@@ -106,7 +106,7 @@ export default function LobbyPage() {
   );
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 md:py-8">
+    <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 overflow-x-hidden w-full">
 
       {/* Toast — full width on mobile, fixed width on desktop */}
       {toast && (
@@ -148,7 +148,7 @@ export default function LobbyPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 md:mb-8 gap-3">
+      <div className="flex items-center justify-between mb-6 md:mb-8 gap-2 w-full min-w-0">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-bold text-white">{t.lobbyTitle}</h1>
           <p className="text-slate-500 text-sm mt-0.5 hidden sm:block">
@@ -171,15 +171,15 @@ export default function LobbyPage() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-4 md:gap-5">
+      <div className="grid lg:grid-cols-5 gap-4 w-full min-w-0">
 
         {/* Game selection */}
         <div className="lg:col-span-2">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{t.selectGame}</p>
           {/* Mobile: horizontal scroll tabs */}
           {/* Horizontal tabs on mobile with snap scroll */}
-          <div className="flex lg:hidden gap-2 overflow-x-auto pb-3 -mx-1 px-1 snap-x-mandatory"
-            style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin', scrollbarColor: 'rgba(124,58,237,0.4) transparent' }}>
+          <div className="flex lg:hidden gap-2 overflow-x-auto pb-3"
+            style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}>
             {games.map((game) => {
               const active = selectedGame?._id === game._id;
               return (
@@ -217,7 +217,7 @@ export default function LobbyPage() {
         </div>
 
         {/* Actions */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4 min-w-0 w-full">
 
           {/* Quick Match */}
           <div className="card p-5 md:p-6" style={{ borderColor: inQueue ? 'rgba(124,58,237,0.3)' : 'var(--border)' }}>
