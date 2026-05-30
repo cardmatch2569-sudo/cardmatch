@@ -36,13 +36,27 @@ const setupSocketHandlers = (io) => {
 
     // ── MATCHMAKING ────────────────────────────────────────────────
     socket.on('join_queue', async ({ gameTypeId }) => {
-      if (!gameTypeId) return;
+      console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
+      console.log(`[QUEUE] Current queues:`, JSON.stringify(Object.fromEntries(
+        [...matchQueues.entries()].map(([k, v]) => [k, v.map(p => p.username)])
+      )));
+      console.log(`[QUEUE] Online users: ${[...onlineUsers.values()].map(u => u.username).join(', ')}`);
+
+      if (!gameTypeId) {
+        console.log(`[QUEUE] ❌ REJECTED: no gameTypeId`);
+        return;
+      }
 
       const queue = matchQueues.get(gameTypeId) || [];
-      if (queue.find((p) => p.userId === userId)) return;
+      const alreadyIn = queue.find((p) => p.userId === userId);
+      if (alreadyIn) {
+        console.log(`[QUEUE] ⚠️ ${user.username} already in queue`);
+        return;
+      }
 
       const waiting = queue.find((p) => p.userId !== userId);
       if (waiting) {
+        console.log(`[QUEUE] ✅ MATCH! ${user.username} <-> ${waiting.username}`);
         matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== waiting.userId));
 
         const roomId = uuidv4();
@@ -57,6 +71,7 @@ const setupSocketHandlers = (io) => {
         io.to(waiting.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: userId, username: user.username, avatar: user.avatar } });
         socket.emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: waiting.userId, username: waiting.username, avatar: opponentInfo.avatar } });
       } else {
+        console.log(`[QUEUE] 📋 ${user.username} added to queue (waiting for opponent)`);
         queue.push({ userId, socketId: socket.id, username: user.username });
         matchQueues.set(gameTypeId, queue);
         socket.emit('queue_joined', { gameTypeId, position: queue.length });
