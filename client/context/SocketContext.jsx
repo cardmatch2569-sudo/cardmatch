@@ -7,7 +7,7 @@ const SocketContext = createContext(null);
 
 export function SocketProvider({ children }) {
   const { user } = useAuth();
-  const socketRef   = useRef(null);
+  const socketRef    = useRef(null);
   const [onlineCount, setOnlineCount] = useState(0);
   const [connected,   setConnected]   = useState(false);
 
@@ -22,21 +22,44 @@ export function SocketProvider({ children }) {
     }
 
     const token = localStorage.getItem('cg_token');
-    const socket = io(process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000', {
+    if (!token) return;
+
+    const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000';
+
+    const socket = io(SERVER_URL, {
       auth: { token },
-      // Allow polling fallback if WebSocket fails (important for cross-network/cloud)
-      transports: ['websocket', 'polling'],
+      // Allow polling fallback — crucial for Railway + cross-network
+      transports: ['polling', 'websocket'],  // Start with polling (faster initial), upgrade to WS
       upgrade: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
+      // Aggressive reconnection to minimize gap
+      reconnectionAttempts:    Infinity,
+      reconnectionDelay:       500,
+      reconnectionDelayMax:    3000,
+      randomizationFactor:     0.3,
+      timeout:                 10000,
     });
 
-    socket.on('connect',       () => { setConnected(true); console.log('Socket connected:', socket.id, 'transport:', socket.io.engine.transport.name); });
-    socket.on('disconnect',    (reason) => { setConnected(false); console.log('Socket disconnected:', reason); });
-    socket.on('connect_error', (err)    => { console.error('Socket connect error:', err.message); });
-    socket.on('online_count',  ({ count }) => setOnlineCount(count));
+    socket.on('connect', () => {
+      setConnected(true);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Socket] Connected via ${socket.io.engine.transport.name}`);
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      setConnected(false);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Socket] Disconnected:', reason);
+      }
+    });
+
+    socket.on('connect_error', (err) => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[Socket] Connect error:', err.message);
+      }
+    });
+
+    socket.on('online_count', ({ count }) => setOnlineCount(count));
 
     socketRef.current = socket;
 
@@ -47,8 +70,6 @@ export function SocketProvider({ children }) {
     };
   }, [user]);
 
-  // Bug fix: wrap in useCallback so reference is stable across renders
-  // Previously recreated on every render, causing effects that depend on it to re-run constantly
   const getSocket = useCallback(() => socketRef.current, []);
 
   return (

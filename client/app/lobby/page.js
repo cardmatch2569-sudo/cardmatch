@@ -11,7 +11,7 @@ import PreMatchModal from '../../components/PreMatchModal';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
-  const { getSocket, onlineCount } = useSocket();
+  const { getSocket, onlineCount, connected } = useSocket();
   const router = useRouter();
   const t = translations[lang];
 
@@ -89,6 +89,17 @@ export default function LobbyPage() {
     setShowPreMatch(false);
     const socket = getSocket();
     if (!socket || !selectedGame) return;
+
+    // If socket not yet connected, wait for it then emit
+    if (!socket.connected) {
+      showToast(lang === 'th' ? 'กำลังเชื่อมต่อ รอสักครู่...' : 'Connecting, please wait...', 'info');
+      socket.once('connect', () => {
+        socket.emit('join_queue', { gameTypeId: selectedGame._id });
+        setQueue(true);
+      });
+      return;
+    }
+
     socket.emit('join_queue', { gameTypeId: selectedGame._id });
     setQueue(true);
   };
@@ -263,12 +274,29 @@ export default function LobbyPage() {
               </div>
             )}
 
+            {/* Socket connecting indicator */}
+            {!connected && !inQueue && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg mb-3 text-xs"
+                style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+                <Loader2 size={11} className="animate-spin flex-shrink-0" />
+                {lang === 'th' ? 'กำลังเชื่อมต่อเซิร์ฟเวอร์...' : 'Connecting to server...'}
+              </div>
+            )}
+
             <button onClick={handleQuickMatch}
+              disabled={!connected && !inQueue}
               className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                ${inQueue ? 'text-red-300' : 'btn-primary text-white'}`}
-              style={inQueue ? { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' } : {}}>
+                ${inQueue
+                  ? 'text-red-300'
+                  : connected
+                    ? 'btn-primary text-white'
+                    : 'opacity-50 cursor-wait text-slate-400'}`}
+              style={inQueue ? { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }
+                : !connected ? { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' } : {}}>
               {inQueue ? (
                 <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={15} /></>
+              ) : !connected ? (
+                <><Loader2 size={16} className="animate-spin" />{lang === 'th' ? 'กำลังเชื่อมต่อ...' : 'Connecting...'}</>
               ) : (
                 <><Shuffle size={16} />{t.quickMatch}</>
               )}

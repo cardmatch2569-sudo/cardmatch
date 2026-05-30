@@ -68,11 +68,21 @@ export default function Navbar() {
           {/* Right side */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
 
-            {/* Online count — desktop only */}
-            {connected && (
-              <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--card)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                <Users size={11} /><span>{onlineCount}</span>
+            {/* Online count / connecting status — desktop only */}
+            {user && (
+              <div className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border bg-[var(--card)]"
+                style={{ borderColor: connected ? 'var(--border)' : 'rgba(251,191,36,0.3)', color: connected ? '#64748b' : '#fbbf24' }}>
+                {connected ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+                    <Users size={11} /><span>{onlineCount}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+                    <span>{lang === 'th' ? 'เชื่อมต่อ...' : 'Connecting'}</span>
+                  </>
+                )}
               </div>
             )}
 

@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, CameraOff, Mic, MicOff, X, Shuffle, AlertTriangle } from 'lucide-react';
+import { Camera, CameraOff, Mic, MicOff, X, Shuffle, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { useSocket } from '../context/SocketContext';
 
 const BAR_COUNT = 16;
 
 export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
+  const { connected } = useSocket();
   const videoRef    = useRef(null);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
@@ -89,7 +91,8 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
     return { lit, color };
   });
 
-  const ready = cameraOk && micOk;
+  // Ready = camera OK + mic OK + socket connected (all 3 required)
+  const ready = cameraOk && micOk && connected;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -149,6 +152,16 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
             )}
           </div>
 
+          {/* Socket connection status */}
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium`}
+            style={connected
+              ? { background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80' }
+              : { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', color: '#fbbf24' }}>
+            {connected
+              ? <><Wifi size={12} /> {lang === 'th' ? 'เซิร์ฟเวอร์: เชื่อมต่อแล้ว ✓' : 'Server: Connected ✓'}</>
+              : <><WifiOff size={12} className="animate-pulse" /> {lang === 'th' ? 'กำลังเชื่อมต่อเซิร์ฟเวอร์...' : 'Connecting to server...'}</>}
+          </div>
+
           {/* Mic meter */}
           <div className="card p-3">
             <div className="flex items-center gap-2 mb-2">
@@ -193,9 +206,11 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
 
           {!ready && !error && !loading && (
             <p className="text-xs text-slate-600 text-center">
-              {lang === 'th'
-                ? '⚠️ กล้องหรือไมค์ยังไม่พร้อม — ตรวจสอบการอนุญาตใน browser'
-                : '⚠️ Camera or mic not ready — check browser permissions'}
+              {!connected
+                ? (lang === 'th' ? '⏳ รอการเชื่อมต่อเซิร์ฟเวอร์...' : '⏳ Waiting for server connection...')
+                : (!cameraOk || !micOk)
+                  ? (lang === 'th' ? '⚠️ กล้องหรือไมค์ยังไม่พร้อม — ตรวจสอบการอนุญาตใน browser' : '⚠️ Camera or mic not ready — check browser permissions')
+                  : ''}
             </p>
           )}
         </div>
