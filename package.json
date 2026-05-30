@@ -1,0 +1,16 @@
+{
+  "name": "cardmatch",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup-lan": "node setup-lan.js",
+    "setup-https": "node setup-https.js",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "seed": "cd server && npm run seed"
+  },
+  "devDependencies": {
+    "qrcode-terminal": "^0.12.0"
+  }
+}

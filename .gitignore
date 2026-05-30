@@ -1,0 +1,25 @@
+node_modules/
+.next/
+certs/
+*.pem
+*.crt
+
+# Env files (contain secrets)
+server/.env
+client/.env.local
+
+# Keep examples
+!server/.env.example
+!client/.env.local.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+CURRENT_URL.txt
+tunnel_*.txt

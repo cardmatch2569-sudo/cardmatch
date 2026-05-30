@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\AunJa\\\\Desktop\\\\Card Game\\\\server\\\\.env.example\" \"c:\\\\Users\\\\AunJa\\\\Desktop\\\\Card Game\\\\server\\\\.env\")",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\AunJa\\\\Desktop\\\\Card Game\\\\client\\\\.env.local.example\" \"c:\\\\Users\\\\AunJa\\\\Desktop\\\\Card Game\\\\client\\\\.env.local\")"
+    ]
+  }
+}

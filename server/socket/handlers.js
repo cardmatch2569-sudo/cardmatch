@@ -1,0 +1,162 @@
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const User = require('../models/User');
+const Room = require('../models/Room');
+const GameType = require('../models/GameType');
+
+// In-memory state
+const onlineUsers = new Map();       // userId → { socketId, username, avatar }
+const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, username }]
+const activeRooms = new Map();       // roomId → { players: [userId] }
+const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
+
+const setupSocketHandlers = (io) => {
+  // Authenticate socket on connection
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('No token'));
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id);
+      if (!user) return next(new Error('User not found'));
+      socket.user = User.toPublic(user);
+      next();
+    } catch {
+      next(new Error('Invalid token'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    const user = socket.user;
+    const userId = user._id;
+
+    onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar });
+    io.emit('online_count', { count: onlineUsers.size });
+    console.log(`[+] ${user.username} (${socket.id})`);
+
+    // ── MATCHMAKING ────────────────────────────────────────────────
+    socket.on('join_queue', async ({ gameTypeId }) => {
+      if (!gameTypeId) return;
+
+      const queue = matchQueues.get(gameTypeId) || [];
+      if (queue.find((p) => p.userId === userId)) return;
+
+      const waiting = queue.find((p) => p.userId !== userId);
+      if (waiting) {
+        matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== waiting.userId));
+
+        const roomId = uuidv4();
+        const gameType = await GameType.findById(gameTypeId);
+        const gameInfo = { _id: gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+
+        try { await Room.create({ roomId, gameTypeId, players: [waiting.userId, userId] }); }
+        catch (e) { console.error('[Room.create] matchmaking failed:', e.message); }
+        activeRooms.set(roomId, { players: [waiting.userId, userId] });
+
+        const opponentInfo = onlineUsers.get(waiting.userId) || {};
+        io.to(waiting.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: userId, username: user.username, avatar: user.avatar } });
+        socket.emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: waiting.userId, username: waiting.username, avatar: opponentInfo.avatar } });
+      } else {
+        queue.push({ userId, socketId: socket.id, username: user.username });
+        matchQueues.set(gameTypeId, queue);
+        socket.emit('queue_joined', { gameTypeId, position: queue.length });
+      }
+    });
+
+    socket.on('leave_queue', () => {
+      matchQueues.forEach((queue, gameTypeId) => {
+        matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== userId));
+      });
+      socket.emit('queue_left');
+    });
+
+    // ── DIRECT CHALLENGE ──────────────────────────────────────────
+    socket.on('challenge_player', async ({ targetUserId, gameTypeId }) => {
+      const target = onlineUsers.get(targetUserId);
+      if (!target) return socket.emit('error', { message: 'Player is offline' });
+
+      const challengeId = uuidv4();
+      const gameType = await GameType.findById(gameTypeId);
+      pendingChallenges.set(challengeId, { from: userId, to: targetUserId, gameTypeId });
+      setTimeout(() => pendingChallenges.delete(challengeId), 30000);
+
+      io.to(target.socketId).emit('challenge_received', {
+        challengeId,
+        from: { _id: userId, username: user.username, avatar: user.avatar },
+        gameType: { _id: gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color },
+      });
+    });
+
+    socket.on('challenge_response', async ({ challengeId, accepted }) => {
+      const challenge = pendingChallenges.get(challengeId);
+      if (!challenge) return;
+      pendingChallenges.delete(challengeId);
+
+      const fromInfo = onlineUsers.get(challenge.from);
+      if (!fromInfo) return;
+
+      if (!accepted) {
+        io.to(fromInfo.socketId).emit('challenge_declined', { by: user.username });
+        return;
+      }
+
+      const roomId = uuidv4();
+      const gameType = await GameType.findById(challenge.gameTypeId);
+      const gameInfo = { _id: challenge.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+
+      try { await Room.create({ roomId, gameTypeId: challenge.gameTypeId, players: [challenge.from, userId] }); }
+      catch (e) { console.error('[Room.create] challenge failed:', e.message); }
+      activeRooms.set(roomId, { players: [challenge.from, userId] });
+
+      io.to(fromInfo.socketId).emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: userId, username: user.username, avatar: user.avatar } });
+      socket.emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: challenge.from, username: fromInfo.username, avatar: fromInfo.avatar } });
+    });
+
+    // ── WEBRTC SIGNALING ──────────────────────────────────────────
+    socket.on('join_room',      ({ roomId }) => { socket.join(roomId); socket.to(roomId).emit('peer_joined', { userId }); });
+    socket.on('offer',          ({ roomId, offer })          => socket.to(roomId).emit('offer',          { offer, from: userId }));
+    socket.on('answer',         ({ roomId, answer })         => socket.to(roomId).emit('answer',         { answer, from: userId }));
+    socket.on('ice_candidate',  ({ roomId, candidate })      => socket.to(roomId).emit('ice_candidate',  { candidate, from: userId }));
+
+    // ── CHAT ──────────────────────────────────────────────────────
+    socket.on('send_message', ({ roomId, message }) => {
+      if (!message?.trim()) return;
+      // Bug fix: cap message length to prevent DoS / memory issues
+      const trimmed = message.trim().slice(0, 500);
+      io.to(roomId).emit('message_received', {
+        from: { _id: userId, username: user.username, avatar: user.avatar },
+        message: trimmed,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // ── LEAVE ROOM ────────────────────────────────────────────────
+    socket.on('leave_room', async ({ roomId }) => {
+      socket.leave(roomId);
+      socket.to(roomId).emit('partner_disconnected');
+      try { await Room.updateStatus(roomId, 'ended'); } catch {}
+      activeRooms.delete(roomId);
+    });
+
+    // ── DISCONNECT ────────────────────────────────────────────────
+    socket.on('disconnect', async () => {
+      onlineUsers.delete(userId);
+      matchQueues.forEach((queue, gameTypeId) => {
+        matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== userId));
+      });
+      for (const [roomId, room] of activeRooms) {
+        if (room.players.includes(userId)) {
+          socket.to(roomId).emit('partner_disconnected');
+          try { await Room.updateStatus(roomId, 'ended'); } catch {}
+          activeRooms.delete(roomId);
+        }
+      }
+      io.emit('online_count', { count: onlineUsers.size });
+      console.log(`[-] ${user.username}`);
+    });
+  });
+};
+
+const getOnlineUsers = () => onlineUsers;
+
+module.exports = { setupSocketHandlers, getOnlineUsers };
