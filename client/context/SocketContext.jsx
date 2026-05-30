@@ -24,14 +24,19 @@ export function SocketProvider({ children }) {
     const token = localStorage.getItem('cg_token');
     const socket = io(process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000', {
       auth: { token },
-      transports: ['websocket'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
+      // Allow polling fallback if WebSocket fails (important for cross-network/cloud)
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
-    socket.on('connect',      () => setConnected(true));
-    socket.on('disconnect',   () => setConnected(false));
-    socket.on('online_count', ({ count }) => setOnlineCount(count));
+    socket.on('connect',       () => { setConnected(true); console.log('Socket connected:', socket.id, 'transport:', socket.io.engine.transport.name); });
+    socket.on('disconnect',    (reason) => { setConnected(false); console.log('Socket disconnected:', reason); });
+    socket.on('connect_error', (err)    => { console.error('Socket connect error:', err.message); });
+    socket.on('online_count',  ({ count }) => setOnlineCount(count));
 
     socketRef.current = socket;
 
