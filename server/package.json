@@ -2,11 +2,13 @@
   "name": "cardgame-server",
   "version": "1.0.0",
   "main": "index.js",
-  "engines": { "node": ">=18.0.0" },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node index.js",
-    "dev":   "nodemon index.js",
-    "seed":  "node seed.js"
+    "dev": "nodemon index.js",
+    "seed": "node seed.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -17,6 +19,7 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^8.0.10",
     "pg": "^8.21.0",
+    "resend": "^6.12.4",
     "socket.io": "^4.6.1",
     "uuid": "^9.0.0"
   },
