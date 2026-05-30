@@ -23,7 +23,7 @@ export default function RootLayout({ children }) {
         <Providers>
           <ViewportHeight />
           <Navbar />
-          <main className="pt-16" style={{ minHeight: 'calc(var(--vh, 1vh) * 100)' }}>
+          <main className="pt-16 w-full overflow-x-hidden" style={{ minHeight: 'calc(var(--vh, 1vh) * 100)' }}>
             {children}
           </main>
         </Providers>

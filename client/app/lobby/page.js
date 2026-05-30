@@ -174,12 +174,11 @@ export default function LobbyPage() {
       <div className="grid lg:grid-cols-5 gap-4 w-full min-w-0">
 
         {/* Game selection */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0 overflow-hidden">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{t.selectGame}</p>
           {/* Mobile: horizontal scroll tabs */}
-          {/* Horizontal tabs on mobile with snap scroll */}
-          <div className="flex lg:hidden gap-2 overflow-x-auto pb-3"
-            style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}>
+          <div className="flex lg:hidden gap-2 overflow-x-auto pb-3 w-full"
+            style={{ WebkitOverflowScrolling: 'touch' }}>
             {games.map((game) => {
               const active = selectedGame?._id === game._id;
               return (
