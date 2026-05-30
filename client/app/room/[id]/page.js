@@ -152,9 +152,27 @@ export default function RoomPage() {
     if (!socket || !stream) return null;
     const pc = new RTCPeerConnection({
       iceServers: [
+        // STUN servers — for simple NAT traversal
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        // TURN servers — required when STUN fails (different networks, mobile, etc.)
+        {
+          urls: [
+            'turn:openrelay.metered.ca:80',
+            'turn:openrelay.metered.ca:443',
+            'turn:openrelay.metered.ca:443?transport=tcp',
+          ],
+          username:   'openrelayproject',
+          credential: 'openrelayproject',
+        },
+        {
+          urls: 'turns:openrelay.metered.ca:443',
+          username:   'openrelayproject',
+          credential: 'openrelayproject',
+        },
       ],
+      iceCandidatePoolSize: 10,
     });
     stream.getTracks().forEach(t => pc.addTrack(t, stream));
     pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('ice_candidate', { roomId, candidate }); };
