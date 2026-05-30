@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import translations from '../../lib/translations';
 import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings } from 'lucide-react';
 import Link from 'next/link';
+import PreMatchModal from '../../components/PreMatchModal';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
@@ -23,6 +24,7 @@ export default function LobbyPage() {
   const [searching, setSearching]       = useState(false);
   const [toast, setToast]               = useState(null);
   const [challenge, setChallenge]       = useState(null);
+  const [showPreMatch, setShowPreMatch] = useState(false);
 
   const inQueueRef  = useRef(false);
   const searchTimer = useRef(null);
@@ -73,9 +75,22 @@ export default function LobbyPage() {
 
   const handleQuickMatch = () => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
-    const socket = getSocket(); if (!socket) return;
-    if (inQueue) { socket.emit('leave_queue'); setQueue(false); }
-    else { socket.emit('join_queue', { gameTypeId: selectedGame._id }); setQueue(true); }
+    if (inQueue) {
+      // Already in queue → cancel
+      getSocket()?.emit('leave_queue');
+      setQueue(false);
+      return;
+    }
+    // Show pre-match device check modal before joining queue
+    setShowPreMatch(true);
+  };
+
+  const handlePreMatchConfirm = () => {
+    setShowPreMatch(false);
+    const socket = getSocket();
+    if (!socket || !selectedGame) return;
+    socket.emit('join_queue', { gameTypeId: selectedGame._id });
+    setQueue(true);
   };
 
   const handleSearch = useCallback((q) => {
@@ -107,6 +122,16 @@ export default function LobbyPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 overflow-x-hidden w-full">
+
+      {/* Pre-match device check modal */}
+      {showPreMatch && selectedGame && (
+        <PreMatchModal
+          lang={lang}
+          gameName={lang === 'th' ? selectedGame.nameTh : selectedGame.name}
+          onConfirm={handlePreMatchConfirm}
+          onCancel={() => setShowPreMatch(false)}
+        />
+      )}
 
       {/* Toast — full width on mobile, fixed width on desktop */}
       {toast && (
