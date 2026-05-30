@@ -51,6 +51,22 @@ connectDB().then(async () => {
   try {
     await getPool().query(`UPDATE Rooms SET status='ended', ended_at=NOW() WHERE status='active'`);
   } catch {}
+
+  // Auto-seed game types if none exist
+  try {
+    const { rows } = await getPool().query('SELECT COUNT(*) AS cnt FROM GameTypes');
+    if (parseInt(rows[0].cnt, 10) === 0) {
+      console.log('Seeding initial game types...');
+      const GameType = require('./models/GameType');
+      const GAMES = [
+        { name: 'Pokémon Trading Card Game', nameTh: 'โปเกมอน เทรดดิ้ง การ์ดเกม', description: 'The classic Pokémon card game!', descriptionTh: 'เกมการ์ดโปเกมอนคลาสสิก', color: '#FFCB05' },
+        { name: 'Battle of Talingchan',       nameTh: 'แบทเทิลออฟตลิ่งชัน',        description: 'Thai card battle game.',      descriptionTh: 'เกมการ์ดต่อสู้สัญชาติไทย',    color: '#e11d48' },
+        { name: 'Riftbound',                  nameTh: 'ริฟต์บาวด์',                description: 'Fantasy trading card game.', descriptionTh: 'การ์ดเกมแฟนตาซี',            color: '#7c3aed' },
+      ];
+      for (const g of GAMES) await GameType.create(g);
+      console.log('Game types seeded!');
+    }
+  } catch (e) { console.warn('Auto-seed warning:', e.message); }
 }).catch(() => {});
 
 app.use(cors(corsOptions));
