@@ -26,37 +26,29 @@ export function SocketProvider({ children }) {
 
     const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000';
 
+    // Start with polling first — faster initial connection, then upgrade to WebSocket
     const socket = io(SERVER_URL, {
       auth: { token },
-      // Allow polling fallback — crucial for Railway + cross-network
-      transports: ['polling', 'websocket'],  // Start with polling (faster initial), upgrade to WS
+      transports: ['polling', 'websocket'],
       upgrade: true,
-      // Aggressive reconnection to minimize gap
-      reconnectionAttempts:    Infinity,
-      reconnectionDelay:       500,
-      reconnectionDelayMax:    3000,
-      randomizationFactor:     0.3,
-      timeout:                 10000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay:    500,
+      reconnectionDelayMax: 3000,
+      timeout:              10000,
     });
 
     socket.on('connect', () => {
       setConnected(true);
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[Socket] Connected via ${socket.io.engine.transport.name}`);
-      }
+      console.log('[Socket] ✅ Connected via', socket.io.engine.transport.name, '| ID:', socket.id);
     });
 
     socket.on('disconnect', (reason) => {
       setConnected(false);
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[Socket] Disconnected:', reason);
-      }
+      console.log('[Socket] ❌ Disconnected:', reason);
     });
 
     socket.on('connect_error', (err) => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('[Socket] Connect error:', err.message);
-      }
+      console.warn('[Socket] ⚠️ Error:', err.message);
     });
 
     socket.on('online_count', ({ count }) => setOnlineCount(count));
@@ -72,8 +64,27 @@ export function SocketProvider({ children }) {
 
   const getSocket = useCallback(() => socketRef.current, []);
 
+  // Helper: emit event only when socket is connected
+  // If not connected yet, wait for connection then emit
+  const safeEmit = useCallback((event, data) => {
+    const socket = socketRef.current;
+    if (!socket) {
+      console.warn('[Socket] safeEmit called but no socket');
+      return;
+    }
+    if (socket.connected) {
+      socket.emit(event, data);
+    } else {
+      console.log(`[Socket] Waiting for connection to emit: ${event}`);
+      socket.once('connect', () => {
+        socket.emit(event, data);
+        console.log(`[Socket] Emitted after connect: ${event}`);
+      });
+    }
+  }, []);
+
   return (
-    <SocketContext.Provider value={{ getSocket, onlineCount, connected }}>
+    <SocketContext.Provider value={{ getSocket, safeEmit, onlineCount, connected }}>
       {children}
     </SocketContext.Provider>
   );

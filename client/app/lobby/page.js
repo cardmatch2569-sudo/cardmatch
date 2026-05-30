@@ -11,7 +11,7 @@ import PreMatchModal from '../../components/PreMatchModal';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
-  const { getSocket, onlineCount, connected } = useSocket();
+  const { getSocket, safeEmit, onlineCount, connected } = useSocket();
   const router = useRouter();
   const t = translations[lang];
 
@@ -87,21 +87,11 @@ export default function LobbyPage() {
 
   const handlePreMatchConfirm = () => {
     setShowPreMatch(false);
-    const socket = getSocket();
-    if (!socket || !selectedGame) return;
-
-    // If socket not yet connected, wait for it then emit
-    if (!socket.connected) {
-      showToast(lang === 'th' ? 'กำลังเชื่อมต่อ รอสักครู่...' : 'Connecting, please wait...', 'info');
-      socket.once('connect', () => {
-        socket.emit('join_queue', { gameTypeId: selectedGame._id });
-        setQueue(true);
-      });
-      return;
-    }
-
-    socket.emit('join_queue', { gameTypeId: selectedGame._id });
+    if (!selectedGame) return;
+    // safeEmit waits for socket connection before emitting
+    safeEmit('join_queue', { gameTypeId: selectedGame._id });
     setQueue(true);
+    console.log('[Lobby] Joining queue for:', selectedGame.nameTh, selectedGame._id);
   };
 
   const handleSearch = useCallback((q) => {
@@ -117,7 +107,7 @@ export default function LobbyPage() {
 
   const handleChallenge = (targetUserId) => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
-    getSocket()?.emit('challenge_player', { targetUserId, gameTypeId: selectedGame._id });
+    safeEmit('challenge_player', { targetUserId, gameTypeId: selectedGame._id });
     showToast(lang === 'th' ? 'ส่งคำท้าแล้ว รอการตอบรับ...' : 'Challenge sent!', 'info');
   };
 
