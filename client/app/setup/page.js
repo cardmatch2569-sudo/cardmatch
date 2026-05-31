@@ -220,11 +220,6 @@ export default function SetupPage() {
                 {cameraOk ? (lang === 'th' ? 'กล้องพร้อม' : 'Camera OK') : (lang === 'th' ? 'ไม่มีกล้อง' : 'No Camera')}
               </div>
             )}
-            <button onClick={() => startMedia(selCamera, selMic)}
-              className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition"
-              style={{ background: 'rgba(0,0,0,0.5)' }}>
-              <RefreshCw size={13} />
-            </button>
           </div>
 
           {/* Camera selector */}

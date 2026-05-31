@@ -4,6 +4,12 @@ import { api } from '../lib/api';
 
 const AuthContext = createContext(null);
 
+// Token helpers — sessionStorage is per-tab (fixes multi-tab same-browser testing),
+// localStorage is fallback for persistent login (new tab or first load).
+const getToken    = () => sessionStorage.getItem('cg_token') || localStorage.getItem('cg_token');
+const setToken    = (t) => { sessionStorage.setItem('cg_token', t); localStorage.setItem('cg_token', t); };
+const removeToken = () => { sessionStorage.removeItem('cg_token'); localStorage.removeItem('cg_token'); };
+
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);
   const [lang,    setLang]    = useState('th');
@@ -15,8 +21,11 @@ export function AuthProvider({ children }) {
     const savedLang = localStorage.getItem('cg_lang') || 'th';
     setLang(savedLang);
 
-    const token = localStorage.getItem('cg_token');
+    const token = getToken();
     if (!token) { setLoading(false); return; }
+
+    // If token came from localStorage only (new tab), mirror it to sessionStorage
+    if (!sessionStorage.getItem('cg_token')) sessionStorage.setItem('cg_token', token);
 
     api.get('/api/auth/me')
       .then(({ user }) => {
@@ -24,7 +33,7 @@ export function AuthProvider({ children }) {
         // Set admin view mode only for admin users
         if (user?.isAdmin) setViewMode('admin');
       })
-      .catch(() => localStorage.removeItem('cg_token'))
+      .catch(() => removeToken())
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,7 +46,7 @@ export function AuthProvider({ children }) {
   const loginWithGoogle = async (credential) => {
     const result = await api.post('/api/auth/google', { credential });
     if (result.requiresOtp) return result;
-    localStorage.setItem('cg_token', result.token);
+    setToken(result.token);
     setUser(result.user);
     if (result.user?.isAdmin) setViewMode('admin');
     return result;
@@ -45,7 +54,7 @@ export function AuthProvider({ children }) {
 
   const verifyOTP = async (email, code) => {
     const { token, user } = await api.post('/api/auth/verify-otp', { email, code });
-    localStorage.setItem('cg_token', token);
+    setToken(token);
     setUser(user);
     if (user?.isAdmin) setViewMode('admin');
     return user;
@@ -53,7 +62,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { token, user } = await api.post('/api/auth/login', { email, password });
-    localStorage.setItem('cg_token', token);
+    setToken(token);
     setUser(user);
     if (user?.isAdmin) setViewMode('admin');
     return user;
@@ -67,7 +76,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('cg_token');
+    removeToken();
     setUser(null);
     setViewMode('user');
   };

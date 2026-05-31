@@ -16,6 +16,9 @@ export default function Navbar() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Room page has its own full-screen UI — hide Navbar completely
+  if (pathname?.startsWith('/room/')) return null;
+
   const handleLogout = () => { logout(); router.push('/'); setMobileOpen(false); };
   const isActive = (href) => pathname === href;
   const close = () => setMobileOpen(false);

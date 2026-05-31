@@ -11,7 +11,7 @@ import PreMatchModal from '../../components/PreMatchModal';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
-  const { getSocket, safeEmit, setQueueGame, onlineCount, connected } = useSocket();
+  const { getSocket, safeEmit, setQueueGame, setLobbyCallbacks, onlineCount, connected } = useSocket();
   const router = useRouter();
   const t = translations[lang];
 
@@ -31,6 +31,17 @@ export default function LobbyPage() {
   // Bug fix: use ref for lang so socket closures read current value without re-registering
   const langRef = useRef(lang);
   useEffect(() => { langRef.current = lang; }, [lang]);
+
+  // Push fresh callbacks into SocketContext on every render.
+  // SocketContext owns the socket.on listeners (registered once at socket creation),
+  // and simply delegates to whatever is in lobbyCallbacksRef — no React timing risk.
+  setLobbyCallbacks({
+    onMatchFound:        ({ roomId, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); setTimeout(() => router.push(`/room/${roomId}`), 600); },
+    onQueueLeft:         () => setQueue(false),
+    onChallengeReceived: (data) => setChallenge(data),
+    onChallengeAccepted: ({ roomId }) => router.push(`/room/${roomId}`),
+    onChallengeDeclined: ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
+  });
 
   // Bug fix: only redirect after auth check completes (not during loading)
   useEffect(() => {
@@ -61,20 +72,10 @@ export default function LobbyPage() {
     if (!val) setQueueGame(null);
   };
 
-  // Bug fix: remove lang from deps — use langRef.current in callbacks instead
-  // Previously re-registered socket listeners on every language change
+  // Clear lobby callbacks when unmounting so stale handlers don't linger
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-    const onMatchFound        = ({ roomId, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); setTimeout(() => router.push(`/room/${roomId}`), 600); };
-    const onQueueLeft         = () => setQueue(false);
-    const onChallengeReceived = (data) => setChallenge(data);
-    const onChallengeAccepted = ({ roomId }) => router.push(`/room/${roomId}`);
-    const onChallengeDeclined = ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error');
-    socket.on('match_found', onMatchFound); socket.on('queue_left', onQueueLeft);
-    socket.on('challenge_received', onChallengeReceived); socket.on('challenge_accepted', onChallengeAccepted); socket.on('challenge_declined', onChallengeDeclined);
-    return () => { socket.off('match_found', onMatchFound); socket.off('queue_left', onQueueLeft); socket.off('challenge_received', onChallengeReceived); socket.off('challenge_accepted', onChallengeAccepted); socket.off('challenge_declined', onChallengeDeclined); };
-  }, [getSocket, router]); // lang removed — using langRef.current instead
+    return () => setLobbyCallbacks({});
+  }, [setLobbyCallbacks]);
 
   const showToast = (msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
 
@@ -98,7 +99,6 @@ export default function LobbyPage() {
     // safeEmit waits for socket connection before emitting
     safeEmit('join_queue', { gameTypeId: selectedGame._id });
     setQueue(true);
-    console.log('[Lobby] Joining queue for:', selectedGame.nameTh, selectedGame._id);
   };
 
   const handleSearch = useCallback((q) => {

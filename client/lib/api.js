@@ -2,7 +2,9 @@ const BASE = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000';
 const TIMEOUT_MS = 30000; // 30-second timeout (email sending can be slow on first connect)
 
 const getToken = () =>
-  typeof window !== 'undefined' ? localStorage.getItem('cg_token') : null;
+  typeof window !== 'undefined'
+    ? (sessionStorage.getItem('cg_token') || localStorage.getItem('cg_token'))
+    : null;
 
 const headers = (extra = {}) => ({
   'Content-Type': 'application/json',
