@@ -346,22 +346,12 @@ export default function RoomPage() {
           <span>{peerConnected ? (lang === 'th' ? 'เชื่อมต่อแล้ว' : 'Connected') : (lang === 'th' ? 'รอการเชื่อมต่อ...' : 'Waiting...')}</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Rotate opponent video */}
-          <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
-            title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
-            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
-            <RotateCw size={15} className="text-white" />
-          </button>
-          {/* Fullscreen / landscape */}
-          <button onClick={toggleFullscreen}
-            title={isExpanded ? (lang === 'th' ? 'ออกจากเต็มจอ' : 'Exit fullscreen') : (lang === 'th' ? 'ขยายเต็มจอ' : 'Fullscreen')}
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
-            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
-            {isExpanded ? <Minimize2 size={16} className="text-white" /> : <Maximize2 size={16} className="text-white" />}
-          </button>
-        </div>
+        <button onClick={toggleFullscreen}
+          title={isExpanded ? (lang === 'th' ? 'ออกจากเต็มจอ' : 'Exit fullscreen') : (lang === 'th' ? 'ขยายเต็มจอ' : 'Fullscreen')}
+          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
+          style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
+          {isExpanded ? <Minimize2 size={16} className="text-white" /> : <Maximize2 size={16} className="text-white" />}
+        </button>
       </div>
 
       {/* ── Opponent label ── */}
@@ -389,13 +379,6 @@ export default function RoomPage() {
           )}
           <div className="absolute bottom-1 left-1.5 text-[9px] text-slate-300 bg-black/60 px-1 rounded">{t.you}</div>
         </div>
-        {/* Rotate self video button */}
-        <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
-          title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
-          className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-95"
-          style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.25)' }}>
-          <RotateCw size={11} className="text-white" />
-        </button>
       </div>
 
       {/* ── CONTROLS BAR — always visible at bottom ── */}
@@ -408,10 +391,24 @@ export default function RoomPage() {
           background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
         }}>
 
+        {/* Rotate opponent video */}
+        <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
+          title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
+          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 backdrop-blur-sm bg-white/15 text-white border border-white/20">
+          <RotateCw size={14} />
+          <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'คู่แข่ง' : 'Opp'}</span>
+        </button>
+
         <button onClick={toggleCamera}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm
             ${cameraOn ? 'bg-white/15 text-white border border-white/20' : 'bg-red-600/80 text-white'}`}>
           {cameraOn ? <Video size={18} /> : <VideoOff size={18} />}
+        </button>
+
+        {/* Leave — center, larger */}
+        <button onClick={handleLeave}
+          className="w-14 h-14 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-500 text-white transition-all active:scale-95 shadow-xl shadow-red-900/50">
+          <PhoneOff size={20} />
         </button>
 
         <button onClick={toggleMic}
@@ -420,10 +417,12 @@ export default function RoomPage() {
           {micOn ? <Mic size={18} /> : <MicOff size={18} />}
         </button>
 
-        {/* Leave — center, larger */}
-        <button onClick={handleLeave}
-          className="w-14 h-14 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-500 text-white transition-all active:scale-95 shadow-xl shadow-red-900/50">
-          <PhoneOff size={20} />
+        {/* Rotate own video */}
+        <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
+          title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
+          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 backdrop-blur-sm bg-white/15 text-white border border-white/20">
+          <RotateCw size={14} />
+          <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'ของฉัน' : 'Mine'}</span>
         </button>
 
         <button onClick={() => setChatOpen(p => !p)}
