@@ -91,6 +91,10 @@ export default function RoomPage() {
   const [mediaError,    setMediaError]    = useState('');
   const [isFullscreen,  setIsFullscreen]  = useState(false);
   const [forcedLandscape, setForcedLandscape] = useState(false);
+  // Track system orientation to avoid double-rotation when iOS auto-rotates
+  const [systemLandscape, setSystemLandscape] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth > window.innerHeight
+  );
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -106,6 +110,13 @@ export default function RoomPage() {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  // Detect system orientation — cancel CSS rotation if device is already landscape
+  useEffect(() => {
+    const onResize = () => setSystemLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -242,9 +253,9 @@ export default function RoomPage() {
   const safeRight  = 'env(safe-area-inset-right,  0px)';
 
   return (
-    // fixed inset-0 + z-50: covers entire viewport; forcedLandscape rotates 90° for iOS
+    {/* forcedLandscape + portrait system → rotate 90°; if system already landscape, skip rotation */}
     <div className="z-50 bg-black overflow-hidden"
-      style={forcedLandscape ? {
+      style={(forcedLandscape && !systemLandscape) ? {
         position: 'fixed',
         width: '100vh',
         height: '100vw',
