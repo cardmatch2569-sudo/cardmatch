@@ -6,8 +6,17 @@ import { useSocket } from '../../../context/SocketContext';
 import translations from '../../../lib/translations';
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, Send,
-  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2,
+  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw,
 } from 'lucide-react';
+
+// Returns absolute-position + size style for a full-screen rotated video element
+function fullscreenRotateStyle(deg) {
+  const r = ((deg % 360) + 360) % 360;
+  if (r === 0)   return { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' };
+  if (r === 180) return { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(180deg)' };
+  // 90° or 270° — swap vw/vh so video still fills the viewport after rotation
+  return { position: 'absolute', width: '100vh', height: '100vw', top: '50%', left: '50%', objectFit: 'cover', transform: `translate(-50%,-50%) rotate(${r}deg)` };
+}
 
 function ChatPanel({ messages, msgInput, setMsgInput, onSend, onClose, user, lang, chatEndRef }) {
   const t = translations[lang];
@@ -102,6 +111,9 @@ export default function RoomPage() {
   );
   // Track remote video orientation to counter-rotate if needed
   const [remoteIsLandscape, setRemoteIsLandscape] = useState(false);
+  // Manual rotation offsets (multiples of 90°) — user can adjust each independently
+  const [remoteRotation, setRemoteRotation] = useState(0);
+  const [localRotation,  setLocalRotation]  = useState(0);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -283,14 +295,10 @@ export default function RoomPage() {
       } : { position: 'fixed', inset: 0 }}>
 
       {/* ── Opponent video fills the ENTIRE background ── */}
-      {/* When CSS landscape active + opponent sends landscape → counter-rotate so it appears upright */}
-      <video ref={remoteVideoRef} autoPlay playsInline
-        className="absolute object-cover"
-        style={(cssLandscapeActive && remoteIsLandscape) ? {
-          width: '100vw', height: '100vh',
-          top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%) rotate(-90deg)',
-        } : { inset: 0, width: '100%', height: '100%' }} />
+      <video ref={remoteVideoRef} autoPlay playsInline className="object-cover"
+        style={fullscreenRotateStyle(
+          (cssLandscapeActive && remoteIsLandscape ? -90 : 0) + remoteRotation
+        )} />
 
       {/* Waiting overlay */}
       {!peerConnected && (
@@ -338,15 +346,22 @@ export default function RoomPage() {
           <span>{peerConnected ? (lang === 'th' ? 'เชื่อมต่อแล้ว' : 'Connected') : (lang === 'th' ? 'รอการเชื่อมต่อ...' : 'Waiting...')}</span>
         </div>
 
-        {/* Fullscreen / landscape button — always visible in top-right */}
-        <button onClick={toggleFullscreen}
-          title={isExpanded
-            ? (lang === 'th' ? 'ออกจากเต็มจอ' : 'Exit fullscreen')
-            : (lang === 'th' ? 'ขยายเต็มจอ (แนวนอน)' : 'Fullscreen landscape')}
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
-          style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
-          {isExpanded ? <Minimize2 size={16} className="text-white" /> : <Maximize2 size={16} className="text-white" />}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Rotate opponent video */}
+          <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
+            title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
+            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
+            <RotateCw size={15} className="text-white" />
+          </button>
+          {/* Fullscreen / landscape */}
+          <button onClick={toggleFullscreen}
+            title={isExpanded ? (lang === 'th' ? 'ออกจากเต็มจอ' : 'Exit fullscreen') : (lang === 'th' ? 'ขยายเต็มจอ' : 'Fullscreen')}
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
+            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
+            {isExpanded ? <Minimize2 size={16} className="text-white" /> : <Maximize2 size={16} className="text-white" />}
+          </button>
+        </div>
       </div>
 
       {/* ── Opponent label ── */}
@@ -356,22 +371,31 @@ export default function RoomPage() {
       </div>
 
       {/* ── Self PiP — bottom-right above controls bar ── */}
-      <div className="absolute z-20 rounded-xl overflow-hidden shadow-2xl border border-white/20"
+      <div className="absolute z-20"
         style={{
           bottom: `calc(68px + max(8px, ${safeBottom}))`,
           right:  `max(8px, ${safeRight})`,
           width: 'clamp(80px, 24vw, 150px)',
           aspectRatio: '4/3',
         }}>
-        <video ref={localVideoRef} autoPlay playsInline muted
-          className="w-full h-full object-cover"
-          style={{ transform: cssLandscapeActive ? 'rotate(-90deg) scaleX(-1)' : 'scaleX(-1)' }} />
-        {!cameraOn && (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
-            <VideoOff size={14} className="text-slate-400" />
-          </div>
-        )}
-        <div className="absolute bottom-1 left-1.5 text-[9px] text-slate-300 bg-black/60 px-1 rounded">{t.you}</div>
+        <div className="relative rounded-xl overflow-hidden shadow-2xl border border-white/20 w-full h-full">
+          <video ref={localVideoRef} autoPlay playsInline muted
+            className="w-full h-full object-cover"
+            style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg) scaleX(-1)` }} />
+          {!cameraOn && (
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
+              <VideoOff size={14} className="text-slate-400" />
+            </div>
+          )}
+          <div className="absolute bottom-1 left-1.5 text-[9px] text-slate-300 bg-black/60 px-1 rounded">{t.you}</div>
+        </div>
+        {/* Rotate self video button */}
+        <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
+          title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
+          className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-95"
+          style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.25)' }}>
+          <RotateCw size={11} className="text-white" />
+        </button>
       </div>
 
       {/* ── CONTROLS BAR — always visible at bottom ── */}
