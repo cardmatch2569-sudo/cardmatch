@@ -89,12 +89,19 @@ export default function RoomPage() {
   const [chatOpen,      setChatOpen]      = useState(false);
   const [unread,        setUnread]        = useState(0);
   const [mediaError,    setMediaError]    = useState('');
-  const [isFullscreen,  setIsFullscreen]  = useState(false);
-  const [forcedLandscape, setForcedLandscape] = useState(false);
+  const [isFullscreen,    setIsFullscreen]    = useState(false);
+  // Auto-force landscape on mobile portrait so both parties always share the same orientation
+  const [forcedLandscape, setForcedLandscape] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    return isMobile && window.innerHeight > window.innerWidth;
+  });
   // Track system orientation to avoid double-rotation when iOS auto-rotates
   const [systemLandscape, setSystemLandscape] = useState(
     () => typeof window !== 'undefined' && window.innerWidth > window.innerHeight
   );
+  // Track remote video orientation to counter-rotate if needed
+  const [remoteIsLandscape, setRemoteIsLandscape] = useState(false);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -178,7 +185,16 @@ export default function RoomPage() {
     });
     stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
     pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('ice_candidate', { roomId, candidate }); };
-    pc.ontrack = ({ streams }) => { if (remoteVideoRef.current) remoteVideoRef.current.srcObject = streams[0]; setPeerConnected(true); };
+    pc.ontrack = ({ streams }) => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = streams[0];
+        remoteVideoRef.current.onloadedmetadata = () => {
+          const v = remoteVideoRef.current;
+          if (v) setRemoteIsLandscape(v.videoWidth > v.videoHeight);
+        };
+      }
+      setPeerConnected(true);
+    };
     pc.onconnectionstatechange = () => { if (['disconnected','failed'].includes(pc.connectionState)) setPeerConnected(false); };
     if (initiator) {
       (async () => { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); socket.emit('offer', { roomId, offer }); })();
@@ -245,6 +261,8 @@ export default function RoomPage() {
     </div>
   );
 
+  // CSS rotation is active when forced landscape but system hasn't rotated yet
+  const cssLandscapeActive = forcedLandscape && !systemLandscape;
   const isExpanded = isFullscreen || forcedLandscape;
 
   const safeTop    = 'env(safe-area-inset-top,    0px)';
@@ -253,9 +271,9 @@ export default function RoomPage() {
   const safeRight  = 'env(safe-area-inset-right,  0px)';
 
   return (
-    {/* forcedLandscape + portrait system → rotate 90°; if system already landscape, skip rotation */}
+    {/* cssLandscapeActive → CSS rotate 90°; system already landscape → normal fixed */}
     <div className="z-50 bg-black overflow-hidden"
-      style={(forcedLandscape && !systemLandscape) ? {
+      style={cssLandscapeActive ? {
         position: 'fixed',
         width: '100vh',
         height: '100vw',
@@ -265,8 +283,14 @@ export default function RoomPage() {
       } : { position: 'fixed', inset: 0 }}>
 
       {/* ── Opponent video fills the ENTIRE background ── */}
+      {/* When CSS landscape active + opponent sends landscape → counter-rotate so it appears upright */}
       <video ref={remoteVideoRef} autoPlay playsInline
-        className="absolute inset-0 w-full h-full object-cover" />
+        className="absolute object-cover"
+        style={(cssLandscapeActive && remoteIsLandscape) ? {
+          width: '100vw', height: '100vh',
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%) rotate(-90deg)',
+        } : { inset: 0, width: '100%', height: '100%' }} />
 
       {/* Waiting overlay */}
       {!peerConnected && (
@@ -341,7 +365,7 @@ export default function RoomPage() {
         }}>
         <video ref={localVideoRef} autoPlay playsInline muted
           className="w-full h-full object-cover"
-          style={{ transform: (forcedLandscape && !systemLandscape) ? 'rotate(-90deg) scaleX(-1)' : 'scaleX(-1)' }} />
+          style={{ transform: cssLandscapeActive ? 'rotate(-90deg) scaleX(-1)' : 'scaleX(-1)' }} />
         {!cameraOn && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
             <VideoOff size={14} className="text-slate-400" />
