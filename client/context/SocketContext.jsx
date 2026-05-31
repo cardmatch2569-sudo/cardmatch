@@ -8,6 +8,7 @@ const SocketContext = createContext(null);
 export function SocketProvider({ children }) {
   const { user } = useAuth();
   const socketRef    = useRef(null);
+  const queueRef     = useRef(null); // { gameTypeId } — track if user is in queue for reconnect
   const [onlineCount, setOnlineCount] = useState(0);
   const [connected,   setConnected]   = useState(false);
 
@@ -17,6 +18,7 @@ export function SocketProvider({ children }) {
         socketRef.current.disconnect();
         socketRef.current = null;
         setConnected(false);
+        queueRef.current = null;
       }
       return;
     }
@@ -26,7 +28,6 @@ export function SocketProvider({ children }) {
 
     const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000';
 
-    // Start with polling first — faster initial connection, then upgrade to WebSocket
     const socket = io(SERVER_URL, {
       auth: { token },
       transports: ['polling', 'websocket'],
@@ -40,6 +41,13 @@ export function SocketProvider({ children }) {
     socket.on('connect', () => {
       setConnected(true);
       console.log('[Socket] ✅ Connected via', socket.io.engine.transport.name, '| ID:', socket.id);
+
+      // Fix: If user was in a queue before reconnect, re-join automatically
+      // Server updates socketId but re-joining ensures fresh queue entry
+      if (queueRef.current) {
+        console.log('[Socket] Re-joining queue after reconnect:', queueRef.current);
+        socket.emit('join_queue', { gameTypeId: queueRef.current });
+      }
     });
 
     socket.on('disconnect', (reason) => {
@@ -64,27 +72,31 @@ export function SocketProvider({ children }) {
 
   const getSocket = useCallback(() => socketRef.current, []);
 
-  // Helper: emit event only when socket is connected
-  // If not connected yet, wait for connection then emit
+  // Track queue state for reconnect handling
+  const setQueueGame = useCallback((gameTypeId) => {
+    queueRef.current = gameTypeId; // null to clear
+  }, []);
+
+  // Emit event — waits for socket connection if not yet connected
   const safeEmit = useCallback((event, data) => {
     const socket = socketRef.current;
     if (!socket) {
-      console.warn('[Socket] safeEmit called but no socket');
+      console.warn('[Socket] safeEmit: no socket');
       return;
     }
     if (socket.connected) {
       socket.emit(event, data);
     } else {
-      console.log(`[Socket] Waiting for connection to emit: ${event}`);
+      console.log(`[Socket] safeEmit: waiting to emit ${event}`);
       socket.once('connect', () => {
         socket.emit(event, data);
-        console.log(`[Socket] Emitted after connect: ${event}`);
+        console.log(`[Socket] safeEmit: emitted ${event} after connect`);
       });
     }
   }, []);
 
   return (
-    <SocketContext.Provider value={{ getSocket, safeEmit, onlineCount, connected }}>
+    <SocketContext.Provider value={{ getSocket, safeEmit, setQueueGame, onlineCount, connected }}>
       {children}
     </SocketContext.Provider>
   );

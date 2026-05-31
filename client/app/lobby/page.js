@@ -11,7 +11,7 @@ import PreMatchModal from '../../components/PreMatchModal';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
-  const { getSocket, safeEmit, onlineCount, connected } = useSocket();
+  const { getSocket, safeEmit, setQueueGame, onlineCount, connected } = useSocket();
   const router = useRouter();
   const t = translations[lang];
 
@@ -54,7 +54,12 @@ export default function LobbyPage() {
     };
   }, [getSocket]);
 
-  const setQueue = (val) => { inQueueRef.current = val; setInQueue(val); };
+  const setQueue = (val) => {
+    inQueueRef.current = val;
+    setInQueue(val);
+    // Track queue state in SocketContext for reconnect handling
+    if (!val) setQueueGame(null);
+  };
 
   // Bug fix: remove lang from deps — use langRef.current in callbacks instead
   // Previously re-registered socket listeners on every language change
@@ -88,6 +93,8 @@ export default function LobbyPage() {
   const handlePreMatchConfirm = () => {
     setShowPreMatch(false);
     if (!selectedGame) return;
+    // Track in SocketContext so socket reconnect auto-rejoins queue
+    setQueueGame(selectedGame._id);
     // safeEmit waits for socket connection before emitting
     safeEmit('join_queue', { gameTypeId: selectedGame._id });
     setQueue(true);

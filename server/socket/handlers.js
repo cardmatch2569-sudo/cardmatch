@@ -34,6 +34,21 @@ const setupSocketHandlers = (io) => {
     io.emit('online_count', { count: onlineUsers.size });
     console.log(`[+] ${user.username} (${socket.id})`);
 
+    // Fix: On reconnect, update socketId in any active queue entry
+    // (socketId changes on reconnect; old entry would cause match_found to be lost)
+    let wasInQueue = false;
+    matchQueues.forEach((queue, gameTypeId) => {
+      const entry = queue.find(p => p.userId === userId);
+      if (entry && entry.socketId !== socket.id) {
+        console.log(`[QUEUE] Updated socketId for ${user.username}: ${entry.socketId} → ${socket.id}`);
+        entry.socketId = socket.id;
+        wasInQueue = true;
+      }
+    });
+    if (wasInQueue) {
+      console.log(`[QUEUE] ${user.username} re-joined queue after reconnect`);
+    }
+
     // ── MATCHMAKING ────────────────────────────────────────────────
     socket.on('join_queue', async ({ gameTypeId }) => {
       console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
