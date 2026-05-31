@@ -90,6 +90,7 @@ export default function RoomPage() {
   const [unread,        setUnread]        = useState(0);
   const [mediaError,    setMediaError]    = useState('');
   const [isFullscreen,  setIsFullscreen]  = useState(false);
+  const [forcedLandscape, setForcedLandscape] = useState(false);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -108,17 +109,24 @@ export default function RoomPage() {
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
+    // Exit forced-landscape CSS mode first
+    if (forcedLandscape) { setForcedLandscape(false); return; }
+    // Exit native fullscreen
+    if (document.fullscreenElement) {
+      await document.exitFullscreen?.().catch(() => {});
+      screen.orientation?.unlock?.();
+      return;
+    }
+    // Try native fullscreen API (desktop + Android Chrome)
     try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen?.();
-        // Try to lock landscape orientation (supported on Android Chrome)
-        await screen.orientation?.lock?.('landscape').catch(() => {});
-      } else {
-        await document.exitFullscreen?.();
-        screen.orientation?.unlock?.();
-      }
-    } catch {}
-  }, []);
+      if (!document.documentElement.requestFullscreen) throw new Error('no-api');
+      await document.documentElement.requestFullscreen();
+      await screen.orientation?.lock?.('landscape').catch(() => {});
+    } catch {
+      // iOS Safari fallback: rotate the whole container 90° via CSS
+      setForcedLandscape(true);
+    }
+  }, [forcedLandscape]);
 
   const startMedia = useCallback(async () => {
     const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
@@ -208,6 +216,7 @@ export default function RoomPage() {
 
   const handleLeave = () => {
     leftRef.current = true;
+    setForcedLandscape(false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     getSocket()?.emit('leave_room', { roomId });
     localStreamRef.current?.getTracks().forEach(tk => tk.stop());
@@ -225,14 +234,24 @@ export default function RoomPage() {
     </div>
   );
 
+  const isExpanded = isFullscreen || forcedLandscape;
+
   const safeTop    = 'env(safe-area-inset-top,    0px)';
   const safeBottom = 'env(safe-area-inset-bottom, 0px)';
   const safeLeft   = 'env(safe-area-inset-left,   0px)';
   const safeRight  = 'env(safe-area-inset-right,  0px)';
 
   return (
-    // fixed inset-0 + z-50: covers entire viewport (portrait & landscape), sits above Navbar
-    <div className="fixed inset-0 z-50 bg-black overflow-hidden">
+    // fixed inset-0 + z-50: covers entire viewport; forcedLandscape rotates 90° for iOS
+    <div className="z-50 bg-black overflow-hidden"
+      style={forcedLandscape ? {
+        position: 'fixed',
+        width: '100vh',
+        height: '100vw',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%) rotate(90deg)',
+      } : { position: 'fixed', inset: 0 }}>
 
       {/* ── Opponent video fills the ENTIRE background ── */}
       <video ref={remoteVideoRef} autoPlay playsInline
@@ -286,12 +305,12 @@ export default function RoomPage() {
 
         {/* Fullscreen / landscape button — always visible in top-right */}
         <button onClick={toggleFullscreen}
-          title={isFullscreen
+          title={isExpanded
             ? (lang === 'th' ? 'ออกจากเต็มจอ' : 'Exit fullscreen')
             : (lang === 'th' ? 'ขยายเต็มจอ (แนวนอน)' : 'Fullscreen landscape')}
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm"
           style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
-          {isFullscreen ? <Minimize2 size={16} className="text-white" /> : <Maximize2 size={16} className="text-white" />}
+          {isExpanded ? <Minimize2 size={16} className="text-white" /> : <Maximize2 size={16} className="text-white" />}
         </button>
       </div>
 
