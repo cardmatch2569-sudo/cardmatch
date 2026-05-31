@@ -1,24 +1,97 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { X, Shuffle, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Camera, CameraOff, Mic, MicOff, X, Shuffle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
+
+const BAR_COUNT = 18;
 
 export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
   const { connected } = useSocket();
-  const [dots, setDots] = useState('');
 
-  // Animated waiting dots
+  const videoRef    = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animRef     = useRef(null);
+  const streamRef   = useRef(null);
+
+  const [cameraOk, setCameraOk] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [micOk,    setMicOk]    = useState(false);
+  const [loading,  setLoading]  = useState(true);
+  const [camError, setCamError] = useState('');
+
+  const startMedia = useCallback(async () => {
+    // Stop existing stream first
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    if (audioCtxRef.current) try { audioCtxRef.current.close(); } catch {}
+
+    setLoading(true); setCamError(''); setCameraOk(false); setMicLevel(0); setMicOk(false);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' }, audio: true,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setCameraOk(stream.getVideoTracks().length > 0);
+
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.7;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      audioCtxRef.current = ctx; analyserRef.current = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        analyser.getByteFrequencyData(data);
+        const avg   = data.slice(2, 40).reduce((a, b) => a + b, 0) / 38;
+        const level = Math.min(100, avg * 2.5);
+        setMicLevel(level); setMicOk(level > 3);
+        animRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+      setLoading(false);
+    } catch (err) {
+      setLoading(false);
+      setCamError(err.name === 'NotAllowedError'
+        ? (lang === 'th' ? 'กรุณาอนุญาตกล้อง/ไมค์ในเบราว์เซอร์' : 'Allow camera/mic in browser settings')
+        : (lang === 'th' ? 'ไม่พบกล้อง — สามารถจับคู่ได้โดยไม่มีกล้อง' : 'No camera — you can still match without it'));
+    }
+  }, [lang]);
+
   useEffect(() => {
-    if (connected) return;
-    const id = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
-    return () => clearInterval(id);
-  }, [connected]);
+    startMedia();
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      if (audioCtxRef.current) try { audioCtxRef.current.close(); } catch {}
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, [startMedia]);
+
+  const handleConfirm = () => {
+    // Stop test streams — room page starts its own
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    if (audioCtxRef.current) try { audioCtxRef.current.close(); } catch {}
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    onConfirm();
+  };
+
+  const bars = Array.from({ length: BAR_COUNT }, (_, i) => {
+    const threshold = (i / BAR_COUNT) * 100;
+    const lit = micLevel > threshold;
+    const color = i < BAR_COUNT * 0.5 ? '#4ade80' : i < BAR_COUNT * 0.75 ? '#fbbf24' : '#f87171';
+    return { lit, color };
+  });
+
+  // Ready = socket connected (camera is optional — don't block matching if no camera)
+  const canConfirm = connected && !loading;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
 
-      <div className="anim-slide-up sm:anim-scale-in w-full sm:max-w-sm card overflow-hidden"
+      <div className="anim-slide-up sm:anim-scale-in w-full sm:max-w-md card overflow-hidden"
         style={{ background: 'rgba(10,10,22,0.98)', borderColor: 'rgba(124,58,237,0.3)',
           borderRadius: '20px 20px 0 0', paddingBottom: 'var(--safe-bottom, 0px)' }}>
 
@@ -28,11 +101,9 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[var(--border)]">
           <div>
             <h2 className="font-bold text-white text-base">
-              🎮 {lang === 'th' ? 'เตรียมจับคู่' : 'Ready to Match'}
+              🎮 {lang === 'th' ? 'ทดสอบอุปกรณ์ก่อนเล่น' : 'Device Check Before Playing'}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {lang === 'th' ? `เกม: ${gameName}` : `Game: ${gameName}`}
-            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{lang === 'th' ? `เกม: ${gameName}` : `Game: ${gameName}`}</p>
           </div>
           <button onClick={onCancel}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition">
@@ -40,65 +111,101 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
           </button>
         </div>
 
-        <div className="px-5 py-5 space-y-4">
+        <div className="px-4 py-4 space-y-3">
 
-          {/* Connection status */}
-          <div className={`flex items-center gap-3 p-4 rounded-2xl transition-all duration-300 ${
-            connected ? 'bg-green-900/15 border border-green-700/30' : 'bg-yellow-900/10 border border-yellow-700/20'
-          }`}>
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-              connected ? 'bg-green-500/20' : 'bg-yellow-500/10'
-            }`}>
-              {connected
-                ? <Wifi size={24} className="text-green-400" />
-                : <WifiOff size={24} className="text-yellow-400 animate-pulse" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={`font-bold text-sm ${connected ? 'text-green-300' : 'text-yellow-300'}`}>
-                {connected
-                  ? (lang === 'th' ? '✅ พร้อมจับคู่แล้ว!' : '✅ Ready to match!')
-                  : (lang === 'th' ? `⏳ กำลังเชื่อมต่อ${dots}` : `⏳ Connecting${dots}`)}
-              </p>
-              <p className="text-xs text-slate-500 mt-0.5 truncate">
-                {connected
-                  ? (lang === 'th' ? 'กด "จับคู่เลย!" เพื่อเริ่ม' : 'Press "Match!" to start')
-                  : (lang === 'th' ? 'รอการเชื่อมต่อเซิร์ฟเวอร์...' : 'Waiting for server...')}
-              </p>
-            </div>
+          {/* Server connection status */}
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium`}
+            style={connected
+              ? { background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80' }
+              : { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', color: '#fbbf24' }}>
+            {connected
+              ? <><Wifi size={11} /> {lang === 'th' ? 'เซิร์ฟเวอร์พร้อม ✓' : 'Server ready ✓'}</>
+              : <><WifiOff size={11} className="animate-pulse" /> {lang === 'th' ? 'กำลังเชื่อมต่อ...' : 'Connecting...'}</>}
           </div>
 
-          {/* Game & camera info */}
-          <div className="p-3 rounded-xl space-y-2"
-            style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.12)' }}>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🃏</span>
-              <div>
-                <p className="text-sm font-semibold text-white">{gameName}</p>
-                <p className="text-[11px] text-slate-500">
-                  {lang === 'th' ? 'กล้องจะเปิดอัตโนมัติเมื่อเจอคู่ต่อสู้' : 'Camera opens automatically when matched'}
-                </p>
+          {/* Camera preview */}
+          <div className="relative rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '4/3' }}>
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
               </div>
+            )}
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover"
+              style={{ transform: 'scaleX(-1)' }} />
+
+            {/* Camera status badge */}
+            {!loading && (
+              <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold
+                ${cameraOk ? 'bg-green-900/80 text-green-300 border border-green-700/40' : 'bg-red-900/80 text-red-300 border border-red-700/40'}`}>
+                {cameraOk ? <Camera size={9} /> : <CameraOff size={9} />}
+                {cameraOk ? (lang === 'th' ? 'กล้องพร้อม' : 'Camera OK') : (lang === 'th' ? 'ไม่มีกล้อง' : 'No Camera')}
+              </div>
+            )}
+
+            {/* Retry button */}
+            {!loading && camError && (
+              <button onClick={startMedia}
+                className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-white transition"
+                style={{ background: 'rgba(124,58,237,0.5)', border: '1px solid rgba(124,58,237,0.4)' }}>
+                <RefreshCw size={9} /> {lang === 'th' ? 'ลองใหม่' : 'Retry'}
+              </button>
+            )}
+          </div>
+
+          {/* Camera error (non-blocking) */}
+          {camError && (
+            <p className="text-xs text-yellow-500 text-center">{camError}</p>
+          )}
+
+          {/* Mic meter */}
+          <div className="card p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0
+                  ${micOk ? 'bg-green-500/15 border border-green-500/25' : 'bg-slate-800 border border-slate-700'}`}>
+                  {micOk ? <Mic size={11} className="text-green-400" /> : <MicOff size={11} className="text-slate-600" />}
+                </div>
+                <span className="text-xs font-medium text-white">{lang === 'th' ? 'ไมโครโฟน' : 'Microphone'}</span>
+              </div>
+              <span className={`badge text-[9px] ${micOk ? 'badge-green' : ''}`}
+                style={!micOk ? { background: 'rgba(255,255,255,0.04)', color: '#475569', border: '1px solid rgba(255,255,255,0.06)' } : {}}>
+                {micOk ? (lang === 'th' ? 'รับเสียง ✓' : 'Active ✓') : (lang === 'th' ? 'เงียบ' : 'Silent')}
+              </span>
             </div>
-            <p className="text-[10px] text-slate-600">
-              💡 {lang === 'th'
-                ? 'ทดสอบกล้อง/ไมค์ได้ที่เมนู "ทดสอบ" ในแถบด้านบน'
-                : 'Test camera/mic via "Setup" in the top menu'}
-            </p>
+            <div className="flex items-end gap-[2px]" style={{ height: '22px' }}>
+              {bars.map(({ lit, color }, i) => (
+                <div key={i} className="flex-1 rounded-sm transition-all duration-75"
+                  style={{ background: lit ? color : 'rgba(255,255,255,0.06)', height: `${30 + (i / BAR_COUNT) * 70}%`, opacity: lit ? 1 : 0.4 }} />
+              ))}
+            </div>
+            {!loading && !camError && (
+              <p className="text-[10px] text-slate-700 text-center mt-1">
+                {lang === 'th' ? 'พูดอะไรก็ได้เพื่อทดสอบ' : 'Say something to test'}
+              </p>
+            )}
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-1">
             <button onClick={onCancel} className="btn-ghost flex-1 py-3 rounded-xl text-sm">
               {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
             </button>
-            <button onClick={onConfirm} disabled={!connected}
-              className={`btn-primary flex-1 py-3 rounded-xl text-sm gap-2 ${!connected ? 'opacity-40 cursor-not-allowed' : ''}`}>
-              <Shuffle size={15} />
-              {connected
-                ? (lang === 'th' ? 'จับคู่เลย!' : 'Match!')
-                : (lang === 'th' ? 'รอสักครู่...' : 'Wait...')}
+            <button onClick={handleConfirm} disabled={!canConfirm}
+              className={`btn-primary flex-1 py-3 rounded-xl text-sm gap-2 ${!canConfirm ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              <Shuffle size={14} />
+              {!connected
+                ? (lang === 'th' ? 'รอเซิร์ฟเวอร์...' : 'Connecting...')
+                : loading
+                  ? (lang === 'th' ? 'เปิดกล้อง...' : 'Opening...')
+                  : (lang === 'th' ? 'พร้อม → จับคู่!' : 'Ready → Match!')}
             </button>
           </div>
+
+          {canConfirm && !cameraOk && (
+            <p className="text-[10px] text-slate-600 text-center">
+              {lang === 'th' ? '💡 สามารถจับคู่ได้แม้ไม่มีกล้อง' : '💡 You can match without a camera'}
+            </p>
+          )}
         </div>
       </div>
     </div>
