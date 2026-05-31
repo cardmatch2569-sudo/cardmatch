@@ -60,20 +60,28 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
     }
   }, [lang]);
 
+  // Centralized cleanup — prevents double-close of AudioContext
+  const cleanupMedia = useCallback(() => {
+    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null; }
+    if (audioCtxRef.current) {
+      // Null FIRST to prevent double-close from useEffect cleanup
+      const ctx = audioCtxRef.current;
+      audioCtxRef.current = null;
+      ctx.close().catch(() => {}); // handle async rejection silently
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     startMedia();
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      if (audioCtxRef.current) try { audioCtxRef.current.close(); } catch {}
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, [startMedia]);
+    return cleanupMedia; // cleanup on unmount
+  }, [startMedia, cleanupMedia]);
 
   const handleConfirm = () => {
-    // Stop test streams — room page starts its own
-    if (animRef.current) cancelAnimationFrame(animRef.current);
-    if (audioCtxRef.current) try { audioCtxRef.current.close(); } catch {}
-    streamRef.current?.getTracks().forEach(t => t.stop());
+    cleanupMedia(); // cleanup BEFORE onConfirm to prevent React re-render conflict
     onConfirm();
   };
 
