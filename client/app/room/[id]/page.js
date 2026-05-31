@@ -340,7 +340,8 @@ export default function RoomPage() {
           aspectRatio: '4/3',
         }}>
         <video ref={localVideoRef} autoPlay playsInline muted
-          className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+          className="w-full h-full object-cover"
+          style={{ transform: (forcedLandscape && !systemLandscape) ? 'rotate(-90deg) scaleX(-1)' : 'scaleX(-1)' }} />
         {!cameraOn && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
             <VideoOff size={14} className="text-slate-400" />
