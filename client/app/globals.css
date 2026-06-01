@@ -104,11 +104,35 @@ button, a, [role="button"] {
   touch-action: manipulation;
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────── */
+/* ── Keyboard focus (Windows / desktop accessibility) ─────────── */
+/* Show focus ring only for keyboard navigation, not mouse clicks  */
+:focus-visible {
+  outline: 2px solid rgba(124,58,237,0.7);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── Windows / cross-platform font rendering ───────────────────── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Windows high-contrast mode support ────────────────────────── */
+@media (forced-colors: active) {
+  .btn-primary { forced-color-adjust: none; }
+  .badge       { forced-color-adjust: none; }
+}
+
+/* ── Scrollbar — Chrome/Edge/Safari (webkit) + Firefox ────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+/* Firefox (Windows/Linux) */
+* { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
 
 /* ── Video ─────────────────────────────────────────────────────── */
 video { object-fit: cover; background: #000; }

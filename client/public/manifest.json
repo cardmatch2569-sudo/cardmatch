@@ -1,0 +1,41 @@
+{
+  "name": "CardMatch - หาคู่เล่นการ์ดเกม",
+  "short_name": "CardMatch",
+  "description": "จับคู่ผู้เล่นการ์ดเกมและเล่นผ่านวิดีโอสด",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07070f",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "categories": ["games", "entertainment"],
+  "lang": "th",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "ล็อบบี้",
+      "url": "/lobby",
+      "description": "ค้นหาคู่เล่น"
+    }
+  ]
+}

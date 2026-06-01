@@ -6,15 +6,29 @@ import ViewportHeight from '../components/ViewportHeight';
 export const metadata = {
   title: 'CardMatch - หาคู่เล่นการ์ดเกม',
   description: 'จับคู่ผู้เล่นการ์ดเกมและเล่นผ่านวิดีโอสด',
+  manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/icon-192.svg',
+  },
   appleWebApp: {
     capable: true,
     title: 'CardMatch',
     statusBarStyle: 'black-translucent',
   },
   other: {
+    // Android
     'mobile-web-app-capable': 'yes',
+    // iOS
     'apple-touch-fullscreen': 'yes',
     'format-detection': 'telephone=no',
+    // Windows (Edge / IE pinned sites)
+    'msapplication-TileColor': '#7c3aed',
+    'msapplication-tap-highlight': 'no',
+    // Universal
+    'application-name': 'CardMatch',
   },
 };
 
@@ -24,7 +38,10 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#07070f',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)',  color: '#07070f' },
+    { media: '(prefers-color-scheme: light)', color: '#7c3aed' },
+  ],
 };
 
 export default function RootLayout({ children }) {
