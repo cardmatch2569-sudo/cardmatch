@@ -520,7 +520,7 @@ export default function RoomPage() {
             style={{
               background: 'rgba(10,10,22,0.98)',
               borderTop: '1px solid var(--border)',
-              height: 'min(60vh, 480px)',
+              height: 'min(60vh, 480px, 100vw - 16px)',
             }}
             onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
