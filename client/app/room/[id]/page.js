@@ -443,13 +443,11 @@ export default function RoomPage() {
             )}
 
             <div className="space-y-2 pt-1">
-              {gameTypeId && (
-                <button onClick={findNextPlayer}
-                  className="btn-primary w-full py-3 rounded-xl text-sm gap-2">
-                  <Shuffle size={15} />
-                  {lang === 'th' ? 'หาผู้เล่นคนต่อไป' : 'Find Next Player'}
-                </button>
-              )}
+              <button onClick={findNextPlayer}
+                className="btn-primary w-full py-3 rounded-xl text-sm gap-2">
+                <Shuffle size={15} />
+                {lang === 'th' ? 'หาผู้เล่นคนต่อไป' : 'Find Next Player'}
+              </button>
               <button onClick={goToLobby}
                 className="btn-ghost w-full py-3 rounded-xl text-sm gap-2 flex items-center justify-center">
                 <Home size={15} />
