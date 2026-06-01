@@ -113,6 +113,9 @@ const setupSocketHandlers = (io) => {
     // Challenge by Player ID (e.g. "A3B7C2")
     socket.on('challenge_by_player_id', async ({ playerId, gameTypeId }) => {
       if (!playerId || !gameTypeId) return;
+      // Block if challenger is already in any active room
+      if ([...activeRooms.values()].some(r => r.players.includes(userId)))
+        return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าได้ขณะอยู่ในห้องแข่ง' });
       const targetUser = await User.findByPlayerId(playerId);
       if (!targetUser) return socket.emit('challenge_id_error', { message: 'ไม่พบผู้เล่น ID นี้' });
       if (targetUser._id === userId) return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าตัวเองได้' });

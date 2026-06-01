@@ -38,7 +38,7 @@ router.get('/users', protect, adminOnly, async (req, res) => {
 
     const [rows, total] = await Promise.all([
       pool.query(
-        `SELECT id,username,email,is_admin,avatar,total_games,wins,losses,google_id,created_at
+        `SELECT id,username,email,is_admin,avatar,player_id,total_games,wins,losses,google_id,created_at
          FROM Users
          WHERE username ILIKE $1 OR email ILIKE $1
          ORDER BY created_at DESC
@@ -54,6 +54,7 @@ router.get('/users', protect, adminOnly, async (req, res) => {
     const online = getOnlineUsers();
     const users = rows.rows.map(r => ({
       _id:       r.id,
+      playerId:  r.player_id || null,
       username:  r.username,
       email:     r.email,
       isAdmin:   !!r.is_admin,
@@ -88,6 +89,10 @@ router.put('/users/:id/role', protect, adminOnly, async (req, res) => {
 // ── DELETE USER (hard delete, requires admin password) ───────────
 router.delete('/users/:id', protect, adminOnly, async (req, res) => {
   try {
+    // Self-deletion check first (fast fail, no DB needed)
+    if (req.params.id === req.user._id)
+      return res.status(400).json({ message: 'ไม่สามารถลบบัญชีตัวเองได้' });
+
     const { password } = req.body;
     if (!password) return res.status(400).json({ message: 'กรุณากรอกรหัสผ่าน Admin เพื่อยืนยัน' });
 
@@ -95,9 +100,6 @@ router.delete('/users/:id', protect, adminOnly, async (req, res) => {
     const admin = await User.findById(req.user._id);
     const valid = await User.comparePassword(password, admin.password);
     if (!valid) return res.status(403).json({ message: 'รหัสผ่าน Admin ไม่ถูกต้อง' });
-
-    if (req.params.id === req.user._id)
-      return res.status(400).json({ message: 'ไม่สามารถลบบัญชีตัวเองได้' });
 
     const target = await User.findById(req.params.id);
     if (!target) return res.status(404).json({ message: 'ไม่พบผู้ใช้' });
