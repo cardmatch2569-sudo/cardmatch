@@ -22,11 +22,11 @@ export default function ProfilePage() {
     }).catch(() => {});
   };
 
-  // Re-fetch user to get newly-generated player_id (for existing accounts)
+  // Generate player_id via dedicated endpoint (also ensures DB column exists)
   const refreshUser = async () => {
     setRefreshing(true);
     try {
-      const { user: fresh } = await api.get('/api/auth/me');
+      const { user: fresh } = await api.post('/api/users/generate-player-id', {});
       if (fresh && setUser) setUser(fresh);
     } catch {}
     setRefreshing(false);
