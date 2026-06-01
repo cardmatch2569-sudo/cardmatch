@@ -179,16 +179,8 @@ export default function RoomPage() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width:     { ideal: 1280 },
-          height:    { ideal: 720  },
-          frameRate: { ideal: 30   },
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 48000,
-        },
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: { echoCancellation: true, noiseSuppression: true },
       });
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -215,7 +207,7 @@ export default function RoomPage() {
         { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
       ],
-      iceCandidatePoolSize: 4,
+      iceCandidatePoolSize: 10,
     });
     stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
     pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('ice_candidate', { roomId, candidate }); };
