@@ -19,7 +19,7 @@ export default function LobbyPage() {
   const [selectedGame, setSelectedGame] = useState(null);
   // Pre-detect autoQueue so lobby shows searching state immediately (no flash of game grid)
   const pendingAutoQueue = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('autoQueue') || null
+    ? new URLSearchParams(window.location.search).get('autoQueue') || sessionStorage.getItem('cg_auto_queue') || null
     : null;
   const [inQueue, setInQueue] = useState(!!pendingAutoQueue);
   const [queueTime, setQueueTime]       = useState(0);
@@ -40,10 +40,10 @@ export default function LobbyPage() {
   // SocketContext owns the socket.on listeners (registered once at socket creation),
   // and simply delegates to whatever is in lobbyCallbacksRef — no React timing risk.
   setLobbyCallbacks({
-    onMatchFound:        ({ roomId, gameType, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); setTimeout(() => router.push(`/room/${roomId}?g=${gameType?._id || ''}`), 600); },
+    onMatchFound:        ({ roomId, gameType, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); setTimeout(() => router.push(`/room/${roomId}`), 600); },
     onQueueLeft:         () => setQueue(false),
     onChallengeReceived: (data) => setChallenge(data),
-    onChallengeAccepted: ({ roomId, gameType }) => router.push(`/room/${roomId}?g=${gameType?._id || ''}`),
+    onChallengeAccepted: ({ roomId, gameType }) => { if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); router.push(`/room/${roomId}`); },
     onChallengeDeclined: ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
   });
 
@@ -56,15 +56,15 @@ export default function LobbyPage() {
     api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
   }, []);
 
-  // Auto-queue when coming from a room with ?autoQueue=gameTypeId — skip PreMatchModal
+  // Auto-queue when coming from a room — skip PreMatchModal, join queue immediately
   useEffect(() => {
     if (!pendingAutoQueue || !games.length) return;
     const game = games.find(g => g._id === pendingAutoQueue);
     if (!game) return;
+    sessionStorage.removeItem('cg_auto_queue'); // consume the signal
     setSelectedGame(game);
     setQueueGame(game._id);
     safeEmit('join_queue', { gameTypeId: game._id });
-    // inQueue was already true from initial state — just sync the ref
     inQueueRef.current = true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games]);

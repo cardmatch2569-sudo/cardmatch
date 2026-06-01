@@ -82,7 +82,7 @@ export default function RoomPage() {
   const router     = useRouter();
   const [gameTypeId] = useState(
     () => typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('g') || ''
+      ? sessionStorage.getItem('cg_last_game') || ''
       : ''
   );
   const t = translations[lang];
@@ -180,9 +180,9 @@ export default function RoomPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width:     { ideal: 1280, min: 640 },
-          height:    { ideal: 720,  min: 480 },
-          frameRate: { ideal: 30,   min: 15  },
+          width:     { ideal: 1280 },
+          height:    { ideal: 720  },
+          frameRate: { ideal: 30   },
         },
         audio: {
           echoCancellation: true,
@@ -212,13 +212,10 @@ export default function RoomPage() {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' },
         { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
       ],
-      iceCandidatePoolSize: 10,
+      iceCandidatePoolSize: 4,
     });
     stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
     pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('ice_candidate', { roomId, candidate }); };
@@ -319,13 +316,15 @@ export default function RoomPage() {
   const handleLeave = () => setEndModal('leave');
 
   const goToLobby = () => {
+    sessionStorage.removeItem('cg_auto_queue');
     cleanupAndLeave();
     router.push('/lobby');
   };
 
   const findNextPlayer = () => {
+    if (gameTypeId) sessionStorage.setItem('cg_auto_queue', gameTypeId);
     cleanupAndLeave();
-    router.push(gameTypeId ? `/lobby?autoQueue=${gameTypeId}` : '/lobby');
+    router.push('/lobby');
   };
 
   const toggleCamera = () => { const tk = localStreamRef.current?.getVideoTracks()[0]; if (tk) { tk.enabled = !tk.enabled; setCameraOn(tk.enabled); } };
