@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, CameraOff, Mic, MicOff, X, Shuffle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Camera, CameraOff, Mic, MicOff, X, Shuffle, Wifi, WifiOff, RefreshCw, SwitchCamera } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 
 const BAR_COUNT = 18;
@@ -14,13 +14,21 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
   const animRef     = useRef(null);
   const streamRef   = useRef(null);
 
-  const [cameraOk, setCameraOk] = useState(false);
-  const [micLevel, setMicLevel] = useState(0);
-  const [micOk,    setMicOk]    = useState(false);
-  const [loading,  setLoading]  = useState(true);
-  const [camError, setCamError] = useState('');
+  const [cameraOk,      setCameraOk]      = useState(false);
+  const [micLevel,      setMicLevel]      = useState(0);
+  const [micOk,         setMicOk]         = useState(false);
+  const [loading,       setLoading]       = useState(true);
+  const [camError,      setCamError]      = useState('');
+  const [facingMode,    setFacingMode]    = useState('user');
+  const [hasFlipCamera, setHasFlipCamera] = useState(false);
 
-  const startMedia = useCallback(async () => {
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices()
+      .then(devs => setHasFlipCamera(devs.filter(d => d.kind === 'videoinput').length > 1))
+      .catch(() => {});
+  }, []);
+
+  const startMedia = useCallback(async (facing = 'user') => {
     // Stop existing stream first
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     if (animRef.current) cancelAnimationFrame(animRef.current);
@@ -30,7 +38,7 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' }, audio: true,
+        video: { facingMode: facing }, audio: true,
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
@@ -139,7 +147,7 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
               </div>
             )}
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover"
-              style={{ transform: 'scaleX(-1)' }} />
+              style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }} />
 
             {/* Camera status badge */}
             {!loading && (
@@ -150,10 +158,25 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
               </div>
             )}
 
+            {/* Flip camera button */}
+            {hasFlipCamera && !loading && (
+              <button
+                onClick={() => {
+                  const next = facingMode === 'user' ? 'environment' : 'user';
+                  setFacingMode(next);
+                  startMedia(next);
+                }}
+                title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
+                className="absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95"
+                style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <SwitchCamera size={14} className="text-white" />
+              </button>
+            )}
+
             {/* Retry button */}
             {!loading && camError && (
-              <button onClick={startMedia}
-                className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-white transition"
+              <button onClick={() => startMedia(facingMode)}
+                className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-white transition"
                 style={{ background: 'rgba(124,58,237,0.5)', border: '1px solid rgba(124,58,237,0.4)' }}>
                 <RefreshCw size={9} /> {lang === 'th' ? 'ลองใหม่' : 'Retry'}
               </button>

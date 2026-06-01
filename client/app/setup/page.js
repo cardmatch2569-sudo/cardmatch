@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Camera, CameraOff, Mic, MicOff, Volume2,
   CheckCircle, XCircle, RefreshCw, ArrowRight,
-  AlertTriangle, Play, Settings,
+  AlertTriangle, Play, Settings, SwitchCamera,
 } from 'lucide-react';
 
 const BAR_COUNT = 20;
@@ -219,6 +219,21 @@ export default function SetupPage() {
                 {cameraOk ? <CheckCircle size={10} /> : <XCircle size={10} />}
                 {cameraOk ? (lang === 'th' ? 'กล้องพร้อม' : 'Camera OK') : (lang === 'th' ? 'ไม่มีกล้อง' : 'No Camera')}
               </div>
+            )}
+            {/* Flip camera button — only when multiple cameras available */}
+            {cameraDevices.length > 1 && !loading && (
+              <button
+                onClick={() => {
+                  const idx = cameraDevices.findIndex(d => d.deviceId === selCamera);
+                  const next = cameraDevices[(idx + 1) % cameraDevices.length];
+                  setSelCamera(next.deviceId);
+                  startMedia(next.deviceId, selMic);
+                }}
+                title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
+                className="absolute bottom-2 right-2 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95"
+                style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <SwitchCamera size={16} className="text-white" />
+              </button>
             )}
           </div>
 

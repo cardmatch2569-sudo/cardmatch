@@ -6,7 +6,7 @@ import { useSocket } from '../../../context/SocketContext';
 import translations from '../../../lib/translations';
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, Send,
-  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw,
+  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera,
 } from 'lucide-react';
 
 // Returns absolute-position + size style for a full-screen rotated video element
@@ -109,6 +109,9 @@ export default function RoomPage() {
   // Manual rotation offsets (multiples of 90°) — user can adjust each independently
   const [remoteRotation, setRemoteRotation] = useState(0);
   const [localRotation,  setLocalRotation]  = useState(0);
+  // Camera flip (front/back)
+  const [facingMode,      setFacingMode]      = useState('user');
+  const [hasFlipCamera,   setHasFlipCamera]   = useState(false);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -131,6 +134,13 @@ export default function RoomPage() {
     const onResize = () => setSystemLandscape(window.innerWidth > window.innerHeight);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Detect if device has multiple cameras (front + back)
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices()
+      .then(devs => setHasFlipCamera(devs.filter(d => d.kind === 'videoinput').length > 1))
+      .catch(() => {});
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -275,6 +285,33 @@ export default function RoomPage() {
 
   const toggleCamera = () => { const tk = localStreamRef.current?.getVideoTracks()[0]; if (tk) { tk.enabled = !tk.enabled; setCameraOn(tk.enabled); } };
   const toggleMic    = () => { const tk = localStreamRef.current?.getAudioTracks()[0];  if (tk) { tk.enabled = !tk.enabled; setMicOn(tk.enabled); } };
+
+  const flipCamera = useCallback(async () => {
+    const next = facingMode === 'user' ? 'environment' : 'user';
+    try {
+      // Try exact facingMode first, fallback to non-exact for older devices
+      let newStream;
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: next } }, audio: false });
+      } catch {
+        newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next }, audio: false });
+      }
+      const newTrack = newStream.getVideoTracks()[0];
+      if (!newTrack) return;
+      // Replace track in active peer connection without renegotiation
+      if (peerRef.current) {
+        const sender = peerRef.current.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) await sender.replaceTrack(newTrack);
+      }
+      // Stop old video track and swap in new one
+      const oldTrack = localStreamRef.current?.getVideoTracks()[0];
+      if (oldTrack) { localStreamRef.current.removeTrack(oldTrack); oldTrack.stop(); }
+      if (localStreamRef.current) localStreamRef.current.addTrack(newTrack);
+      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+      setFacingMode(next);
+      setCameraOn(true);
+    } catch (e) { console.warn('[flipCamera]', e.message); }
+  }, [facingMode]);
   const sendMessage  = () => { if (!msgInput.trim()) return; getSocket()?.emit('send_message', { roomId, message: msgInput }); setMsgInput(''); };
 
   if (loading || !user) return (
@@ -381,7 +418,7 @@ export default function RoomPage() {
         <div className="relative rounded-xl overflow-hidden shadow-2xl border border-white/20 w-full h-full">
           <video ref={localVideoRef} autoPlay playsInline muted
             className="w-full h-full object-cover"
-            style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg) scaleX(-1)` }} />
+            style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg)${facingMode === 'user' ? ' scaleX(-1)' : ''}` }} />
           {!cameraOn && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
               <VideoOff size={14} className="text-slate-400" />
@@ -414,6 +451,22 @@ export default function RoomPage() {
             ${cameraOn ? 'bg-white/15 text-white border border-white/20' : 'bg-red-600/80 text-white'}`}>
           {cameraOn ? <Video size={18} /> : <VideoOff size={18} />}
         </button>
+
+        {/* Flip camera — only shown when device has front+back cameras */}
+        {hasFlipCamera && (
+          <button onClick={flipCamera}
+            title={lang === 'th'
+              ? (facingMode === 'user' ? 'สลับกล้องหลัง' : 'สลับกล้องหน้า')
+              : (facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera')}
+            className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 backdrop-blur-sm bg-white/15 text-white border border-white/20">
+            <SwitchCamera size={16} />
+            <span className="text-[8px] leading-none opacity-70">
+              {facingMode === 'user'
+                ? (lang === 'th' ? 'หลัง' : 'Back')
+                : (lang === 'th' ? 'หน้า' : 'Front')}
+            </span>
+          </button>
+        )}
 
         {/* Leave — center, larger */}
         <button onClick={handleLeave}
