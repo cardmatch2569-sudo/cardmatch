@@ -43,22 +43,8 @@ export default function GoogleLoginButton({ lang }) {
   // Don't render if client ID not configured
   if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') return null;
 
-  // Don't render if accessed via IP address — show friendly message instead
-  if (!allowed) {
-    return (
-      <div className="w-full p-3 rounded-xl text-center"
-        style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
-        <p className="text-xs text-yellow-400 font-medium mb-1">
-          {lang === 'th' ? '🔒 Google Login ไม่รองรับการเข้าถึงผ่าน IP' : '🔒 Google Login unavailable via IP address'}
-        </p>
-        <p className="text-xs text-yellow-700">
-          {lang === 'th'
-            ? 'กรุณาใช้ Email/Password ด้านล่าง หรือเปิดผ่าน localhost'
-            : 'Please use Email/Password below, or open via localhost'}
-        </p>
-      </div>
-    );
-  }
+  // If accessed via IP address, hide Google Login silently (no message)
+  if (!allowed) return null;
 
   const handleSuccess = async (res) => {
     setError('');
