@@ -140,11 +140,12 @@ export default function AdminPage() {
     </div>
   );
 
+  // Short labels for mobile, full for desktop
   const tabLabels = {
-    overview: lang === 'th' ? '📊 ภาพรวม' : '📊 Overview',
-    users:    lang === 'th' ? '👥 ผู้ใช้'  : '👥 Users',
-    games:    lang === 'th' ? '🃏 เกม'     : '🃏 Games',
-    rooms:    lang === 'th' ? '🎮 ห้อง'    : '🎮 Rooms',
+    overview: <><span className="hidden sm:inline">📊 </span><span className="sm:hidden">📊</span><span className="hidden sm:inline">{lang === 'th' ? 'ภาพรวม' : 'Overview'}</span></>,
+    users:    <><span className="hidden sm:inline">👥 </span><span className="sm:hidden">👥</span><span className="hidden sm:inline">{lang === 'th' ? 'ผู้ใช้' : 'Users'}</span></>,
+    games:    <><span className="hidden sm:inline">🃏 </span><span className="sm:hidden">🃏</span><span className="hidden sm:inline">{lang === 'th' ? 'เกม' : 'Games'}</span></>,
+    rooms:    <><span className="hidden sm:inline">🎮 </span><span className="sm:hidden">🎮</span><span className="hidden sm:inline">{lang === 'th' ? 'ห้อง' : 'Rooms'}</span></>,
   };
 
   const statCards = stats ? [
@@ -274,20 +275,21 @@ export default function AdminPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
-            <Shield size={20} className="text-yellow-400" />
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            <Shield size={18} className="text-yellow-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-            <p className="text-slate-600 text-xs">{lang === 'th' ? 'จัดการระบบ CardMatch' : 'Manage CardMatch system'}</p>
+            <h1 className="text-lg md:text-2xl font-bold text-white leading-tight">Admin</h1>
+            <p className="text-slate-600 text-[11px]">CardMatch</p>
           </div>
         </div>
         <button onClick={toggleViewMode}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition border"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition border flex-shrink-0"
           style={{ background: 'rgba(124,58,237,0.1)', borderColor: 'rgba(124,58,237,0.25)', color: '#a78bfa' }}>
-          👤 {lang === 'th' ? 'ดูเป็นผู้ใช้ทั่วไป' : 'Preview as User'}
+          👤 <span className="hidden sm:inline">{lang === 'th' ? 'ดูเป็นผู้ใช้' : 'Preview'}</span>
+          <span className="sm:hidden">{lang === 'th' ? 'ผู้ใช้' : 'User'}</span>
         </button>
       </div>
 
@@ -448,19 +450,18 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           {u._id !== user._id && (
-                            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition">
+                            <div className="flex items-center gap-1.5 md:opacity-0 md:group-hover:opacity-100 transition">
                               <button onClick={() => handleToggleAdmin(u._id, u.username)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition"
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition"
                                 style={{ background: u.isAdmin ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)', color: u.isAdmin ? '#f87171' : '#fbbf24', border: `1px solid ${u.isAdmin ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'}` }}>
-                                {u.isAdmin
-                                  ? <><UserX size={11} /> {lang === 'th' ? 'ถอด Admin' : 'Remove'}</>
-                                  : <><Crown size={11} /> {lang === 'th' ? 'ตั้ง Admin' : 'Make Admin'}</>}
+                                {u.isAdmin ? <UserX size={11} /> : <Crown size={11} />}
+                                <span className="hidden sm:inline">{u.isAdmin ? (lang === 'th' ? 'ถอด' : 'Remove') : (lang === 'th' ? 'ตั้ง Admin' : 'Admin')}</span>
                               </button>
                               <button onClick={() => openDeleteUser(u)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition"
-                                style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}
-                                title={lang === 'th' ? 'ลบผู้ใช้' : 'Delete user'}>
-                                <Trash2 size={11} /> {lang === 'th' ? 'ลบ' : 'Delete'}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition"
+                                style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                <Trash2 size={11} />
+                                <span className="hidden sm:inline">{lang === 'th' ? 'ลบ' : 'Del'}</span>
                               </button>
                             </div>
                           )}
@@ -526,9 +527,9 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition">
-                            <button onClick={() => openEdit(g)} className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition"><Pencil size={13} /></button>
-                            <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"><Trash2 size={13} /></button>
+                          <div className="flex items-center justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition">
+                            <button onClick={() => openEdit(g)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition active:scale-95"><Pencil size={14} /></button>
+                            <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition active:scale-95"><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>
