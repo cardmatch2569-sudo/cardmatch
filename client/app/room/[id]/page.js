@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
 import translations from '../../../lib/translations';
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, Send,
-  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera,
+  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera, Shuffle, Home,
 } from 'lucide-react';
 
 // Returns absolute-position + size style for a full-screen rotated video element
@@ -79,7 +79,9 @@ export default function RoomPage() {
   const { id: roomId } = useParams();
   const { user, loading, lang } = useAuth();
   const { getSocket } = useSocket();
-  const router = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const gameTypeId   = searchParams.get('g') || '';
   const t = translations[lang];
 
   const localVideoRef  = useRef(null);
@@ -98,6 +100,7 @@ export default function RoomPage() {
   const [chatOpen,      setChatOpen]      = useState(false);
   const [unread,        setUnread]        = useState(0);
   const [mediaError,    setMediaError]    = useState('');
+  const [endModal,      setEndModal]      = useState(null); // null | 'leave' | 'partner_left'
   const [isFullscreen,    setIsFullscreen]    = useState(false);
   const [forcedLandscape, setForcedLandscape] = useState(false);
   // Track system orientation to avoid double-rotation when iOS auto-rotates
@@ -285,6 +288,7 @@ export default function RoomPage() {
         if (s) s.getTracks().forEach(tk => tk.stop());
         remoteVideoRef.current.srcObject = null;
       }
+      setEndModal('partner_left');
     };
 
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
@@ -300,14 +304,25 @@ export default function RoomPage() {
     };
   }, [loading, user, roomId, router, getSocket, startMedia, createPeer]);
 
-  const handleLeave = () => {
+  const cleanupAndLeave = useCallback(() => {
     leftRef.current = true;
     setForcedLandscape(false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     getSocket()?.emit('leave_room', { roomId });
     localStreamRef.current?.getTracks().forEach(tk => tk.stop());
     peerRef.current?.close();
+  }, [getSocket, roomId]);
+
+  const handleLeave = () => setEndModal('leave');
+
+  const goToLobby = () => {
+    cleanupAndLeave();
     router.push('/lobby');
+  };
+
+  const findNextPlayer = () => {
+    cleanupAndLeave();
+    router.push(gameTypeId ? `/lobby?autoQueue=${gameTypeId}` : '/lobby');
   };
 
   const toggleCamera = () => { const tk = localStreamRef.current?.getVideoTracks()[0]; if (tk) { tk.enabled = !tk.enabled; setCameraOn(tk.enabled); } };
@@ -391,18 +406,69 @@ export default function RoomPage() {
         </div>
       )}
 
+      {/* ── End-of-match modal (leave confirm / partner left) ── */}
+      {endModal && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(10px)' }}>
+          <div className="card w-full max-w-xs p-6 text-center space-y-4 anim-scale-in"
+            style={{ background: 'rgba(12,12,26,0.98)', borderColor: 'rgba(124,58,237,0.3)' }}>
+
+            {endModal === 'partner_left' ? (
+              <>
+                <div className="text-4xl">😔</div>
+                <div>
+                  <p className="text-white font-bold text-base">
+                    {lang === 'th' ? 'คู่แข่งออกจากการแข่งแล้ว' : 'Opponent left the match'}
+                  </p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {lang === 'th' ? 'ต้องการเล่นต่อไหม?' : 'Want to keep playing?'}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-4xl">🏁</div>
+                <div>
+                  <p className="text-white font-bold text-base">
+                    {lang === 'th' ? 'จบการแข่ง?' : 'End the match?'}
+                  </p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {lang === 'th' ? 'เลือกสิ่งที่ต้องการทำต่อไป' : 'Choose what to do next'}
+                  </p>
+                </div>
+              </>
+            )}
+
+            <div className="space-y-2 pt-1">
+              {gameTypeId && (
+                <button onClick={findNextPlayer}
+                  className="btn-primary w-full py-3 rounded-xl text-sm gap-2">
+                  <Shuffle size={15} />
+                  {lang === 'th' ? 'หาผู้เล่นคนต่อไป' : 'Find Next Player'}
+                </button>
+              )}
+              <button onClick={goToLobby}
+                className="btn-ghost w-full py-3 rounded-xl text-sm gap-2 flex items-center justify-center">
+                <Home size={15} />
+                {lang === 'th' ? 'กลับ Lobby' : 'Back to Lobby'}
+              </button>
+              {endModal === 'leave' && (
+                <button onClick={() => setEndModal(null)}
+                  className="w-full py-2 rounded-xl text-xs text-slate-600 hover:text-slate-400 transition">
+                  {lang === 'th' ? 'เล่นต่อ' : 'Continue playing'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Notifications ── */}
       {mediaError && (
         <div className="absolute z-30 left-3 right-3 p-3 rounded-xl text-xs"
           style={{ top: `calc(52px + max(0px, ${safeTop}))`, background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5' }}>
           <p className="font-semibold">📷 {lang === 'th' ? 'ไม่สามารถเปิดกล้องได้' : 'Cannot access camera'}</p>
           {mediaError.split('\n').map((line, i) => <p key={i} className="text-[11px] mt-0.5 opacity-80">{line}</p>)}
-        </div>
-      )}
-      {partnerLeft && (
-        <div className="absolute z-30 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap"
-          style={{ top: `calc(52px + max(0px, ${safeTop}))`, background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5' }}>
-          {t.partnerLeft}
         </div>
       )}
 

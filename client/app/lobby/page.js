@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
@@ -12,7 +12,8 @@ import PreMatchModal from '../../components/PreMatchModal';
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
   const { getSocket, safeEmit, setQueueGame, setLobbyCallbacks, onlineCount, connected } = useSocket();
-  const router = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
   const t = translations[lang];
 
   const [games, setGames]               = useState([]);
@@ -36,10 +37,10 @@ export default function LobbyPage() {
   // SocketContext owns the socket.on listeners (registered once at socket creation),
   // and simply delegates to whatever is in lobbyCallbacksRef — no React timing risk.
   setLobbyCallbacks({
-    onMatchFound:        ({ roomId, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); setTimeout(() => router.push(`/room/${roomId}`), 600); },
+    onMatchFound:        ({ roomId, gameType, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); setTimeout(() => router.push(`/room/${roomId}?g=${gameType?._id || ''}`), 600); },
     onQueueLeft:         () => setQueue(false),
     onChallengeReceived: (data) => setChallenge(data),
-    onChallengeAccepted: ({ roomId }) => router.push(`/room/${roomId}`),
+    onChallengeAccepted: ({ roomId, gameType }) => router.push(`/room/${roomId}?g=${gameType?._id || ''}`),
     onChallengeDeclined: ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
   });
 
@@ -51,6 +52,17 @@ export default function LobbyPage() {
   useEffect(() => {
     api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
   }, []);
+
+  // Auto-queue when coming from a room with ?autoQueue=gameTypeId
+  const autoQueue = searchParams.get('autoQueue');
+  useEffect(() => {
+    if (!autoQueue || !games.length || inQueue) return;
+    const game = games.find(g => g._id === autoQueue);
+    if (!game) return;
+    setSelectedGame(game);
+    setTimeout(() => setShowPreMatch(true), 400);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoQueue, games]);
 
   useEffect(() => {
     if (!inQueue) { setQueueTime(0); return; }
