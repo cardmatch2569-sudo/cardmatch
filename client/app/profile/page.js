@@ -13,6 +13,8 @@ export default function ProfilePage() {
   const [games, setGames]           = useState([]);
   const [copied, setCopied]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Prevent retrying if the endpoint is not yet available
+  const pidTriedRef = useRef(false);
 
   const copyPlayerId = () => {
     if (!user.playerId) return;
@@ -22,12 +24,14 @@ export default function ProfilePage() {
     }).catch(() => {});
   };
 
-  // Generate player_id via dedicated endpoint (also ensures DB column exists)
+  // Generate player_id via dedicated endpoint (once per session)
   const refreshUser = async () => {
+    if (pidTriedRef.current) return;
+    pidTriedRef.current = true;
     setRefreshing(true);
     try {
       const { user: fresh } = await api.post('/api/users/generate-player-id', {});
-      if (fresh && setUser) setUser(fresh);
+      if (fresh?._id && setUser) setUser(fresh);
     } catch {}
     setRefreshing(false);
   };
@@ -36,7 +40,6 @@ export default function ProfilePage() {
     if (!loading && !user) { router.push('/login'); return; }
     if (user) {
       api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
-      // Auto-refresh if player_id is missing (server will generate it)
       if (!user.playerId) refreshUser();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
