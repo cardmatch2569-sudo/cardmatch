@@ -282,8 +282,8 @@ export default function RoomPage() {
   const safeLeft   = 'env(safe-area-inset-left,   0px)';
   const safeRight  = 'env(safe-area-inset-right,  0px)';
 
+  // cssLandscapeActive → CSS rotate 90°; system already landscape → normal fixed
   return (
-    {/* cssLandscapeActive → CSS rotate 90°; system already landscape → normal fixed */}
     <div className="z-50 bg-black overflow-hidden"
       style={cssLandscapeActive ? {
         position: 'fixed',
@@ -371,7 +371,7 @@ export default function RoomPage() {
         <div className="relative rounded-xl overflow-hidden shadow-2xl border border-white/20 w-full h-full">
           <video ref={localVideoRef} autoPlay playsInline muted
             className="w-full h-full object-cover"
-            style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg) scaleX(-1)` }} />
+            style={{ transform: `scaleX(-1) rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg)` }} />
           {!cameraOn && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
               <VideoOff size={14} className="text-slate-400" />
