@@ -85,6 +85,33 @@ router.put('/users/:id/role', protect, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// ── DELETE USER (hard delete, requires admin password) ───────────
+router.delete('/users/:id', protect, adminOnly, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ message: 'กรุณากรอกรหัสผ่าน Admin เพื่อยืนยัน' });
+
+    // Verify Admin's own password
+    const admin = await User.findById(req.user._id);
+    const valid = await User.comparePassword(password, admin.password);
+    if (!valid) return res.status(403).json({ message: 'รหัสผ่าน Admin ไม่ถูกต้อง' });
+
+    if (req.params.id === req.user._id)
+      return res.status(400).json({ message: 'ไม่สามารถลบบัญชีตัวเองได้' });
+
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'ไม่พบผู้ใช้' });
+
+    const pool = getPool();
+    // Cascade-delete all user data
+    await pool.query('DELETE FROM RoomPlayers WHERE user_id=$1', [req.params.id]);
+    await pool.query('DELETE FROM EmailVerifications WHERE email=$1', [target.email]);
+    await pool.query('DELETE FROM Users WHERE id=$1', [req.params.id]);
+
+    res.json({ message: `ลบผู้ใช้ "${target.username}" ออกจากระบบแล้ว` });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // ── ROOMS HISTORY ────────────────────────────────────────────────
 router.get('/rooms', protect, adminOnly, async (req, res) => {
   try {

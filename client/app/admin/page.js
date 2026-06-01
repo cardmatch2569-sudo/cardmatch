@@ -31,6 +31,11 @@ export default function AdminPage() {
   const [saving,    setSaving]    = useState(false);
   const [formError, setFormError] = useState('');
   const [tableLoading, setTableLoading] = useState(false);
+  // Delete user
+  const [deleteTarget,   setDeleteTarget]   = useState(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError,    setDeleteError]    = useState('');
+  const [deleting,       setDeleting]       = useState(false);
 
   // Bug fix: debounce ref for user search
   const searchTimer = useRef(null);
@@ -103,6 +108,32 @@ export default function AdminPage() {
     try { await api.delete(`/api/games/${id}`); await loadGames(); } catch {}
   };
 
+  const openDeleteUser = (u) => {
+    setDeleteTarget(u);
+    setDeletePassword('');
+    setDeleteError('');
+    setModal('delete-user');
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletePassword || !deleteTarget) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete(`/api/admin/users/${deleteTarget._id}`, { password: deletePassword });
+      setUsers(p => p.filter(u => u._id !== deleteTarget._id));
+      setUserTotal(p => p - 1);
+      loadStats();
+      setModal(null);
+      setDeleteTarget(null);
+      setDeletePassword('');
+    } catch (err) {
+      setDeleteError(err.message || (lang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Wrong password'));
+    } finally { setDeleting(false); }
+  };
+
+  const closeDeleteModal = () => { setModal(null); setDeleteTarget(null); setDeletePassword(''); setDeleteError(''); };
+
   if (authLoading || !user?.isAdmin) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
@@ -125,6 +156,67 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+
+      {/* ── Delete User modal ───────────────────────────────── */}
+      {modal === 'delete-user' && deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(14px)' }}>
+          <div className="anim-scale-in card w-full max-w-sm p-6"
+            style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(239,68,68,0.35)' }}>
+            <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-red-500 to-transparent mb-6" />
+
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-3">⚠️</div>
+              <h2 className="text-lg font-bold text-white mb-1">
+                {lang === 'th' ? 'ลบผู้ใช้ออกจากระบบ?' : 'Delete User?'}
+              </h2>
+              <p className="text-sm text-slate-400 mb-1">
+                {lang === 'th' ? 'ผู้ใช้' : 'User'}{' '}
+                <span className="text-red-400 font-bold">"{deleteTarget.username}"</span>
+                {' '}{lang === 'th' ? 'จะถูกลบออกถาวร ไม่สามารถกู้คืนได้' : 'will be permanently deleted'}
+              </p>
+              <p className="text-xs text-slate-600">
+                {lang === 'th' ? 'รวมข้อมูลทั้งหมด: โปรไฟล์ สถิติ และประวัติการแข่ง' : 'Includes all data: profile, stats, match history'}
+              </p>
+            </div>
+
+            <div className="mb-5">
+              <label className="text-xs text-slate-400 block mb-2 font-medium">
+                {lang === 'th' ? '🔐 ยืนยันด้วยรหัสผ่าน Admin ของคุณ' : '🔐 Confirm with your Admin password'}
+              </label>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                onKeyDown={e => e.key === 'Enter' && deletePassword && handleDeleteUser()}
+                placeholder={lang === 'th' ? 'รหัสผ่านของคุณ' : 'Your password'}
+                className="input-base text-sm"
+                autoFocus
+              />
+              {deleteError && (
+                <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
+                  <span>⚠</span> {deleteError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={closeDeleteModal}
+                className="btn-ghost flex-1 py-2.5 rounded-xl text-sm">
+                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+              </button>
+              <button onClick={handleDeleteUser}
+                disabled={!deletePassword || deleting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
+                {deleting
+                  ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {lang === 'th' ? 'กำลังลบ...' : 'Deleting...'}</span>
+                  : (lang === 'th' ? '🗑 ลบถาวร' : '🗑 Delete permanently')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Game modal */}
       {modal === 'game' && (
@@ -356,13 +448,21 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           {u._id !== user._id && (
-                            <button onClick={() => handleToggleAdmin(u._id, u.username)}
-                              className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition"
-                              style={{ background: u.isAdmin ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)', color: u.isAdmin ? '#f87171' : '#fbbf24', border: `1px solid ${u.isAdmin ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'}` }}>
-                              {u.isAdmin
-                                ? <><UserX size={11} /> {lang === 'th' ? 'ถอด Admin' : 'Remove'}</>
-                                : <><Crown size={11} /> {lang === 'th' ? 'ตั้งเป็น Admin' : 'Make Admin'}</>}
-                            </button>
+                            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition">
+                              <button onClick={() => handleToggleAdmin(u._id, u.username)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition"
+                                style={{ background: u.isAdmin ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)', color: u.isAdmin ? '#f87171' : '#fbbf24', border: `1px solid ${u.isAdmin ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'}` }}>
+                                {u.isAdmin
+                                  ? <><UserX size={11} /> {lang === 'th' ? 'ถอด Admin' : 'Remove'}</>
+                                  : <><Crown size={11} /> {lang === 'th' ? 'ตั้ง Admin' : 'Make Admin'}</>}
+                              </button>
+                              <button onClick={() => openDeleteUser(u)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition"
+                                style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}
+                                title={lang === 'th' ? 'ลบผู้ใช้' : 'Delete user'}>
+                                <Trash2 size={11} /> {lang === 'th' ? 'ลบ' : 'Delete'}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
