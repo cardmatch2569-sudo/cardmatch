@@ -40,17 +40,19 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: facing,
-          width:     { ideal: 1280, min: 640 },
-          height:    { ideal: 720,  min: 480 },
-          frameRate: { ideal: 30,   min: 15  },
+          width:     { ideal: 1280 },
+          height:    { ideal: 720  },
+          frameRate: { ideal: 30   },
         },
-        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 },
+        audio: { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraOk(stream.getVideoTracks().length > 0);
 
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // iOS Safari suspends AudioContext until user gesture — resume immediately
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.7;
       ctx.createMediaStreamSource(stream).connect(analyser);

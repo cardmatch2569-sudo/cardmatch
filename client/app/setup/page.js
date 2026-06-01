@@ -67,14 +67,15 @@ export default function SetupPage() {
       const hdBase = { width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30, min: 15 } };
       const stream = await navigator.mediaDevices.getUserMedia({
         video: cameraId ? { deviceId: { exact: cameraId }, ...hdBase } : { facingMode: 'user', ...hdBase },
-        audio: micId    ? { deviceId: { exact: micId }, echoCancellation: true, noiseSuppression: true, sampleRate: 48000 }
-                        : { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 },
+        audio: micId    ? { deviceId: { exact: micId }, echoCancellation: true, noiseSuppression: true }
+                        : { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraOk(stream.getVideoTracks().length > 0);
 
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.7;

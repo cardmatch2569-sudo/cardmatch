@@ -50,9 +50,12 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Prevent iOS text zoom on input focus */
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
+  /* Prevent elastic overscroll bounce (iOS) and pull-to-refresh (Android) */
+  overscroll-behavior: none;
+  /* Prevent long-press context menu on images/links (iOS) */
+  -webkit-touch-callout: none;
 }
 
 /* ── Mobile height utilities ────────────────────────────────────── */
@@ -60,10 +63,12 @@ body {
 .h-screen-safe {
   height: 100vh;
   height: calc(var(--vh, 1vh) * 100);
+  height: 100dvh; /* modern browsers: true viewport height excluding browser chrome */
 }
 .min-h-screen-safe {
   min-height: 100vh;
   min-height: calc(var(--vh, 1vh) * 100);
+  min-height: 100dvh;
 }
 /* Scrollbar hidden (for horizontal scroll tabs) */
 .scrollbar-hide {
@@ -76,8 +81,15 @@ body {
 .snap-x-mandatory {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x; /* allow only horizontal swipe, prevent accidental zoom */
 }
 .snap-start { scroll-snap-align: start; }
+
+/* Select dropdown — remove iOS default styling */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+}
 
 /* ── Mobile: Prevent input zoom on iOS ─────────────────────────── */
 @media screen and (max-width: 768px) {
@@ -223,6 +235,9 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
   min-height: 44px;
+  /* Remove iOS/Android default system styling */
+  -webkit-appearance: none;
+  appearance: none;
 }
 .input-base::placeholder { color: var(--text-3); }
 .input-base:focus {

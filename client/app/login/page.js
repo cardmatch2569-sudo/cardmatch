@@ -162,6 +162,7 @@ export default function LoginPage() {
                   onChange={e => setForm({ ...form, username: e.target.value })}
                   className="input-base pl-10 text-sm"
                   autoComplete="username"
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
                 />
               </div>
             )}
@@ -176,6 +177,7 @@ export default function LoginPage() {
                 onChange={e => setForm({ ...form, email: e.target.value })}
                 className="input-base pl-10 text-sm"
                 autoComplete={mode === 'login' ? 'email' : 'new-email'}
+                onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
               />
             </div>
 
@@ -191,6 +193,7 @@ export default function LoginPage() {
                 onChange={e => setForm({ ...form, password: e.target.value })}
                 className="input-base pl-10 pr-10 text-sm"
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
               />
               <button type="button" tabIndex={-1} onClick={() => setShowPass(p => !p)}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition p-1">
