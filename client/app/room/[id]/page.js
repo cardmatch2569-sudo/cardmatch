@@ -99,12 +99,7 @@ export default function RoomPage() {
   const [unread,        setUnread]        = useState(0);
   const [mediaError,    setMediaError]    = useState('');
   const [isFullscreen,    setIsFullscreen]    = useState(false);
-  // Auto-force landscape on mobile portrait so both parties always share the same orientation
-  const [forcedLandscape, setForcedLandscape] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    return isMobile && window.innerHeight > window.innerWidth;
-  });
+  const [forcedLandscape, setForcedLandscape] = useState(false);
   // Track system orientation to avoid double-rotation when iOS auto-rotates
   const [systemLandscape, setSystemLandscape] = useState(
     () => typeof window !== 'undefined' && window.innerWidth > window.innerHeight
@@ -371,7 +366,7 @@ export default function RoomPage() {
         <div className="relative rounded-xl overflow-hidden shadow-2xl border border-white/20 w-full h-full">
           <video ref={localVideoRef} autoPlay playsInline muted
             className="w-full h-full object-cover"
-            style={{ transform: `scaleX(-1) rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg)` }} />
+            style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg) scaleX(-1)` }} />
           {!cameraOn && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
               <VideoOff size={14} className="text-slate-400" />
