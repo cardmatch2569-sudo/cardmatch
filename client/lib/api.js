@@ -24,6 +24,14 @@ const request = async (method, path, body) => {
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     clearTimeout(timer);
+
+    // Guard: server may return HTML on 404/500 — don't try to JSON-parse it
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      if (!res.ok) throw new Error(`Server error ${res.status} — check server connection`);
+      return {};
+    }
+
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Request failed');
     return data;
