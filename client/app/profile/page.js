@@ -7,11 +7,12 @@ import translations from '../../lib/translations';
 import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, loading, lang } = useAuth();
+  const { user, loading, lang, setUser } = useAuth();
   const router = useRouter();
   const t = translations[lang];
-  const [games, setGames]     = useState([]);
-  const [copied, setCopied]   = useState(false);
+  const [games, setGames]           = useState([]);
+  const [copied, setCopied]         = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const copyPlayerId = () => {
     if (!user.playerId) return;
@@ -21,10 +22,25 @@ export default function ProfilePage() {
     }).catch(() => {});
   };
 
+  // Re-fetch user to get newly-generated player_id (for existing accounts)
+  const refreshUser = async () => {
+    setRefreshing(true);
+    try {
+      const { user: fresh } = await api.get('/api/auth/me');
+      if (fresh && setUser) setUser(fresh);
+    } catch {}
+    setRefreshing(false);
+  };
+
   useEffect(() => {
     if (!loading && !user) { router.push('/login'); return; }
-    if (user) api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
-  }, [loading, user, router]);
+    if (user) {
+      api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
+      // Auto-refresh if player_id is missing (server will generate it)
+      if (!user.playerId) refreshUser();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user?._id, router]);
 
   if (loading || !user) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -71,22 +87,32 @@ export default function ProfilePage() {
           </div>
 
           {/* Player ID badge */}
-          {user.playerId && (
-            <div className="mb-4 flex items-center gap-3 px-3 py-2.5 rounded-xl"
-              style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-0.5">{t.myPlayerId}</p>
-                <p className="text-purple-300 font-mono font-bold tracking-widest text-base">{user.playerId}</p>
-              </div>
+          <div className="mb-4 flex items-center gap-3 px-3 py-2.5 rounded-xl"
+            style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-slate-500 mb-0.5">{t.myPlayerId}</p>
+              {user.playerId
+                ? <p className="text-purple-300 font-mono font-bold tracking-widest text-base">{user.playerId}</p>
+                : <p className="text-slate-600 text-xs">{lang === 'th' ? 'กำลังสร้าง ID...' : 'Generating ID...'}</p>
+              }
+            </div>
+            {user.playerId ? (
               <button onClick={copyPlayerId}
-                title={t.copied}
-                className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95 flex-shrink-0"
                 style={{ background: copied ? 'rgba(74,222,128,0.15)' : 'rgba(124,58,237,0.15)', color: copied ? '#4ade80' : '#a78bfa' }}>
                 {copied ? <Check size={12} /> : <Copy size={12} />}
                 {copied ? t.copied : lang === 'th' ? 'คัดลอก' : 'Copy'}
               </button>
-            </div>
-          )}
+            ) : (
+              <button onClick={refreshUser} disabled={refreshing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95 flex-shrink-0 disabled:opacity-50"
+                style={{ background: 'rgba(124,58,237,0.15)', color: '#a78bfa' }}>
+                {refreshing
+                  ? <span className="w-3 h-3 border border-purple-400/40 border-t-purple-400 rounded-full animate-spin" />
+                  : <span>{lang === 'th' ? 'รีเฟรช' : 'Refresh'}</span>}
+              </button>
+            )}
+          </div>
 
           {/* Info rows */}
           <div className="space-y-2">

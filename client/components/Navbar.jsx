@@ -167,23 +167,27 @@ export default function Navbar() {
             style={{ top: 'var(--navbar-h, 4rem)', background: 'rgba(10,10,20,0.98)', borderBottom: '1px solid var(--border)' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* User info */}
+            {/* User info — tap to go to profile */}
             {user && (
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
+              <Link href="/profile" onClick={close}
+                className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)] hover:bg-white/5 transition">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
                   {user.username[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-white truncate">{user.username}</p>
-                  <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                  {user.playerId
+                    ? <p className="text-xs text-purple-400 font-mono">{user.playerId}</p>
+                    : <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                  }
                 </div>
                 {connected && (
-                  <div className="flex items-center gap-1.5 text-xs text-green-400">
+                  <div className="flex items-center gap-1.5 text-xs text-green-400 flex-shrink-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                     <Users size={11} />{onlineCount}
                   </div>
                 )}
-              </div>
+              </Link>
             )}
 
             {/* Nav links */}

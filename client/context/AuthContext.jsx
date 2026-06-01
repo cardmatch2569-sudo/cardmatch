@@ -96,7 +96,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, lang, loading,
+      user, setUser, lang, loading,
       viewMode, isAdminMode, toggleViewMode,
       login, register, loginWithGoogle, verifyOTP, logout, toggleLang,
     }}>
