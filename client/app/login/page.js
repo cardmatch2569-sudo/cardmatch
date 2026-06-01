@@ -152,7 +152,7 @@ export default function LoginPage() {
                 <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
                 <input
                   type="text" required
-                  placeholder={lang === 'th' ? 'ชื่อผู้ใช้ (3-20 ตัว)' : 'Username (3-20 chars)'}
+                  placeholder={lang === 'th' ? 'ชื่อแสดง / ชื่อผู้เล่น (3-20 ตัว)' : 'Display name / Username (3-20 chars)'}
                   value={form.username}
                   onChange={e => setForm({ ...form, username: e.target.value })}
                   className="input-base pl-10 text-sm"

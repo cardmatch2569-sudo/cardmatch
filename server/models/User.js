@@ -1,11 +1,12 @@
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const { getPool } = require('../config/db');
+const { getPool, generatePlayerId } = require('../config/db');
 
 const fmt = (row) => {
   if (!row) return null;
   return {
     _id:      row.id,
+    playerId: row.player_id || null,
     username: row.username,
     email:    row.email,
     password: row.password,
@@ -22,37 +23,51 @@ const fmt = (row) => {
   };
 };
 
+// Generate unique player_id with retry
+async function makeUniquePlayerId(pool) {
+  let pid; let tries = 0;
+  do {
+    pid = generatePlayerId();
+    const { rows } = await pool.query('SELECT 1 FROM Users WHERE player_id=$1', [pid]);
+    if (!rows.length) return pid;
+  } while (++tries < 50);
+  throw new Error('Failed to generate unique player_id');
+}
+
 const User = {
   async create({ username, email, password, isAdmin = false }) {
     const pool = getPool();
-    const id   = uuidv4();
+    const id  = uuidv4();
+    const pid = await makeUniquePlayerId(pool);
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
-      `INSERT INTO Users (id, username, email, password, is_admin)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [id, username, email.toLowerCase().trim(), hash, isAdmin]
+      `INSERT INTO Users (id, username, email, password, is_admin, player_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [id, username, email.toLowerCase().trim(), hash, isAdmin, pid]
     );
     return fmt(rows[0]);
   },
 
   async createWithGoogle({ googleId, email, username, avatar = '', isAdmin = false }) {
     const pool = getPool();
-    const id   = uuidv4();
+    const id  = uuidv4();
+    const pid = await makeUniquePlayerId(pool);
     const { rows } = await pool.query(
-      `INSERT INTO Users (id, username, email, password, google_id, avatar, is_admin)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [id, username, email.toLowerCase().trim(), '', googleId, avatar, isAdmin]
+      `INSERT INTO Users (id, username, email, password, google_id, avatar, is_admin, player_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [id, username, email.toLowerCase().trim(), '', googleId, avatar, isAdmin, pid]
     );
     return fmt(rows[0]);
   },
 
   async createFromVerifiedEmail({ username, email, hashedPassword, isAdmin = false }) {
     const pool = getPool();
-    const id   = uuidv4();
+    const id  = uuidv4();
+    const pid = await makeUniquePlayerId(pool);
     const { rows } = await pool.query(
-      `INSERT INTO Users (id, username, email, password, is_admin)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [id, username, email.toLowerCase().trim(), hashedPassword, isAdmin]
+      `INSERT INTO Users (id, username, email, password, is_admin, player_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [id, username, email.toLowerCase().trim(), hashedPassword, isAdmin, pid]
     );
     return fmt(rows[0]);
   },
@@ -90,9 +105,17 @@ const User = {
     return parseInt(rows[0].cnt, 10);
   },
 
+  async findByPlayerId(playerId) {
+    const { rows } = await getPool().query(
+      'SELECT * FROM Users WHERE player_id=$1',
+      [playerId.toUpperCase().trim()]
+    );
+    return fmt(rows[0]);
+  },
+
   async search(query, excludeId) {
     const { rows } = await getPool().query(
-      `SELECT id,username,avatar,total_games,wins,losses
+      `SELECT id,username,avatar,player_id,total_games,wins,losses
        FROM Users
        WHERE username ILIKE $1 AND id <> $2
        LIMIT 10`,

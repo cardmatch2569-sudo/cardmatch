@@ -4,13 +4,22 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Trophy, Gamepad2, Target, Shield, Calendar, Mail } from 'lucide-react';
+import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, loading, lang } = useAuth();
   const router = useRouter();
   const t = translations[lang];
-  const [games, setGames] = useState([]);
+  const [games, setGames]     = useState([]);
+  const [copied, setCopied]   = useState(false);
+
+  const copyPlayerId = () => {
+    if (!user.playerId) return;
+    navigator.clipboard.writeText(user.playerId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     if (!loading && !user) { router.push('/login'); return; }
@@ -60,6 +69,24 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+
+          {/* Player ID badge */}
+          {user.playerId && (
+            <div className="mb-4 flex items-center gap-3 px-3 py-2.5 rounded-xl"
+              style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-0.5">{t.myPlayerId}</p>
+                <p className="text-purple-300 font-mono font-bold tracking-widest text-base">{user.playerId}</p>
+              </div>
+              <button onClick={copyPlayerId}
+                title={t.copied}
+                className="ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95"
+                style={{ background: copied ? 'rgba(74,222,128,0.15)' : 'rgba(124,58,237,0.15)', color: copied ? '#4ade80' : '#a78bfa' }}>
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? t.copied : lang === 'th' ? 'คัดลอก' : 'Copy'}
+              </button>
+            </div>
+          )}
 
           {/* Info rows */}
           <div className="space-y-2">

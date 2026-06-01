@@ -4,6 +4,14 @@ let pool;
 
 const getPool = () => pool;
 
+// Chars: uppercase letters + digits, excluding confusing pairs (0/O, 1/I)
+const PID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const generatePlayerId = () => {
+  let id = '';
+  for (let i = 0; i < 6; i++) id += PID_CHARS[Math.floor(Math.random() * PID_CHARS.length)];
+  return id;
+};
+
 const initTables = async () => {
   const p = getPool();
 
@@ -16,6 +24,7 @@ const initTables = async () => {
       avatar       VARCHAR(500) DEFAULT '',
       is_admin     BOOLEAN      DEFAULT FALSE,
       google_id    VARCHAR(255),
+      player_id    VARCHAR(8)   UNIQUE,
       total_games  INTEGER      DEFAULT 0,
       wins         INTEGER      DEFAULT 0,
       losses       INTEGER      DEFAULT 0,
@@ -23,6 +32,19 @@ const initTables = async () => {
       updated_at   TIMESTAMP    DEFAULT NOW()
     )
   `);
+  // Add player_id for existing deployments that pre-date this column
+  await p.query(`ALTER TABLE Users ADD COLUMN IF NOT EXISTS player_id VARCHAR(8) UNIQUE`).catch(() => {});
+  // Generate player_ids for any users that don't have one yet
+  const { rows: noId } = await p.query('SELECT id FROM Users WHERE player_id IS NULL');
+  for (const u of noId) {
+    let pid; let tries = 0;
+    do {
+      pid = generatePlayerId();
+      const { rows } = await p.query('SELECT 1 FROM Users WHERE player_id=$1', [pid]);
+      if (!rows.length) break;
+    } while (++tries < 50);
+    if (pid) await p.query('UPDATE Users SET player_id=$1 WHERE id=$2', [pid, u.id]);
+  }
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS GameTypes (
@@ -70,6 +92,7 @@ const initTables = async () => {
     )
   `);
 
+  if (noId.length) console.log(`[DB] Generated player_id for ${noId.length} existing user(s)`);
   console.log('Tables initialized (PostgreSQL)');
 };
 
@@ -90,4 +113,4 @@ const connectDB = async () => {
   }
 };
 
-module.exports = { connectDB, getPool };
+module.exports = { connectDB, getPool, generatePlayerId };

@@ -110,6 +110,27 @@ const setupSocketHandlers = (io) => {
     });
 
     // ── DIRECT CHALLENGE ──────────────────────────────────────────
+    // Challenge by Player ID (e.g. "A3B7C2")
+    socket.on('challenge_by_player_id', async ({ playerId, gameTypeId }) => {
+      if (!playerId || !gameTypeId) return;
+      const targetUser = await User.findByPlayerId(playerId);
+      if (!targetUser) return socket.emit('challenge_id_error', { message: 'ไม่พบผู้เล่น ID นี้' });
+      if (targetUser._id === userId) return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าตัวเองได้' });
+      const target = onlineUsers.get(targetUser._id);
+      if (!target) return socket.emit('challenge_id_error', { message: `${targetUser.username} ออฟไลน์อยู่` });
+
+      const challengeId = uuidv4();
+      const gameType = await GameType.findById(gameTypeId);
+      pendingChallenges.set(challengeId, { from: userId, to: targetUser._id, gameTypeId });
+      setTimeout(() => pendingChallenges.delete(challengeId), 30000);
+      io.to(target.socketId).emit('challenge_received', {
+        challengeId,
+        from: { _id: userId, username: user.username, avatar: user.avatar },
+        gameType: { _id: gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color },
+      });
+      socket.emit('challenge_id_sent', { to: targetUser.username });
+    });
+
     socket.on('challenge_player', async ({ targetUserId, gameTypeId }) => {
       if (targetUserId === userId) return;
       const target = onlineUsers.get(targetUserId);

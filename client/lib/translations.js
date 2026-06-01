@@ -48,6 +48,13 @@ const translations = {
     noPlayers: 'ไม่พบผู้เล่น',
     onlinePlayers: 'ผู้เล่นออนไลน์',
     selectGameFirst: 'กรุณาเลือกประเภทเกมก่อน',
+    challengeById: 'ท้าด้วย Player ID',
+    playerIdPlaceholder: 'Player ID (เช่น A3B7C2)',
+    challengeByIdBtn: 'ส่งคำท้า',
+    playerIdNotFound: 'ไม่พบผู้เล่น ID นี้',
+    playerIdOffline: 'ผู้เล่นนี้ออฟไลน์อยู่',
+    myPlayerId: 'Player ID ของฉัน',
+    copied: 'คัดลอกแล้ว!',
 
     // Room
     you: 'คุณ',
@@ -127,6 +134,13 @@ const translations = {
     noPlayers: 'No players found',
     onlinePlayers: 'Online Players',
     selectGameFirst: 'Please select a game type first.',
+    challengeById: 'Challenge by Player ID',
+    playerIdPlaceholder: 'Player ID (e.g. A3B7C2)',
+    challengeByIdBtn: 'Send Challenge',
+    playerIdNotFound: 'Player ID not found',
+    playerIdOffline: 'That player is offline',
+    myPlayerId: 'My Player ID',
+    copied: 'Copied!',
 
     you: 'You',
     opponent: 'Opponent',

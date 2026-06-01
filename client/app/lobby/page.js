@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings } from 'lucide-react';
+import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings, Hash } from 'lucide-react';
 import Link from 'next/link';
 import PreMatchModal from '../../components/PreMatchModal';
 
@@ -27,8 +27,10 @@ export default function LobbyPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching]       = useState(false);
   const [toast, setToast]               = useState(null);
-  const [challenge, setChallenge]       = useState(null);
-  const [showPreMatch, setShowPreMatch] = useState(false);
+  const [challenge, setChallenge]         = useState(null);
+  const [showPreMatch, setShowPreMatch]   = useState(false);
+  const [pidInput, setPidInput]           = useState('');
+  const [pidLoading, setPidLoading]       = useState(false);
 
   const inQueueRef  = useRef(false);
   const searchTimer = useRef(null);
@@ -44,7 +46,9 @@ export default function LobbyPage() {
     onQueueLeft:         () => setQueue(false),
     onChallengeReceived: (data) => setChallenge(data),
     onChallengeAccepted: ({ roomId, gameType }) => { if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); router.push(`/room/${roomId}`); },
-    onChallengeDeclined: ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
+    onChallengeDeclined:  ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
+    onChallengeIdSent:    ({ to }) => { setPidLoading(false); setPidInput(''); showToast(`${langRef.current === 'th' ? 'ส่งคำท้าถึง' : 'Challenge sent to'} ${to}`, 'success'); },
+    onChallengeIdError:   ({ message }) => { setPidLoading(false); showToast(message, 'error'); },
   });
 
   // Bug fix: only redirect after auth check completes (not during loading)
@@ -136,6 +140,13 @@ export default function LobbyPage() {
   };
 
   const handleChallengeResponse = (accepted) => { getSocket()?.emit('challenge_response', { challengeId: challenge.challengeId, accepted }); setChallenge(null); };
+
+  const handleChallengeById = () => {
+    if (!selectedGame) return showToast(t.selectGameFirst, 'error');
+    if (pidInput.length !== 6) return;
+    setPidLoading(true);
+    safeEmit('challenge_by_player_id', { playerId: pidInput.toUpperCase(), gameTypeId: selectedGame._id });
+  };
   const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
 
   // Bug fix: show loader while auth check is in progress, not just blank/redirect
@@ -368,6 +379,50 @@ export default function LobbyPage() {
               </div>
             )}
           </div>
+
+          {/* Challenge by Player ID */}
+          <div className="card p-5 md:p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                <Hash size={17} className="text-purple-400" />
+              </div>
+              <div>
+                <h2 className="font-bold text-white text-sm md:text-base">{t.challengeById}</h2>
+                <p className="text-xs text-slate-600">{lang === 'th' ? 'กรอก Player ID เพื่อท้าโดยตรง' : 'Enter Player ID to challenge directly'}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                <input
+                  type="text"
+                  value={pidInput}
+                  onChange={e => setPidInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                  placeholder={t.playerIdPlaceholder}
+                  className="input-base pl-8 text-sm font-mono tracking-widest uppercase"
+                  maxLength={6}
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300)}
+                />
+              </div>
+              <button
+                onClick={handleChallengeById}
+                disabled={pidInput.length !== 6 || pidLoading || !selectedGame}
+                className="btn-primary px-4 py-2 rounded-xl text-sm flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+                {pidLoading
+                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <><Swords size={14} /> {t.challengeByIdBtn}</>}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-700 mt-2 text-center">
+              {lang === 'th'
+                ? 'Player ID ของคุณอยู่ที่หน้าโปรไฟล์'
+                : 'Your Player ID is on your profile page'}
+            </p>
+          </div>
+
         </div>
       </div>
     </div>
