@@ -222,17 +222,6 @@ export default function RoomPage() {
       setPeerConnected(true);
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') {
-        // Boost video bitrate to 2.5 Mbps for HD quality
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) {
-          const params = sender.getParameters();
-          if (!params.encodings?.length) params.encodings = [{}];
-          params.encodings[0].maxBitrate  = 2_500_000;
-          params.encodings[0].maxFramerate = 30;
-          sender.setParameters(params).catch(() => {});
-        }
-      }
       if (['disconnected','failed'].includes(pc.connectionState)) setPeerConnected(false);
     };
     if (initiator) {
@@ -260,12 +249,12 @@ export default function RoomPage() {
       if (!peerRef.current) createPeer(false, localStreamRef.current);
       const pc = peerRef.current;
       if (!pc) return;
-      await pc.setRemoteDescription(offer);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('answer', { roomId, answer });
     };
-    const onAnswer = async ({ answer }) => { if (peerRef.current) await peerRef.current.setRemoteDescription(answer); };
+    const onAnswer = async ({ answer }) => { if (peerRef.current) await peerRef.current.setRemoteDescription(new RTCSessionDescription(answer)); };
     const onIce = async ({ candidate }) => { try { if (peerRef.current && candidate) await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {} };
     const onMessage = (msg) => {
       setMessages(p => [...p, msg]);
