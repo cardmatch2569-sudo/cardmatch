@@ -117,13 +117,8 @@ export default function LoginPage() {
           {/* Google Button (login mode only) */}
           {mode === 'login' && googleConfigured && (
             <>
-              <p className="text-center text-xs text-slate-600 mb-3">
-                {lang === 'th' ? 'เข้าสู่ระบบด้วย Google' : 'Sign in with Google'}
-              </p>
               <GoogleLoginButton lang={lang} />
-              <div className="divider my-4">
-                <span className="text-xs">{lang === 'th' ? 'หรือใช้อีเมล' : 'or use email'}</span>
-              </div>
+              {/* divider removed */}
             </>
           )}
 
