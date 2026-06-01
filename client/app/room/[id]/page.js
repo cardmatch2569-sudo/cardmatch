@@ -172,7 +172,18 @@ export default function RoomPage() {
       return null;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width:     { ideal: 1280, min: 640 },
+          height:    { ideal: 720,  min: 480 },
+          frameRate: { ideal: 30,   min: 15  },
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000,
+        },
+      });
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       setMediaError('');
@@ -195,6 +206,9 @@ export default function RoomPage() {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' },
         { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
       ],
@@ -212,7 +226,20 @@ export default function RoomPage() {
       }
       setPeerConnected(true);
     };
-    pc.onconnectionstatechange = () => { if (['disconnected','failed'].includes(pc.connectionState)) setPeerConnected(false); };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        // Boost video bitrate to 2.5 Mbps for HD quality
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) {
+          const params = sender.getParameters();
+          if (!params.encodings?.length) params.encodings = [{}];
+          params.encodings[0].maxBitrate  = 2_500_000;
+          params.encodings[0].maxFramerate = 30;
+          sender.setParameters(params).catch(() => {});
+        }
+      }
+      if (['disconnected','failed'].includes(pc.connectionState)) setPeerConnected(false);
+    };
     if (initiator) {
       (async () => {
         try {
@@ -291,10 +318,11 @@ export default function RoomPage() {
     try {
       // Try exact facingMode first, fallback to non-exact for older devices
       let newStream;
+      const hdVideo = (fm) => ({ facingMode: fm, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 } });
       try {
-        newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: next } }, audio: false });
+        newStream = await navigator.mediaDevices.getUserMedia({ video: { ...hdVideo(undefined), facingMode: { exact: next } }, audio: false });
       } catch {
-        newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next }, audio: false });
+        newStream = await navigator.mediaDevices.getUserMedia({ video: hdVideo(next), audio: false });
       }
       const newTrack = newStream.getVideoTracks()[0];
       if (!newTrack) return;

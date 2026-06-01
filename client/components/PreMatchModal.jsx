@@ -38,7 +38,13 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facing }, audio: true,
+        video: {
+          facingMode: facing,
+          width:     { ideal: 1280, min: 640 },
+          height:    { ideal: 720,  min: 480 },
+          frameRate: { ideal: 30,   min: 15  },
+        },
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 },
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
