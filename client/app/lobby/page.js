@@ -17,7 +17,11 @@ export default function LobbyPage() {
 
   const [games, setGames]               = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
-  const [inQueue, setInQueue]           = useState(false);
+  // Pre-detect autoQueue so lobby shows searching state immediately (no flash of game grid)
+  const pendingAutoQueue = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('autoQueue') || null
+    : null;
+  const [inQueue, setInQueue] = useState(!!pendingAutoQueue);
   const [queueTime, setQueueTime]       = useState(0);
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -54,17 +58,14 @@ export default function LobbyPage() {
 
   // Auto-queue when coming from a room with ?autoQueue=gameTypeId — skip PreMatchModal
   useEffect(() => {
-    if (!games.length || inQueue) return;
-    const autoQueue = typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('autoQueue')
-      : null;
-    if (!autoQueue) return;
-    const game = games.find(g => g._id === autoQueue);
+    if (!pendingAutoQueue || !games.length) return;
+    const game = games.find(g => g._id === pendingAutoQueue);
     if (!game) return;
     setSelectedGame(game);
     setQueueGame(game._id);
     safeEmit('join_queue', { gameTypeId: game._id });
-    setQueue(true);
+    // inQueue was already true from initial state — just sync the ref
+    inQueueRef.current = true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games]);
 
