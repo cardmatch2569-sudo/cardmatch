@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
@@ -12,8 +12,7 @@ import PreMatchModal from '../../components/PreMatchModal';
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
   const { getSocket, safeEmit, setQueueGame, setLobbyCallbacks, onlineCount, connected } = useSocket();
-  const router       = useRouter();
-  const searchParams = useSearchParams();
+  const router = useRouter();
   const t = translations[lang];
 
   const [games, setGames]               = useState([]);
@@ -54,15 +53,18 @@ export default function LobbyPage() {
   }, []);
 
   // Auto-queue when coming from a room with ?autoQueue=gameTypeId
-  const autoQueue = searchParams.get('autoQueue');
   useEffect(() => {
-    if (!autoQueue || !games.length || inQueue) return;
+    if (!games.length || inQueue) return;
+    const autoQueue = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('autoQueue')
+      : null;
+    if (!autoQueue) return;
     const game = games.find(g => g._id === autoQueue);
     if (!game) return;
     setSelectedGame(game);
     setTimeout(() => setShowPreMatch(true), 400);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoQueue, games]);
+  }, [games]);
 
   useEffect(() => {
     if (!inQueue) { setQueueTime(0); return; }

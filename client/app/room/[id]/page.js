@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
 import translations from '../../../lib/translations';
@@ -79,9 +79,12 @@ export default function RoomPage() {
   const { id: roomId } = useParams();
   const { user, loading, lang } = useAuth();
   const { getSocket } = useSocket();
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const gameTypeId   = searchParams.get('g') || '';
+  const router     = useRouter();
+  const [gameTypeId] = useState(
+    () => typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('g') || ''
+      : ''
+  );
   const t = translations[lang];
 
   const localVideoRef  = useRef(null);
