@@ -52,10 +52,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
-  /* Prevent elastic overscroll bounce (iOS) and pull-to-refresh (Android) */
-  overscroll-behavior: none;
   /* Prevent long-press context menu on images/links (iOS) */
   -webkit-touch-callout: none;
+  /* iOS/Android: prevent pull-to-refresh on mobile only */
 }
 
 /* ── Mobile height utilities ────────────────────────────────────── */
@@ -96,6 +95,11 @@ select {
   input, select, textarea {
     font-size: 16px !important;
   }
+}
+
+/* ── Mobile only: prevent pull-to-refresh (does NOT block mouse scroll) ── */
+@media (pointer: coarse) {
+  body { overscroll-behavior-y: contain; }
 }
 
 /* ── Touch: Remove tap highlight on mobile ─────────────────────── */
