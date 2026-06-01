@@ -243,7 +243,11 @@ export default function RoomPage() {
     const socket = getSocket();
     if (!socket) return;
 
-    const init = async () => { await startMedia(); socket.emit('join_room', { roomId }); };
+    let aborted = false;
+    const init = async () => {
+      await startMedia();
+      if (!aborted) socket.emit('join_room', { roomId });
+    };
     const onPeerJoined = () => createPeer(true, localStreamRef.current);
     const onOffer = async ({ offer }) => {
       if (!peerRef.current) createPeer(false, localStreamRef.current);
@@ -277,6 +281,7 @@ export default function RoomPage() {
     init();
 
     return () => {
+      aborted = true;
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
