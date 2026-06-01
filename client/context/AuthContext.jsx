@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user) setViewMode('user');
     else if (user.isAdmin) setViewMode('admin');
-  }, [user?._id]);
+  }, [user?._id, user?.isAdmin]);
 
   const loginWithGoogle = async (credential) => {
     const result = await api.post('/api/auth/google', { credential });
@@ -87,8 +87,10 @@ export function AuthProvider({ children }) {
     localStorage.setItem('cg_lang', next);
   };
 
-  const toggleViewMode = () =>
+  const toggleViewMode = () => {
+    if (!user?.isAdmin) return;
     setViewMode(p => p === 'admin' ? 'user' : 'admin');
+  };
 
   const isAdminMode = user?.isAdmin && viewMode === 'admin';
 

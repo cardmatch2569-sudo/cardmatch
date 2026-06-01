@@ -68,6 +68,11 @@ const setupSocketHandlers = (io) => {
         console.log(`[QUEUE] ⚠️ ${user.username} already in queue`);
         return;
       }
+      const alreadyInRoom = [...activeRooms.values()].some(r => r.players.includes(userId));
+      if (alreadyInRoom) {
+        console.log(`[QUEUE] ⚠️ ${user.username} already in active room`);
+        return;
+      }
 
       const waiting = queue.find((p) => p.userId !== userId);
       if (waiting) {
@@ -79,7 +84,11 @@ const setupSocketHandlers = (io) => {
         const gameInfo = { _id: gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
 
         try { await Room.create({ roomId, gameTypeId, players: [waiting.userId, userId] }); }
-        catch (e) { console.error('[Room.create] matchmaking failed:', e.message); }
+        catch (e) {
+          console.error('[Room.create] matchmaking failed:', e.message);
+          socket.emit('error', { message: 'Failed to create room, please try again' });
+          return;
+        }
         activeRooms.set(roomId, { players: [waiting.userId, userId] });
 
         const opponentInfo = onlineUsers.get(waiting.userId) || {};
@@ -102,6 +111,7 @@ const setupSocketHandlers = (io) => {
 
     // ── DIRECT CHALLENGE ──────────────────────────────────────────
     socket.on('challenge_player', async ({ targetUserId, gameTypeId }) => {
+      if (targetUserId === userId) return;
       const target = onlineUsers.get(targetUserId);
       if (!target) return socket.emit('error', { message: 'Player is offline' });
 
@@ -135,7 +145,11 @@ const setupSocketHandlers = (io) => {
       const gameInfo = { _id: challenge.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
 
       try { await Room.create({ roomId, gameTypeId: challenge.gameTypeId, players: [challenge.from, userId] }); }
-      catch (e) { console.error('[Room.create] challenge failed:', e.message); }
+      catch (e) {
+        console.error('[Room.create] challenge failed:', e.message);
+        socket.emit('error', { message: 'Failed to create room, please try again' });
+        return;
+      }
       activeRooms.set(roomId, { players: [challenge.from, userId] });
 
       io.to(fromInfo.socketId).emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: userId, username: user.username, avatar: user.avatar } });
@@ -143,10 +157,11 @@ const setupSocketHandlers = (io) => {
     });
 
     // ── WEBRTC SIGNALING ──────────────────────────────────────────
+    const inRoom = (roomId) => activeRooms.get(roomId)?.players.includes(userId);
     socket.on('join_room',      ({ roomId }) => { socket.join(roomId); socket.to(roomId).emit('peer_joined', { userId }); });
-    socket.on('offer',          ({ roomId, offer })          => socket.to(roomId).emit('offer',          { offer, from: userId }));
-    socket.on('answer',         ({ roomId, answer })         => socket.to(roomId).emit('answer',         { answer, from: userId }));
-    socket.on('ice_candidate',  ({ roomId, candidate })      => socket.to(roomId).emit('ice_candidate',  { candidate, from: userId }));
+    socket.on('offer',          ({ roomId, offer })     => { if (!inRoom(roomId)) return; socket.to(roomId).emit('offer',         { offer, from: userId }); });
+    socket.on('answer',         ({ roomId, answer })    => { if (!inRoom(roomId)) return; socket.to(roomId).emit('answer',        { answer, from: userId }); });
+    socket.on('ice_candidate',  ({ roomId, candidate }) => { if (!inRoom(roomId)) return; socket.to(roomId).emit('ice_candidate', { candidate, from: userId }); });
 
     // ── CHAT ──────────────────────────────────────────────────────
     socket.on('send_message', ({ roomId, message }) => {

@@ -204,7 +204,13 @@ export default function RoomPage() {
     };
     pc.onconnectionstatechange = () => { if (['disconnected','failed'].includes(pc.connectionState)) setPeerConnected(false); };
     if (initiator) {
-      (async () => { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); socket.emit('offer', { roomId, offer }); })();
+      (async () => {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('offer', { roomId, offer });
+        } catch (e) { console.warn('[WebRTC] createOffer failed:', e.message); }
+      })();
     }
     peerRef.current = pc;
     return pc;
@@ -221,19 +227,28 @@ export default function RoomPage() {
     const onOffer = async ({ offer }) => {
       if (!peerRef.current) createPeer(false, localStreamRef.current);
       const pc = peerRef.current;
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      if (!pc) return;
+      await pc.setRemoteDescription(offer);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('answer', { roomId, answer });
     };
-    const onAnswer = async ({ answer }) => { if (peerRef.current) await peerRef.current.setRemoteDescription(new RTCSessionDescription(answer)); };
+    const onAnswer = async ({ answer }) => { if (peerRef.current) await peerRef.current.setRemoteDescription(answer); };
     const onIce = async ({ candidate }) => { try { if (peerRef.current && candidate) await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {} };
     const onMessage = (msg) => {
       setMessages(p => [...p, msg]);
       setUnread(p => chatOpenRef.current ? 0 : p + 1);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     };
-    const onPartnerLeft = () => { setPartnerLeft(true); setPeerConnected(false); if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null; };
+    const onPartnerLeft = () => {
+      setPartnerLeft(true);
+      setPeerConnected(false);
+      if (remoteVideoRef.current) {
+        const s = remoteVideoRef.current.srcObject;
+        if (s) s.getTracks().forEach(tk => tk.stop());
+        remoteVideoRef.current.srcObject = null;
+      }
+    };
 
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
     socket.on('ice_candidate', onIce); socket.on('message_received', onMessage); socket.on('partner_disconnected', onPartnerLeft);

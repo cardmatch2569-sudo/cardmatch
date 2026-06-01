@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
@@ -15,6 +15,12 @@ export default function Navbar() {
   const t = translations[lang];
 
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => { if (window.innerWidth >= 768) setMobileOpen(false); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Room page has its own full-screen UI — hide Navbar completely
   if (pathname?.startsWith('/room/')) return null;

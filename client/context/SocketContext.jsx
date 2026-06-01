@@ -92,17 +92,21 @@ export function SocketProvider({ children }) {
   const getSocket    = useCallback(() => socketRef.current, []);
   const setQueueGame = useCallback((gameTypeId) => { queueRef.current = gameTypeId; }, []);
 
+  const pendingEmits = useRef([]);
   const safeEmit = useCallback((event, data) => {
     const socket = socketRef.current;
     if (!socket) { console.warn('[Socket] safeEmit: no socket'); return; }
     if (socket.connected) {
       socket.emit(event, data);
     } else {
-      console.log(`[Socket] safeEmit: waiting to emit ${event}`);
-      socket.once('connect', () => {
-        socket.emit(event, data);
-        console.log(`[Socket] safeEmit: emitted ${event} after connect`);
-      });
+      const isFirst = pendingEmits.current.length === 0;
+      pendingEmits.current.push({ event, data });
+      if (isFirst) {
+        socket.once('connect', () => {
+          const queued = pendingEmits.current.splice(0);
+          queued.forEach(q => socket.emit(q.event, q.data));
+        });
+      }
     }
   }, []);
 
