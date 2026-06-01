@@ -52,7 +52,7 @@ export default function LobbyPage() {
     api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
   }, []);
 
-  // Auto-queue when coming from a room with ?autoQueue=gameTypeId
+  // Auto-queue when coming from a room with ?autoQueue=gameTypeId — skip PreMatchModal
   useEffect(() => {
     if (!games.length || inQueue) return;
     const autoQueue = typeof window !== 'undefined'
@@ -62,7 +62,9 @@ export default function LobbyPage() {
     const game = games.find(g => g._id === autoQueue);
     if (!game) return;
     setSelectedGame(game);
-    setTimeout(() => setShowPreMatch(true), 400);
+    setQueueGame(game._id);
+    safeEmit('join_queue', { gameTypeId: game._id });
+    setQueue(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games]);
 
