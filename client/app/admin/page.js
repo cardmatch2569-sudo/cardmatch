@@ -437,9 +437,10 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3 text-slate-500 text-xs hidden md:table-cell max-w-[180px] truncate">{u.email}</td>
                         <td className="px-4 py-3">
-                          <span className={`badge text-[10px] ${u.isOnline ? 'badge-green' : ''}`}
-                            style={!u.isOnline ? { background: 'rgba(255,255,255,0.04)', color: '#475569', border: '1px solid rgba(255,255,255,0.06)' } : {}}>
-                            {u.isOnline ? '● Online' : 'Offline'}
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${u.isOnline ? 'text-green-400' : 'text-slate-600'}`}
+                            style={u.isOnline ? { background: 'rgba(74,222,128,0.1)' } : {}}>
+                            {u.isOnline && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
+                            {u.isOnline ? 'Online' : 'Offline'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-500 text-xs">{u.stats.totalGames}</td>
@@ -501,35 +502,38 @@ export default function AdminPage() {
           <div className="card overflow-hidden table-wrap">
             {games.length === 0
               ? <div className="text-center py-12 text-slate-600"><div className="text-4xl mb-3">🃏</div><p>{lang === 'th' ? 'ยังไม่มีเกม' : 'No games'}</p></div>
-              : <table className="w-full text-sm" style={{ minWidth: '400px' }}>
+              : <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-                      {[lang === 'th' ? 'เกม' : 'Game', lang === 'th' ? 'ชื่อไทย' : 'Thai', lang === 'th' ? 'สถานะ' : 'Status', ''].map((h, i) => (
-                        <th key={i} className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{h}</th>
-                      ))}
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{lang === 'th' ? 'เกม' : 'Game'}</th>
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">{lang === 'th' ? 'ชื่อไทย' : 'Thai'}</th>
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                      <th className="px-4 py-3.5 w-20"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {games.map(g => (
                       <tr key={g._id} className="border-b border-[var(--border)]/40 hover:bg-white/[0.01] transition group">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${g.color}15`, border: `1px solid ${g.color}30` }}>
-                              <div className="w-3 h-3 rounded-full" style={{ background: g.color }} />
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${g.color}15`, border: `1px solid ${g.color}30` }}>
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: g.color }} />
                             </div>
-                            <span className="font-semibold text-white">{g.name}</span>
+                            <span className="font-semibold text-white text-sm leading-tight">{g.name}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-slate-500">{g.nameTh}</td>
-                        <td className="px-5 py-3.5">
-                          <span className={`badge text-xs ${g.isActive ? 'badge-green' : 'badge-red'}`}>
-                            {g.isActive ? (lang === 'th' ? 'เปิดใช้' : 'Active') : (lang === 'th' ? 'ปิด' : 'Off')}
+                        <td className="px-4 py-3 text-slate-500 text-xs hidden md:table-cell max-w-[140px]">
+                          <span className="line-clamp-2">{g.nameTh}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`badge text-[10px] ${g.isActive ? 'badge-green' : 'badge-red'}`}>
+                            {g.isActive ? (lang === 'th' ? 'เปิด' : 'On') : (lang === 'th' ? 'ปิด' : 'Off')}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition">
-                            <button onClick={() => openEdit(g)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition active:scale-95"><Pencil size={14} /></button>
-                            <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition active:scale-95"><Trash2 size={14} /></button>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition">
+                            <button onClick={() => openEdit(g)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition active:scale-95" title={lang === 'th' ? 'แก้ไข' : 'Edit'}><Pencil size={14} /></button>
+                            <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition active:scale-95" title={lang === 'th' ? 'ลบ' : 'Delete'}><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>
