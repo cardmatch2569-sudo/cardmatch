@@ -230,9 +230,6 @@ export default function LobbyPage() {
               {announcement.text}
             </p>
           </div>
-          <span className="text-yellow-700 text-[10px] flex-shrink-0 hidden sm:block">
-            — {announcement.author}
-          </span>
         </div>
       )}
 
