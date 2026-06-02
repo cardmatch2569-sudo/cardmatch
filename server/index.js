@@ -19,19 +19,35 @@ const adminRoutes             = require('./routes/admin');
 const { setupSocketHandlers } = require('./socket/handlers');
 
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true;
+  if (!origin) return false; // Block requests with no Origin header
+  const exact = process.env.CLIENT_URL;
+  if (exact && origin === exact) return true;
+  // Allow localhost/LAN in dev; block everything else in prod
+  if (process.env.NODE_ENV === 'production') return false;
   return (
     origin.includes('localhost') ||
     origin.includes('127.0.0.1') ||
-    /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}/.test(origin) ||
-    /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(origin) ||
-    /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}/.test(origin) ||
-    origin.includes('.trycloudflare.com') ||
-    origin.includes('.vercel.app') ||
-    origin.includes('.railway.app') ||
-    (process.env.CLIENT_URL && origin === process.env.CLIENT_URL)
+    /^https?:\/\/192\.168\./.test(origin) ||
+    /^https?:\/\/10\./.test(origin) ||
+    origin.includes('.vercel.app') // preview deploys during development
   );
 };
+
+// ── In-memory login rate limiter (per IP) ────────────────────────
+const loginAttempts = new Map(); // ip → { count, resetAt }
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS    = 15 * 60 * 1000; // 15 minutes
+const checkLoginRate = (ip) => {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip) || { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + LOGIN_WINDOW_MS; }
+  if (entry.count >= MAX_LOGIN_ATTEMPTS) return false;
+  entry.count++;
+  loginAttempts.set(ip, entry);
+  return true;
+};
+// Clean up old entries every 30 minutes
+setInterval(() => { const now = Date.now(); loginAttempts.forEach((v, k) => { if (now > v.resetAt) loginAttempts.delete(k); }); }, 30 * 60 * 1000);
 
 const corsOptions = {
   origin: (origin, cb) => isAllowedOrigin(origin) ? cb(null, true) : cb(new Error(`CORS blocked: ${origin}`)),
@@ -47,6 +63,20 @@ const io     = new Server(server, {
 });
 
 app.set('io', io); // make io available to route handlers (announcements)
+app.set('checkLoginRate', checkLoginRate); // expose to auth routes
+
+// ── Security headers ──────────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options',   'nosniff');
+  res.setHeader('X-Frame-Options',           'DENY');
+  res.setHeader('X-XSS-Protection',          '1; mode=block');
+  res.setHeader('Referrer-Policy',            'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy',         'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 
 connectDB().then(async () => {
   // Reset stale active rooms on startup
@@ -76,22 +106,15 @@ connectDB().then(async () => {
     // Ensure required games exist — upsert by name on every startup
     const GameType = require('./models/GameType');
     const REQUIRED_GAMES = [
-      { name: 'Thai Card Battle',     nameTh: 'การ์ดต่อสู้ไทย',       description: 'Supports Battle of Talingchan and other Thai card games.', descriptionTh: 'รองรับการแข่งขัน Battle of Talingchan และเกมการ์ดไทยอื่นๆ', color: '#e11d48' },
-      { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.',                  descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad',                           color: '#1d4ed8' },
+      { name: 'Battle of Talingchan', nameTh: 'แบทเทิลออฟตลิ่งชัน',     description: 'Thai card battle game.',                 descriptionTh: 'เกมการ์ดต่อสู้สัญชาติไทย', color: '#e11d48' },
+      { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.', descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad', color: '#1d4ed8' },
     ];
     for (const g of REQUIRED_GAMES) {
       const existing = await GameType.findByName(g.name);
       if (!existing) { await GameType.create(g); console.log(`+ Game added: ${g.name}`); }
     }
-    // Migrate: rename 'Battle of Talingchan' → 'Thai Card Battle' if still in DB
-    try {
-      await getPool().query(
-        `UPDATE GameTypes SET name='Thai Card Battle', name_th='การ์ดต่อสู้ไทย',
-         description='Supports Battle of Talingchan and other Thai card games.',
-         description_th='รองรับการแข่งขัน Battle of Talingchan และเกมการ์ดไทยอื่นๆ'
-         WHERE name='Battle of Talingchan'`
-      );
-    } catch {}
+    // Clean up: remove 'Thai Card Battle' interim entry if it exists
+    try { await getPool().query(`DELETE FROM GameTypes WHERE name='Thai Card Battle'`); } catch {}
   } catch (e) { console.warn('Auto-seed warning:', e.message); }
 }).catch(() => {});
 

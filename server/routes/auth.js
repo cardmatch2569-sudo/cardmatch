@@ -39,7 +39,7 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const code = generateOTP();
     await EmailVerification.create(email, code, { type: 'email', username, email, hashedPassword });
-    console.log(`\n🔑 Register OTP for ${email} : ${code}\n`);
+    if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 Register OTP for ${email} : ${code}\n`);
 
     sendRegisterOTPEmail(email, code, username)
       .then(() => console.log(`📧 sent to ${email}`))
@@ -52,6 +52,11 @@ router.post('/register', async (req, res) => {
 // ── EMAIL LOGIN ───────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const checkLoginRate = req.app.get('checkLoginRate');
+    if (checkLoginRate && !checkLoginRate(ip))
+      return res.status(429).json({ message: 'เข้าสู่ระบบผิดพลาดหลายครั้งเกินไป กรุณารอ 15 นาที' });
+
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
     const user = await User.findByEmail(email);
@@ -87,18 +92,30 @@ router.post('/google', async (req, res) => {
 
     const code = generateOTP();
     await EmailVerification.create(email, code, { googleId, email, name, picture });
-    console.log(`\n🔑 Google OTP for ${email} : ${code}\n`);
+    if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 Google OTP for ${email} : ${code}\n`);
 
     sendOTPEmail(email, code, name).catch(e => console.warn(`📧 warn:`, e.message));
     res.json({ requiresOtp: true, email, name });
   } catch (err) { console.error('Google auth error:', err.message); res.status(400).json({ message: 'Google authentication failed' }); }
 });
 
+// OTP verify rate limiter — max 5 attempts per email per 10 min
+const otpVerifyAttempts = new Map();
+const checkOtpRate = (email) => {
+  const now = Date.now(), win = 10 * 60 * 1000;
+  const e = otpVerifyAttempts.get(email) || { count: 0, resetAt: now + win };
+  if (now > e.resetAt) { e.count = 0; e.resetAt = now + win; }
+  if (e.count >= 5) return false;
+  e.count++; otpVerifyAttempts.set(email, e); return true;
+};
+
 // ── VERIFY OTP — Step 2 ───────────────────────────────────────────
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) return res.status(400).json({ message: 'Email and code required' });
+    if (!checkOtpRate(email))
+      return res.status(429).json({ message: 'พยายามยืนยัน OTP มากเกินไป กรุณารอ 10 นาที' });
 
     const otpRow = await EmailVerification.verify(email, code);
     if (!otpRow) return res.status(400).json({ message: 'รหัสไม่ถูกต้องหรือหมดอายุแล้ว' });
@@ -165,7 +182,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const code = generateOTP();
     await EmailVerification.create(email, code, { type: 'reset', userId: user._id, username: user.username });
-    console.log(`\n🔑 Password Reset OTP for ${email}: ${code}\n`);
+    if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 Password Reset OTP for ${email}: ${code}\n`);
 
     sendOTPEmail(email, code, user.username).catch(e => console.warn('📧 warn:', e.message));
     res.json({ message: 'ส่งรหัส OTP ไปยัง Email แล้ว', email });
