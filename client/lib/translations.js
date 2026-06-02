@@ -86,6 +86,22 @@ const translations = {
     active: 'เปิดใช้งาน',
     inactive: 'ปิดใช้งาน',
 
+    // Donate
+    donate: 'สนับสนุน',
+    donateTitle: 'สนับสนุนการพัฒนา',
+    donateSubtitle: 'CardMatch ให้บริการฟรีสำหรับทุกคน หากชื่นชอบและอยากสนับสนุน ขอบคุณมากครับ 🙏',
+    donateDesc1: 'สแกน QR Code ด้านล่างเพื่อโอนผ่าน PromptPay',
+    donateDesc2: 'ไม่มีขั้นต่ำ ไม่บังคับ — ทุกบาทช่วยให้พัฒนาต่อได้',
+    donateThanks: 'ขอบคุณที่เล่นและสนับสนุน CardMatch!',
+    donateFree: 'เล่นฟรี ไม่มีโฆษณา',
+    donateFreeDesc: 'CardMatch ไม่มีค่าใช้จ่าย ไม่ติดโฆษณา และเปิดให้ทุกคนเข้าถึงได้',
+    donateDisclaimerTitle: 'ข้อตกลงสำคัญก่อนสนับสนุน',
+    donateDisclaimer1: 'การโอนเงินนี้เป็น "การสนับสนุนสมัครใจ" เท่านั้น ไม่ใช่การซื้อสินค้า บริการ หรือสิทธิพิเศษใดๆ ทั้งสิ้น',
+    donateDisclaimer2: 'ไม่มีสิ่งตอบแทนใดๆ — ผู้สนับสนุนจะไม่ได้รับรางวัล ไอเทม หรือสิทธิ์เพิ่มเติมในระบบ',
+    donateDisclaimer3: 'ไม่สามารถขอคืนเงินได้ เนื่องจากการโอนผ่าน PromptPay เป็นที่สุด',
+    donateDisclaimer4: 'ผู้รับเป็นบุคคลธรรมดา — CardMatch เป็นโปรเจคอิสระ ไม่ใช่บริษัท มูลนิธิ หรือนิติบุคคล',
+    donateDisclaimer5: 'โปรดอ่านและยอมรับข้อตกลงนี้ก่อนโอนเงินทุกครั้ง',
+
     // General
     loading: 'กำลังโหลด...',
     error: 'เกิดข้อผิดพลาด',
@@ -172,6 +188,22 @@ const translations = {
     cancel: 'Cancel',
     active: 'Active',
     inactive: 'Inactive',
+
+    // Donate
+    donate: 'Support',
+    donateTitle: 'Support Development',
+    donateSubtitle: 'CardMatch is completely free. If you enjoy it and want to help keep it running, thank you so much 🙏',
+    donateDesc1: 'Scan the QR Code below to transfer via PromptPay',
+    donateDesc2: 'No minimum amount, no pressure — every bit helps!',
+    donateThanks: 'Thank you for playing and supporting CardMatch!',
+    donateFree: 'Free to Play, No Ads',
+    donateFreeDesc: 'CardMatch has no fees, no ads, and is accessible to everyone.',
+    donateDisclaimerTitle: 'Important Notice Before Supporting',
+    donateDisclaimer1: 'This transfer is a voluntary donation only — not a purchase of goods, services, or any special privileges.',
+    donateDisclaimer2: 'No rewards in return — supporters will not receive in-game items, badges, or additional rights.',
+    donateDisclaimer3: 'Non-refundable — PromptPay transfers are final and cannot be reversed.',
+    donateDisclaimer4: 'Received by an individual — CardMatch is an independent project, not a company, foundation, or legal entity.',
+    donateDisclaimer5: 'Please read and accept these terms before transferring.',
 
     loading: 'Loading...',
     error: 'Error',

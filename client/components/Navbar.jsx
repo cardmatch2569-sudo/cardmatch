@@ -5,7 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X } from 'lucide-react';
+import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart } from 'lucide-react';
 
 export default function Navbar() {
   const { user, lang, loading, isAdminMode, viewMode, toggleViewMode, logout, toggleLang } = useAuth();
@@ -34,6 +34,8 @@ export default function Navbar() {
     { href: '/setup', label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, always: true },
     ...(isAdminMode ? [{ href: '/admin', label: t.admin, icon: <Shield size={15} />, admin: true }] : []),
   ];
+
+  const donateLink = { href: '/donate', label: t.donate, icon: <Heart size={14} fill="currentColor" /> };
 
   return (
     <>
@@ -105,6 +107,16 @@ export default function Navbar() {
                 {viewMode === 'admin' ? <><Eye size={12} />{lang === 'th' ? 'ดูผู้ใช้' : 'User'}</> : <><EyeOff size={12} />Admin</>}
               </button>
             )}
+
+            {/* Donate button — desktop */}
+            <Link href="/donate"
+              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+                ${isActive('/donate')
+                  ? 'bg-pink-600/20 text-pink-300 border-pink-600/20'
+                  : 'text-pink-400 border-pink-600/20 bg-pink-500/5 hover:bg-pink-500/10 hover:text-pink-300'}`}>
+              <Heart size={12} fill="currentColor" />
+              {t.donate}
+            </Link>
 
             {/* Language toggle */}
             <button onClick={toggleLang}
@@ -220,6 +232,17 @@ export default function Navbar() {
                 </button>
               </div>
             )}
+
+            {/* Donate link (mobile) */}
+            <div className="px-3 py-2 border-t border-[var(--border)]">
+              <Link href={donateLink.href} onClick={close}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
+                  ${isActive('/donate') ? 'bg-pink-600/15 text-pink-300' : 'text-pink-400 hover:text-pink-300 hover:bg-pink-500/8'}`}>
+                <span className="text-pink-400">{donateLink.icon}</span>
+                {donateLink.label}
+                {isActive('/donate') && <div className="ml-auto w-2 h-2 rounded-full bg-current opacity-60" />}
+              </Link>
+            </div>
 
             {/* Bottom actions */}
             <div className="px-3 py-3 border-t border-[var(--border)]">
