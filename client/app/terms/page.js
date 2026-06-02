@@ -94,7 +94,7 @@ export default function TermsPage() {
             </Section>
 
             <Section title="10. ติดต่อเรา">
-              <b>อีเมล:</b> chakkarink@lanna.co.th
+              <b>อีเมล:</b> cardmatch2569@gmail.com
             </Section>
           </>
         ) : (
@@ -109,7 +109,7 @@ export default function TermsPage() {
             <Section title="8. Termination">We reserve the right to suspend or delete accounts that violate these terms without prior notice.</Section>
             <Section title="8. Disclaimer">The service is provided "as is" with no warranties. We are not responsible for user behavior or service interruptions.</Section>
             <Section title="9. Governing Law">These terms are governed by Thai law.</Section>
-            <Section title="10. Contact"><b>Email:</b> chakkarink@lanna.co.th</Section>
+            <Section title="10. Contact"><b>Email:</b> cardmatch2569@gmail.com</Section>
           </>
         )}
       </div>

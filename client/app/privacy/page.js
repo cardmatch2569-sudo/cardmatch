@@ -66,7 +66,7 @@ export default function PrivacyPage() {
                 <li>สิทธิ์เข้าถึง แก้ไข ลบ และคัดค้านการประมวลผลข้อมูล</li>
                 <li>ลบบัญชีด้วยตนเองได้ที่: <b>โปรไฟล์ → โซนอันตราย → ลบบัญชีของฉัน</b></li>
               </ul>
-              ติดต่อขอใช้สิทธิ์: <b>chakkarink@lanna.co.th</b>
+              ติดต่อขอใช้สิทธิ์: <b>cardmatch2569@gmail.com</b>
             </Section>
             <Section title="8. ความปลอดภัยของข้อมูล">
               <ul className="list-disc pl-5 space-y-1">
@@ -78,7 +78,7 @@ export default function PrivacyPage() {
             </Section>
             <Section title="9. การละเมิดข้อมูลส่วนบุคคล">
               หากเกิดการละเมิดที่มีความเสี่ยงสูง เราจะแจ้ง PDPC ภายใน 72 ชั่วโมง ตามมาตรา 37(4) และแจ้งผู้ใช้ที่ได้รับผลกระทบผ่านระบบประชาสัมพันธ์โดยเร็วที่สุด
-              ติดต่อรายงานปัญหาความปลอดภัย: <b>chakkarink@lanna.co.th</b>
+              ติดต่อรายงานปัญหาความปลอดภัย: <b>cardmatch2569@gmail.com</b>
             </Section>
             <Section title="10. ผู้เยาว์">
               บริการนี้ไม่ได้มุ่งหมายสำหรับผู้มีอายุต่ำกว่า 13 ปี
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
               เราอาจปรับปรุงนโยบายนี้เป็นครั้งคราว โดยจะแจ้งผ่านระบบประชาสัมพันธ์ในแอปพลิเคชัน
             </Section>
             <Section title="12. ติดต่อเรา">
-              <b>อีเมล:</b> chakkarink@lanna.co.th
+              <b>อีเมล:</b> cardmatch2569@gmail.com
             </Section>
           </>
         ) : (
@@ -123,13 +123,13 @@ export default function PrivacyPage() {
             </Section>
             <Section title="7. Your Rights (PDPA)">
               You have rights to access, rectify, erase, and object. Delete your account via <b>Profile → Danger Zone → Delete my account</b>.
-              Contact: <b>chakkarink@lanna.co.th</b>
+              Contact: <b>cardmatch2569@gmail.com</b>
             </Section>
             <Section title="8. Security">
               Passwords bcrypt-hashed, HTTPS/TLS, JWT 7-day expiry, no payment data stored.
             </Section>
             <Section title="9. Data Breach">
-              In case of high-risk breach, we will notify PDPC within 72 hours and affected users via in-app announcement. Report security issues to: <b>chakkarink@lanna.co.th</b>
+              In case of high-risk breach, we will notify PDPC within 72 hours and affected users via in-app announcement. Report security issues to: <b>cardmatch2569@gmail.com</b>
             </Section>
             <Section title="10. Minors">
               Not intended for users under 13.
@@ -138,7 +138,7 @@ export default function PrivacyPage() {
               Policy updates will be announced via the in-app announcement system.
             </Section>
             <Section title="12. Contact">
-              <b>Email:</b> chakkarink@lanna.co.th
+              <b>Email:</b> cardmatch2569@gmail.com
             </Section>
           </>
         )}
