@@ -25,11 +25,16 @@ const rateOk = (map, userId, minMs) => {
   return true;
 };
 
+const MAX_CONCURRENT_USERS = 200; // Safe limit for Railway Starter plan (~512MB RAM)
+
 const setupSocketHandlers = (io) => {
   // Authenticate socket on connection
   io.use(async (socket, next) => {
+    // Reject if server is at capacity
+    if (onlineUsers.size >= MAX_CONCURRENT_USERS) {
+      return next(new Error('SERVER_FULL'));
+    }
     const token = socket.handshake.auth?.token;
-    if (!token) return next(new Error('No token'));
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.id);

@@ -12,6 +12,7 @@ export function SocketProvider({ children }) {
   const [onlineCount, setOnlineCount] = useState(0);
   const [connected,   setConnected]   = useState(false);
   const [socketReady, setSocketReady] = useState(false);
+  const [serverFull,  setServerFull]  = useState(false);
 
   // Lobby callbacks — registered once inside the socket, delegates to these refs.
   // This avoids React effect timing issues: listeners live on the socket itself,
@@ -64,7 +65,12 @@ export function SocketProvider({ children }) {
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('[Socket] ⚠️ Error:', err.message);
+      if (err.message === 'SERVER_FULL') {
+        console.warn('[Socket] ⚠️ Server full — max concurrent users reached');
+        setServerFull(true);
+      } else {
+        console.warn('[Socket] ⚠️ Error:', err.message);
+      }
     });
 
     socket.on('online_count', ({ count }) => setOnlineCount(count));
@@ -118,7 +124,7 @@ export function SocketProvider({ children }) {
   return (
     <SocketContext.Provider value={{
       getSocket, safeEmit, setQueueGame, setLobbyCallbacks,
-      onlineCount, connected, socketReady,
+      onlineCount, connected, socketReady, serverFull,
     }}>
       {children}
     </SocketContext.Provider>

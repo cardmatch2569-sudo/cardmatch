@@ -12,7 +12,7 @@ import PublicChat from '../../components/PublicChat';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
-  const { getSocket, safeEmit, setQueueGame, setLobbyCallbacks, onlineCount, connected } = useSocket();
+  const { getSocket, safeEmit, setQueueGame, setLobbyCallbacks, onlineCount, connected, serverFull } = useSocket();
   const router = useRouter();
   const t = translations[lang];
 
@@ -216,6 +216,21 @@ export default function LobbyPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Server full banner */}
+      {serverFull && (
+        <div className="w-full py-4 px-5 rounded-xl mb-6 text-center"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <p className="text-red-400 font-semibold text-sm mb-1">
+            {lang === 'th' ? '⚠️ ขณะนี้ Server มีผู้เล่นเต็มแล้ว' : '⚠️ Server is currently full'}
+          </p>
+          <p className="text-slate-500 text-xs">
+            {lang === 'th'
+              ? 'กรุณารอสักครู่แล้วลอง refresh ใหม่อีกครั้ง'
+              : 'Please wait a moment and refresh the page to try again'}
+          </p>
         </div>
       )}
 
