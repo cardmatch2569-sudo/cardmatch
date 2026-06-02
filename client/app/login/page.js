@@ -129,15 +129,26 @@ export default function LoginPage() {
 
           {/* Registration notice */}
           {mode === 'register' && (
-            <div className="flex items-start gap-2.5 p-3 rounded-xl mb-4"
-              style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)' }}>
-              <CheckCircle size={15} className="text-purple-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-purple-300 leading-relaxed">
-                {lang === 'th'
-                  ? 'ระบบจะส่งรหัส OTP 6 หลักไปยัง Email ที่กรอก เพื่อยืนยันว่า Email มีจริง'
-                  : 'A 6-digit OTP code will be sent to your email to verify it exists'}
-              </p>
-            </div>
+            <>
+              <div className="flex items-start gap-2.5 p-3 rounded-xl mb-2"
+                style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                <CheckCircle size={15} className="text-purple-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-purple-300 leading-relaxed">
+                  {lang === 'th'
+                    ? 'ระบบจะส่งรหัส OTP 6 หลักไปยัง Email ที่กรอก เพื่อยืนยันว่า Email มีจริง'
+                    : 'A 6-digit OTP code will be sent to your email to verify it exists'}
+                </p>
+              </div>
+              <div className="flex items-start gap-2.5 p-3 rounded-xl mb-4"
+                style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
+                <span className="text-yellow-400 text-xs flex-shrink-0 mt-0.5">🧪</span>
+                <p className="text-xs text-yellow-300/80 leading-relaxed">
+                  {lang === 'th'
+                    ? 'ขณะนี้ระบบอยู่ใน ช่วง Beta Test — สามารถสมัครได้ไม่จำกัด แต่รองรับผู้เล่นออนไลน์พร้อมกันสูงสุด 200 คน'
+                    : 'The system is in Beta — registration is unlimited, but the server supports up to 200 concurrent players'}
+                </p>
+              </div>
+            </>
           )}
 
           {/* Error */}

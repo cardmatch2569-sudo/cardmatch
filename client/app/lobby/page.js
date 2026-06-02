@@ -221,16 +221,26 @@ export default function LobbyPage() {
 
       {/* Server full banner */}
       {serverFull && (
-        <div className="w-full py-4 px-5 rounded-xl mb-6 text-center"
+        <div className="w-full p-4 rounded-xl mb-6"
           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-          <p className="text-red-400 font-semibold text-sm mb-1">
-            {lang === 'th' ? '⚠️ ขณะนี้ Server มีผู้เล่นเต็มแล้ว' : '⚠️ Server is currently full'}
+          <p className="text-red-400 font-bold text-sm mb-1">
+            {lang === 'th' ? '⚠️ ผู้เล่นออนไลน์เต็มจำนวนแล้ว (200/200)' : '⚠️ Server is at capacity (200/200 players)'}
           </p>
-          <p className="text-slate-500 text-xs">
+          <p className="text-slate-400 text-xs leading-relaxed mb-2">
             {lang === 'th'
-              ? 'กรุณารอสักครู่แล้วลอง refresh ใหม่อีกครั้ง'
-              : 'Please wait a moment and refresh the page to try again'}
+              ? 'ระบบ Beta นี้รองรับผู้เล่นออนไลน์พร้อมกันสูงสุด 200 คน ขณะนี้ทุกที่นั่งถูกใช้งานอยู่'
+              : 'This Beta server supports up to 200 concurrent players. All slots are currently occupied.'}
           </p>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-xs">
+              {lang === 'th' ? '📌 สมัครบัญชีได้ปกติ และรอเล่นเมื่อมีที่ว่าง' : '📌 You can still register — play when a slot opens up'}
+            </span>
+          </div>
+          <button onClick={() => window.location.reload()}
+            className="mt-3 w-full py-2 rounded-xl text-xs font-semibold transition"
+            style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+            {lang === 'th' ? '🔄 ลอง Refresh อีกครั้ง' : '🔄 Refresh to try again'}
+          </button>
         </div>
       )}
 
