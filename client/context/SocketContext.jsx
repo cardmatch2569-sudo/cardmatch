@@ -77,8 +77,10 @@ export function SocketProvider({ children }) {
     socket.on('challenge_received', (...a) => lobbyCallbacksRef.current.onChallengeReceived?.(...a));
     socket.on('challenge_accepted', (...a) => lobbyCallbacksRef.current.onChallengeAccepted?.(...a));
     socket.on('challenge_declined', (...a) => lobbyCallbacksRef.current.onChallengeDeclined?.(...a));
-    socket.on('challenge_id_sent',  (...a) => lobbyCallbacksRef.current.onChallengeIdSent?.(...a));
-    socket.on('challenge_id_error', (...a) => lobbyCallbacksRef.current.onChallengeIdError?.(...a));
+    socket.on('challenge_id_sent',   (...a) => lobbyCallbacksRef.current.onChallengeIdSent?.(...a));
+    socket.on('challenge_id_error',  (...a) => lobbyCallbacksRef.current.onChallengeIdError?.(...a));
+    socket.on('public_message',      (...a) => lobbyCallbacksRef.current.onPublicMessage?.(...a));
+    socket.on('public_chat_history', (...a) => lobbyCallbacksRef.current.onPublicChatHistory?.(...a));
 
     socketRef.current = socket;
     setSocketReady(true);

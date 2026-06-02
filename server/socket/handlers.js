@@ -9,6 +9,7 @@ const onlineUsers = new Map();       // userId → { socketId, username, avatar 
 const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, username }]
 const activeRooms = new Map();       // roomId → { players: [userId] }
 const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
+const publicChatBuffer = [];         // last 50 public lobby messages
 
 const setupSocketHandlers = (io) => {
   // Authenticate socket on connection
@@ -33,6 +34,9 @@ const setupSocketHandlers = (io) => {
     onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar });
     io.emit('online_count', { count: onlineUsers.size });
     console.log(`[+] ${user.username} (${socket.id})`);
+
+    // Send recent public chat history to newly connected user
+    socket.emit('public_chat_history', publicChatBuffer);
 
     // Fix: On reconnect, update socketId in any active queue entry
     // (socketId changes on reconnect; old entry would cause match_found to be lost)
@@ -100,6 +104,19 @@ const setupSocketHandlers = (io) => {
         matchQueues.set(gameTypeId, queue);
         socket.emit('queue_joined', { gameTypeId, position: queue.length });
       }
+    });
+
+    // ── PUBLIC LOBBY CHAT ─────────────────────────────────────────
+    socket.on('public_message', ({ message }) => {
+      if (!message?.trim()) return;
+      const msg = {
+        from: { _id: userId, username: user.username, avatar: user.avatar },
+        message: message.trim().slice(0, 300),
+        timestamp: new Date().toISOString(),
+      };
+      publicChatBuffer.push(msg);
+      if (publicChatBuffer.length > 50) publicChatBuffer.shift();
+      io.emit('public_message', msg); // broadcast to all connected users
     });
 
     socket.on('leave_queue', () => {
