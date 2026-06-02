@@ -76,13 +76,22 @@ connectDB().then(async () => {
     // Ensure required games exist — upsert by name on every startup
     const GameType = require('./models/GameType');
     const REQUIRED_GAMES = [
-      { name: 'Battle of Talingchan', nameTh: 'แบทเทิลออฟตลิ่งชัน', description: 'Thai card battle game.',               descriptionTh: 'เกมการ์ดต่อสู้สัญชาติไทย',     color: '#e11d48' },
-      { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.', descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad', color: '#1d4ed8' },
+      { name: 'Thai Card Battle',     nameTh: 'การ์ดต่อสู้ไทย',       description: 'Supports Battle of Talingchan and other Thai card games.', descriptionTh: 'รองรับการแข่งขัน Battle of Talingchan และเกมการ์ดไทยอื่นๆ', color: '#e11d48' },
+      { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.',                  descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad',                           color: '#1d4ed8' },
     ];
     for (const g of REQUIRED_GAMES) {
       const existing = await GameType.findByName(g.name);
       if (!existing) { await GameType.create(g); console.log(`+ Game added: ${g.name}`); }
     }
+    // Migrate: rename 'Battle of Talingchan' → 'Thai Card Battle' if still in DB
+    try {
+      await getPool().query(
+        `UPDATE GameTypes SET name='Thai Card Battle', name_th='การ์ดต่อสู้ไทย',
+         description='Supports Battle of Talingchan and other Thai card games.',
+         description_th='รองรับการแข่งขัน Battle of Talingchan และเกมการ์ดไทยอื่นๆ'
+         WHERE name='Battle of Talingchan'`
+      );
+    } catch {}
   } catch (e) { console.warn('Auto-seed warning:', e.message); }
 }).catch(() => {});
 
