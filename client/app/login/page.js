@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
 import translations from '../../lib/translations';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
 import OTPModal from '../../components/OTPModal';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, CheckCircle, KeyRound } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -12,13 +14,21 @@ export default function LoginPage() {
   const t = translations[lang];
   const router = useRouter();
 
-  const [mode, setMode]         = useState('login');   // 'login' | 'register'
+  const [mode, setMode]         = useState('login');   // 'login' | 'register' | 'forgot' | 'reset'
   const [showPass, setShowPass] = useState(false);
   const [showConf, setShowConf] = useState(false);
   const [form, setForm]         = useState({ username: '', email: '', password: '', confirm: '' });
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [success, setSuccess]   = useState('');
+
+  // Forgot / Reset password flow
+  const [resetEmail, setResetEmail]   = useState('');
+  const [resetCode,  setResetCode]    = useState('');
+  const [newPass,    setNewPass]      = useState('');
+  const [newPassConf,setNewPassConf]  = useState('');
+  const [showNewPass,setShowNewPass]  = useState(false);
 
   // OTP flow for email registration
   const [otpData, setOtpData]   = useState(null);  // { email, devCode }
@@ -63,9 +73,40 @@ export default function LoginPage() {
   const switchMode = (m) => {
     setMode(m);
     setError('');
+    setSuccess('');
     setForm({ username: '', email: '', password: '', confirm: '' });
     setShowPass(false);
     setShowConf(false);
+    setResetCode('');
+    setNewPass('');
+    setNewPassConf('');
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!resetEmail.trim()) return setError(lang === 'th' ? 'กรุณากรอก Email' : 'Please enter your email');
+    setLoading(true);
+    try {
+      await api.post('/api/auth/forgot-password', { email: resetEmail.trim() });
+      setMode('reset');
+      setSuccess(lang === 'th' ? `ส่ง OTP ไปยัง ${resetEmail} แล้ว` : `OTP sent to ${resetEmail}`);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  const handleResetSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (newPass !== newPassConf) return setError(lang === 'th' ? 'รหัสผ่านทั้งสองช่องไม่ตรงกัน' : 'Passwords do not match');
+    if (newPass.length < 6) return setError(lang === 'th' ? 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' : 'Password min 6 characters');
+    setLoading(true);
+    try {
+      const { message } = await api.post('/api/auth/reset-password', { email: resetEmail, code: resetCode, newPassword: newPass });
+      switchMode('login');
+      setSuccess(message);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -98,26 +139,123 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex gap-1 p-1 rounded-xl mb-5 anim-fade-up"
-          style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-          <button onClick={() => switchMode('login')}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition
-              ${mode === 'login' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-            style={mode === 'login' ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
-            {t.login}
-          </button>
-          <button onClick={() => switchMode('register')}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition
-              ${mode === 'register' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-            style={mode === 'register' ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
-            {t.register}
-          </button>
-        </div>
+        {/* Tab switcher — hidden in forgot/reset mode */}
+        {(mode === 'login' || mode === 'register') && (
+          <div className="flex gap-1 p-1 rounded-xl mb-5 anim-fade-up"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            <button onClick={() => switchMode('login')}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition
+                ${mode === 'login' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+              style={mode === 'login' ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
+              {t.login}
+            </button>
+            <button onClick={() => switchMode('register')}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition
+                ${mode === 'register' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+              style={mode === 'register' ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
+              {t.register}
+            </button>
+          </div>
+        )}
+        {(mode === 'forgot' || mode === 'reset') && (
+          <div className="flex items-center gap-2 mb-5 anim-fade-up">
+            <button onClick={() => switchMode('login')} className="text-slate-500 hover:text-white transition p-1">
+              ←
+            </button>
+            <span className="text-white text-sm font-semibold flex items-center gap-2">
+              <KeyRound size={15} className="text-purple-400" />
+              {lang === 'th' ? 'ตั้งรหัสผ่านใหม่' : 'Reset Password'}
+            </span>
+          </div>
+        )}
 
         {/* Card */}
         <div className="anim-fade-up delay-100 card p-5 overflow-hidden"
           style={{ background: 'rgba(15,15,30,0.85)', backdropFilter: 'blur(20px)' }}>
+
+          {/* Success message */}
+          {success && (
+            <div className="mb-4 px-3 py-2.5 rounded-xl text-sm flex items-center gap-2"
+              style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80' }}>
+              <CheckCircle size={14} /> {success}
+            </div>
+          )}
+
+          {/* ── FORGOT PASSWORD ─────────────────────────────────── */}
+          {mode === 'forgot' && (
+            <form onSubmit={handleForgotSubmit} className="space-y-3">
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                {lang === 'th'
+                  ? 'กรอก Email ที่ใช้สมัคร ระบบจะส่งรหัส OTP เพื่อยืนยันตัวตน'
+                  : 'Enter your registered email. We\'ll send an OTP to verify your identity.'}
+              </p>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
+                <input type="email" required autoFocus
+                  placeholder={lang === 'th' ? 'Email ที่ใช้สมัคร' : 'Registered email'}
+                  value={resetEmail}
+                  onChange={e => setResetEmail(e.target.value)}
+                  className="input-base pl-10 text-sm"
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
+                />
+              </div>
+              {error && <div className="px-3 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>{error}</div>}
+              <button type="submit" disabled={loading} className="btn-primary w-full py-3 rounded-xl text-sm gap-2">
+                {loading
+                  ? <span className="flex items-center gap-2 justify-center"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{lang === 'th' ? 'กำลังส่ง...' : 'Sending...'}</span>
+                  : <>{lang === 'th' ? 'ส่งรหัส OTP' : 'Send OTP'} <ArrowRight size={15} /></>}
+              </button>
+            </form>
+          )}
+
+          {/* ── RESET PASSWORD ──────────────────────────────────── */}
+          {mode === 'reset' && (
+            <form onSubmit={handleResetSubmit} className="space-y-3">
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
+                <input type="text" inputMode="numeric" required maxLength={6} autoFocus
+                  placeholder={lang === 'th' ? 'รหัส OTP 6 หลักจาก Email' : '6-digit OTP from email'}
+                  value={resetCode}
+                  onChange={e => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="input-base pl-10 text-sm tracking-widest font-mono"
+                />
+              </div>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
+                <input type={showNewPass ? 'text' : 'password'} required
+                  placeholder={lang === 'th' ? 'รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)' : 'New password (min 6 chars)'}
+                  value={newPass}
+                  onChange={e => setNewPass(e.target.value)}
+                  className="input-base pl-10 pr-10 text-sm"
+                  autoComplete="new-password"
+                />
+                <button type="button" tabIndex={-1} onClick={() => setShowNewPass(p => !p)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition p-1">
+                  {showNewPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
+                <input type={showNewPass ? 'text' : 'password'} required
+                  placeholder={lang === 'th' ? 'ยืนยันรหัสผ่านใหม่' : 'Confirm new password'}
+                  value={newPassConf}
+                  onChange={e => setNewPassConf(e.target.value)}
+                  className={`input-base pl-10 text-sm ${newPassConf && newPass !== newPassConf ? 'border-red-500/60' : newPassConf && newPass === newPassConf ? 'border-green-500/60' : ''}`}
+                  autoComplete="new-password"
+                />
+              </div>
+              {error && <div className="px-3 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>{error}</div>}
+              <button type="submit" disabled={loading || resetCode.length !== 6} className="btn-primary w-full py-3 rounded-xl text-sm gap-2 disabled:opacity-40">
+                {loading
+                  ? <span className="flex items-center gap-2 justify-center"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /></span>
+                  : <><KeyRound size={14} /> {lang === 'th' ? 'ตั้งรหัสผ่านใหม่' : 'Set New Password'}</>}
+              </button>
+              <button type="button" onClick={() => { setResetCode(''); handleForgotSubmit({ preventDefault: () => {} }); }}
+                className="w-full text-xs text-slate-600 hover:text-slate-400 transition py-1">
+                {lang === 'th' ? 'ส่ง OTP ใหม่อีกครั้ง' : 'Resend OTP'}
+              </button>
+            </form>
+          )}
 
           {/* Google Button (login mode only) */}
           {mode === 'login' && googleConfigured && (
@@ -281,6 +419,16 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Forgot password link — login mode only */}
+          {mode === 'login' && (
+            <p className="text-center mt-3">
+              <button onClick={() => { setResetEmail(form.email); switchMode('forgot'); }}
+                className="text-xs text-slate-600 hover:text-purple-400 transition">
+                {lang === 'th' ? 'ลืมรหัสผ่าน?' : 'Forgot password?'}
+              </button>
+            </p>
+          )}
 
           {/* First user note */}
           {mode === 'register' && (

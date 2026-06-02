@@ -151,6 +151,49 @@ router.post('/resend-otp', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// ── FORGOT PASSWORD — Step 1: send OTP ───────────────────────────
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'กรุณากรอก Email' });
+
+    const user = await User.findByEmail(email);
+    if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีที่ใช้ Email นี้' });
+
+    if (await EmailVerification.isRateLimited(email))
+      return res.status(429).json({ message: 'กรุณารอ 60 วินาทีก่อนขอรหัสใหม่' });
+
+    const code = generateOTP();
+    await EmailVerification.create(email, code, { type: 'reset', userId: user._id, username: user.username });
+    console.log(`\n🔑 Password Reset OTP for ${email}: ${code}\n`);
+
+    sendOTPEmail(email, code, user.username).catch(e => console.warn('📧 warn:', e.message));
+    res.json({ message: 'ส่งรหัส OTP ไปยัง Email แล้ว', email });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ── RESET PASSWORD — Step 2: verify OTP + set new password ───────
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) return res.status(400).json({ message: 'ข้อมูลไม่ครบถ้วน' });
+    if (newPassword.length < 6) return res.status(400).json({ message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' });
+
+    const otpRow = await EmailVerification.verify(email, code);
+    if (!otpRow) return res.status(400).json({ message: 'รหัสไม่ถูกต้องหรือหมดอายุแล้ว' });
+
+    const data = JSON.parse(otpRow.google_data);
+    if (data.type !== 'reset') return res.status(400).json({ message: 'รหัสไม่ถูกต้องสำหรับการรีเซ็ตรหัสผ่าน' });
+
+    const bcrypt = require('bcryptjs');
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await getPool().query('UPDATE Users SET password=$1, updated_at=NOW() WHERE email=$2', [hashed, email.toLowerCase().trim()]);
+    await EmailVerification.markUsed(otpRow.id);
+
+    res.json({ message: 'เปลี่ยนรหัสผ่านสำเร็จแล้ว กรุณาเข้าสู่ระบบด้วยรหัสใหม่' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 function getPool() { return require('../config/db').getPool(); }
 
 module.exports = router;
