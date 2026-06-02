@@ -73,16 +73,15 @@ connectDB().then(async () => {
 
   // Auto-seed game types if none exist
   try {
-    const { rows } = await getPool().query('SELECT COUNT(*) AS cnt FROM GameTypes');
-    if (parseInt(rows[0].cnt, 10) === 0) {
-      console.log('Seeding initial game types...');
-      const GameType = require('./models/GameType');
-      const GAMES = [
-        { name: 'Battle of Talingchan', nameTh: 'แบทเทิลออฟตลิ่งชัน', description: 'Thai card battle game.',               descriptionTh: 'เกมการ์ดต่อสู้สัญชาติไทย',     color: '#e11d48' },
-        { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.', descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad', color: '#1d4ed8' },
-      ];
-      for (const g of GAMES) await GameType.create(g);
-      console.log('Game types seeded!');
+    // Ensure required games exist — upsert by name on every startup
+    const GameType = require('./models/GameType');
+    const REQUIRED_GAMES = [
+      { name: 'Battle of Talingchan', nameTh: 'แบทเทิลออฟตลิ่งชัน', description: 'Thai card battle game.',               descriptionTh: 'เกมการ์ดต่อสู้สัญชาติไทย',     color: '#e11d48' },
+      { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.', descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad', color: '#1d4ed8' },
+    ];
+    for (const g of REQUIRED_GAMES) {
+      const existing = await GameType.findByName(g.name);
+      if (!existing) { await GameType.create(g); console.log(`+ Game added: ${g.name}`); }
     }
   } catch (e) { console.warn('Auto-seed warning:', e.message); }
 }).catch(() => {});
