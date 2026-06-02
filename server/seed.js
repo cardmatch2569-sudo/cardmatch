@@ -4,6 +4,7 @@ const GameType = require('./models/GameType');
 
 const GAMES = [
   { name: 'Battle of Talingchan', nameTh: 'แบทเทิลออฟตลิ่งชัน', description: 'Thai card battle game.', descriptionTh: 'เกมการ์ดต่อสู้สัญชาติไทย', color: '#e11d48' },
+  { name: 'Cardfight!! Vanguard', nameTh: 'การ์ดไฟต์!! แวนการ์ด', description: 'Japanese trading card game by Bushiroad.', descriptionTh: 'เกมการ์ดญี่ปุ่นโดย Bushiroad', color: '#1d4ed8' },
 ];
 
 (async () => {
