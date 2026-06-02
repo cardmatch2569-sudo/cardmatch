@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { getPool, generatePlayerId } = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
 
@@ -62,6 +63,28 @@ router.put('/me', protect, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// ── DELETE OWN ACCOUNT (requires password confirmation) ──────────
+router.delete('/me', protect, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ message: 'กรุณากรอกรหัสผ่านเพื่อยืนยัน' });
+
+    const user = await User.findById(req.user._id);
+    // Google-only accounts have no password — skip password check
+    if (user.password) {
+      const valid = await User.comparePassword(password, user.password);
+      if (!valid) return res.status(403).json({ message: 'รหัสผ่านไม่ถูกต้อง' });
+    }
+
+    const pool = getPool();
+    await pool.query('DELETE FROM RoomPlayers WHERE user_id=$1', [req.user._id]);
+    await pool.query('DELETE FROM EmailVerifications WHERE email=$1', [user.email]);
+    await pool.query('DELETE FROM Users WHERE id=$1', [req.user._id]);
+
+    res.json({ message: 'ลบบัญชีเรียบร้อยแล้ว' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 module.exports = router;

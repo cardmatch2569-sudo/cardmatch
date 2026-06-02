@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [ageConfirmed, setAgeConfirmed]   = useState(false);
   const [success, setSuccess]   = useState('');
 
   // Forgot / Reset password flow
@@ -44,6 +45,10 @@ export default function LoginPage() {
     // Validate confirm password before calling API
     if (mode === 'register' && form.password !== form.confirm) {
       setError(lang === 'th' ? 'รหัสผ่านทั้งสองช่องไม่ตรงกัน' : 'Passwords do not match');
+      return;
+    }
+    if (mode === 'register' && !ageConfirmed) {
+      setError(lang === 'th' ? 'กรุณายืนยันว่าคุณมีอายุ 13 ปีขึ้นไป' : 'Please confirm you are at least 13 years old');
       return;
     }
     if (mode === 'register' && !termsAccepted) {
@@ -381,6 +386,22 @@ export default function LoginPage() {
                   </span>
                 )}
               </div>
+            )}
+
+            {/* Age confirmation — register only */}
+            {mode === 'register' && (
+              <label className="flex items-start gap-2.5 cursor-pointer group">
+                <div className="relative flex-shrink-0 mt-0.5">
+                  <input type="checkbox" checked={ageConfirmed} onChange={e => setAgeConfirmed(e.target.checked)} className="sr-only" />
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all
+                    ${ageConfirmed ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-500'}`}>
+                    {ageConfirmed && <svg viewBox="0 0 10 8" width="8" height="8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 leading-relaxed">
+                  {lang === 'th' ? 'ฉันยืนยันว่ามีอายุ 13 ปีขึ้นไป' : 'I confirm that I am at least 13 years old'}
+                </span>
+              </label>
             )}
 
             {/* Terms consent — register only */}

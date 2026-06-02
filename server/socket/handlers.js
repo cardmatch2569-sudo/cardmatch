@@ -10,6 +10,15 @@ const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, user
 const activeRooms = new Map();       // roomId → { players: [userId] }
 const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
+
+// Basic content filter — blocks clearly illegal/harmful content
+const BLOCKED_PATTERNS = [
+  /เบอร์โทร|line\s*id|โทร\s*หา|ติดต่อ\s*ได้ที่/i,  // contact solicitation
+  /ยาเสพติด|ยาบ้า|กัญชา|heroin|cocaine/i,            // drugs
+  /ลามก|โป๊|porn|xxx|sex\s*for/i,                      // pornography
+  /พนัน|บาคาร่า|casino|gambling/i,                    // gambling
+];
+const isBlocked = (text) => BLOCKED_PATTERNS.some(p => p.test(text));
 let currentAnnouncement = null;      // { text, author, timestamp } | null
 
 // Rate limit state — userId → last event timestamp (ms)
@@ -131,6 +140,7 @@ const setupSocketHandlers = (io) => {
     // ── PUBLIC LOBBY CHAT ─────────────────────────────────────────
     socket.on('public_message', ({ message }) => {
       if (!message?.trim()) return;
+      if (isBlocked(message)) return socket.emit('error', { message: 'ข้อความถูกบล็อกเนื่องจากเนื้อหาไม่เหมาะสม' });
       if (!rateOk(rateLimits.publicMsg, userId, 1500)) return;
       const msg = {
         from: { _id: userId, username: user.username, avatar: user.avatar },

@@ -4,15 +4,20 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check } from 'lucide-react';
+import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check, Trash2, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, loading, lang, setUser } = useAuth();
   const router = useRouter();
   const t = translations[lang];
-  const [games, setGames]           = useState([]);
-  const [copied, setCopied]         = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [games, setGames]             = useState([]);
+  const [copied, setCopied]           = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePass, setDeletePass]   = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting]       = useState(false);
+  const [showDelPass, setShowDelPass] = useState(false);
   // Prevent retrying if the endpoint is not yet available
   const pidTriedRef = useRef(false);
 
@@ -25,6 +30,20 @@ export default function ProfilePage() {
   };
 
   // Generate player_id via dedicated endpoint (once per session)
+  const deleteAccount = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api.delete('/api/users/me', { password: deletePass });
+      // Log out and redirect
+      localStorage.removeItem('cg_token');
+      sessionStorage.removeItem('cg_token');
+      router.push('/');
+    } catch (err) {
+      setDeleteError(err.message || (lang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Wrong password'));
+    } finally { setDeleting(false); }
+  };
+
   const refreshUser = async () => {
     if (pidTriedRef.current) return;
     pidTriedRef.current = true;
@@ -187,6 +206,90 @@ export default function ProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* Danger zone */}
+      <div className="max-w-2xl mx-auto px-4 pb-10">
+        <div className="card p-5" style={{ borderColor: 'rgba(239,68,68,0.2)' }}>
+          <h3 className="text-sm font-bold text-red-400 mb-1">
+            {lang === 'th' ? '⚠️ โซนอันตราย' : '⚠️ Danger Zone'}
+          </h3>
+          <p className="text-xs text-slate-500 mb-3">
+            {lang === 'th'
+              ? 'การลบบัญชีจะลบข้อมูลทั้งหมดอย่างถาวร ไม่สามารถกู้คืนได้ (สิทธิ์ตาม PDPA มาตรา 33)'
+              : 'Deleting your account permanently removes all data and cannot be undone (PDPA Article 33 right)'}
+          </p>
+          <button onClick={() => { setShowDeleteModal(true); setDeletePass(''); setDeleteError(''); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition"
+            style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <Trash2 size={13} /> {lang === 'th' ? 'ลบบัญชีของฉัน' : 'Delete my account'}
+          </button>
+        </div>
+      </div>
+
+      {/* Delete account confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(14px)' }}>
+          <div className="anim-scale-in card w-full max-w-sm p-6"
+            style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(239,68,68,0.35)' }}>
+            <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-red-500 to-transparent mb-5" />
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-3">🗑️</div>
+              <h2 className="text-lg font-bold text-white mb-1">
+                {lang === 'th' ? 'ลบบัญชีถาวร?' : 'Delete Account?'}
+              </h2>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {lang === 'th'
+                  ? 'ข้อมูลทั้งหมดจะถูกลบอย่างถาวร รวมถึงโปรไฟล์ สถิติ และประวัติการแข่งขัน'
+                  : 'All data will be permanently deleted including profile, stats, and match history'}
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs text-slate-400 block mb-2">
+                {lang === 'th'
+                  ? user.googleId && !user.password
+                    ? '(บัญชี Google ไม่ต้องกรอกรหัสผ่าน)'
+                    : '🔐 ยืนยันด้วยรหัสผ่านของคุณ'
+                  : user.googleId && !user.password
+                    ? '(Google account — no password required)'
+                    : '🔐 Confirm with your password'}
+              </label>
+              {!(user.googleId && !user.password) && (
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                  <input type={showDelPass ? 'text' : 'password'}
+                    value={deletePass}
+                    onChange={e => { setDeletePass(e.target.value); setDeleteError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && deletePass && deleteAccount()}
+                    placeholder={lang === 'th' ? 'รหัสผ่านของคุณ' : 'Your password'}
+                    className="input-base pl-9 pr-10 text-sm"
+                    autoFocus
+                  />
+                  <button type="button" tabIndex={-1} onClick={() => setShowDelPass(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 p-1">
+                    {showDelPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              )}
+              {deleteError && <p className="text-red-400 text-xs mt-1.5">⚠ {deleteError}</p>}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteModal(false)}
+                className="btn-ghost flex-1 py-2.5 rounded-xl text-sm">
+                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+              </button>
+              <button onClick={deleteAccount}
+                disabled={deleting || (!(user.googleId && !user.password) && !deletePass)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-40"
+                style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
+                {deleting
+                  ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /></span>
+                  : (lang === 'th' ? '🗑 ลบถาวร' : '🗑 Delete permanently')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
