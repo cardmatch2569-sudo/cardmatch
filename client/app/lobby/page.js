@@ -1,13 +1,14 @@
 'use client';
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings, Hash, MessageSquare, Send } from 'lucide-react';
+import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings, Hash } from 'lucide-react';
 import Link from 'next/link';
 import PreMatchModal from '../../components/PreMatchModal';
+import PublicChat from '../../components/PublicChat';
 
 export default function LobbyPage() {
   const { user, loading, lang } = useAuth();
@@ -437,83 +438,13 @@ export default function LobbyPage() {
         </div>
       </div>
 
-      {/* ── PUBLIC CHAT ──────────────────────────────────────────── */}
-      <div className="max-w-6xl mx-auto px-4 pb-8">
-        <div className="card overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)' }}>
-              <MessageSquare size={15} className="text-green-400" />
-            </div>
-            <div className="flex-1">
-              <h2 className="font-bold text-white text-sm">{t.publicChat}</h2>
-              <p className="text-[11px] text-slate-600">
-                {lang === 'th' ? `ผู้เล่นออนไลน์ ${onlineCount} คนสามารถเห็นข้อความนี้` : `${onlineCount} online players can see this`}
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-green-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="font-medium">{lang === 'th' ? 'สด' : 'Live'}</span>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div className="h-64 overflow-y-auto px-4 py-3 space-y-3">
-            {chatMessages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-slate-700 text-sm text-center">{t.publicChatEmpty}</p>
-              </div>
-            ) : (
-              chatMessages.map((msg, i) => {
-                const isMe = msg.from._id === user._id;
-                const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                return (
-                  <div key={i} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {msg.from.username[0].toUpperCase()}
-                    </div>
-                    <div className={`flex flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-                      <span className="text-[10px] text-slate-600 mb-0.5 px-1">
-                        {isMe ? (lang === 'th' ? 'คุณ' : 'You') : msg.from.username} · {time}
-                      </span>
-                      <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm text-slate-200'}`}
-                        style={isMe
-                          ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)' }
-                          : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        {msg.message}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="px-4 py-3 border-t border-[var(--border)]">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendPublicMessage()}
-                placeholder={t.publicChatPlaceholder}
-                className="input-base text-sm flex-1 py-2"
-                maxLength={300}
-                onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300)}
-                enterKeyHint="send"
-              />
-              <button onClick={sendPublicMessage} disabled={!chatInput.trim()}
-                className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-40 flex-shrink-0"
-                style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Floating public chat */}
+      <PublicChat
+        lang={lang}
+        user={user}
+        messages={chatMessages}
+        onSend={sendPublicMessage}
+      />
 
     </div>
   );
