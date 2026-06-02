@@ -106,7 +106,7 @@ export default function DonatePage() {
           <div className="flex justify-center mb-4">
             <div className="rounded-xl overflow-hidden shadow-lg shadow-black/40 w-full max-w-[260px]">
               <img
-                src="/qr-donate.png"
+                src="/qr-donate.jpg"
                 alt="PromptPay QR Code - นายจักรรินทร์ ขาวงาม"
                 className="block w-full h-auto"
                 onError={e => {
@@ -116,7 +116,7 @@ export default function DonatePage() {
               />
               <div className="hidden items-center justify-center bg-slate-800/60 text-slate-500 text-xs py-16 flex-col gap-2">
                 <span className="text-2xl">📷</span>
-                <span>วางไฟล์ qr-donate.png ใน public/</span>
+                <span>วางไฟล์ qr-donate.jpg ใน public/</span>
               </div>
             </div>
           </div>
