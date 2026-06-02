@@ -1,6 +1,7 @@
 import './globals.css';
 import Providers from '../components/Providers';
 import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import ViewportHeight from '../components/ViewportHeight';
 
 export const metadata = {
@@ -54,6 +55,7 @@ export default function RootLayout({ children }) {
           <main className="pt-16 w-full overflow-x-hidden" style={{ minHeight: 'calc(var(--vh, 1vh) * 100)' }}>
             {children}
           </main>
+          <Footer />
         </Providers>
       </body>
     </html>

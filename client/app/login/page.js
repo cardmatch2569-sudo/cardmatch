@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [form, setForm]         = useState({ username: '', email: '', password: '', confirm: '' });
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // OTP flow for email registration
   const [otpData, setOtpData]   = useState(null);  // { email, devCode }
@@ -33,6 +34,10 @@ export default function LoginPage() {
     // Validate confirm password before calling API
     if (mode === 'register' && form.password !== form.confirm) {
       setError(lang === 'th' ? 'รหัสผ่านทั้งสองช่องไม่ตรงกัน' : 'Passwords do not match');
+      return;
+    }
+    if (mode === 'register' && !termsAccepted) {
+      setError(lang === 'th' ? 'กรุณายอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวก่อน' : 'Please accept the Terms of Service and Privacy Policy');
       return;
     }
 
@@ -227,6 +232,25 @@ export default function LoginPage() {
                   </span>
                 )}
               </div>
+            )}
+
+            {/* Terms consent — register only */}
+            {mode === 'register' && (
+              <label className="flex items-start gap-2.5 cursor-pointer group">
+                <div className="relative flex-shrink-0 mt-0.5">
+                  <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} className="sr-only" />
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all
+                    ${termsAccepted ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-500'}`}>
+                    {termsAccepted && <svg viewBox="0 0 10 8" width="8" height="8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 leading-relaxed">
+                  {lang === 'th' ? 'ฉันอ่านและยอมรับ ' : 'I have read and agree to the '}
+                  <a href="/terms" target="_blank" className="text-purple-400 hover:text-purple-300 underline">{lang === 'th' ? 'ข้อกำหนดการใช้งาน' : 'Terms of Service'}</a>
+                  {lang === 'th' ? ' และ ' : ' and '}
+                  <a href="/privacy" target="_blank" className="text-purple-400 hover:text-purple-300 underline">{lang === 'th' ? 'นโยบายความเป็นส่วนตัว' : 'Privacy Policy'}</a>
+                </span>
+              </label>
             )}
 
             <button type="submit" disabled={loading}

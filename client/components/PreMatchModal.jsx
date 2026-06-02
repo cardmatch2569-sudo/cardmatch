@@ -224,6 +224,17 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
             )}
           </div>
 
+          {/* Privacy notice — video P2P, no recording */}
+          <div className="flex items-start gap-2 px-2 py-2 rounded-lg"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <span className="text-slate-600 flex-shrink-0 text-[10px] mt-0.5">🔒</span>
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              {lang === 'th'
+                ? 'วิดีโอและเสียงเป็นแบบ Peer-to-Peer โดยตรง — ระบบไม่บันทึกและไม่จัดเก็บ ห้ามบันทึกหน้าจอผู้เล่นอื่นโดยไม่ได้รับอนุญาต'
+                : 'Video & audio are Peer-to-Peer — not recorded or stored by the system. Do not record other players without consent.'}
+            </p>
+          </div>
+
           {/* Buttons */}
           <div className="flex gap-3 pt-1">
             <button onClick={onCancel} className="btn-ghost flex-1 py-3 rounded-xl text-sm">
