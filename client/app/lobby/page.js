@@ -348,6 +348,12 @@ export default function LobbyPage() {
               );
             })}
           </div>
+          {/* IP disclaimer under game list */}
+          <p className="text-[10px] text-slate-700 mt-2 leading-relaxed">
+            {lang === 'th'
+              ? 'ชื่อเกมเป็นสมบัติของเจ้าของสิทธิ์ CardMatch ไม่ใช่ตัวแทนหรือพันธมิตรของเจ้าของสิทธิ์ใดๆ'
+              : 'Game names are property of their respective owners. CardMatch is not affiliated with any rights holder.'}
+          </p>
         </div>
 
         {/* Actions */}
