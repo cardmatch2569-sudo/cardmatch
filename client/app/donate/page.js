@@ -30,6 +30,25 @@ export default function DonatePage() {
           <p className="text-slate-400 text-sm leading-relaxed">{t.donateSubtitle}</p>
         </div>
 
+        {/* Why support section */}
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 mb-3">
+          <p className="text-white text-sm font-bold mb-2">
+            {lang === 'th' ? '🤔 ทำไมถึงต้องมีข้อจำกัด?' : '🤔 Why is there a player limit?'}
+          </p>
+          <div className="space-y-2 text-xs text-slate-400 leading-relaxed">
+            <p>
+              {lang === 'th'
+                ? 'CardMatch รันบน Server จริงที่มีค่าใช้จ่ายรายเดือน ในช่วง Beta เราจึงจำกัดผู้เล่นพร้อมกันไว้ที่ 200 คน เพื่อให้ระบบมีเสถียรภาพ'
+                : 'CardMatch runs on a real server with monthly costs. During Beta, we limit 200 concurrent players to keep the system stable.'}
+            </p>
+            <p className="text-slate-500">
+              {lang === 'th'
+                ? '💡 ทุกการสนับสนุนช่วยให้เราอัปเกรด Server เปิดรับผู้เล่นได้มากขึ้น และให้บริการได้นานขึ้น'
+                : '💡 Every contribution helps us upgrade the server, welcome more players, and keep the service running longer.'}
+            </p>
+          </div>
+        </div>
+
         {/* Beta — Unlimited free */}
         <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl mb-3 border border-green-500/25 bg-green-500/8">
           <Zap size={16} className="text-green-400 flex-shrink-0 mt-0.5" />

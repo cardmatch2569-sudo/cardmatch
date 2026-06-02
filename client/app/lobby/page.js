@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings, Hash } from 'lucide-react';
+import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings, Hash, Heart } from 'lucide-react';
 import Link from 'next/link';
 import PreMatchModal from '../../components/PreMatchModal';
 import PublicChat from '../../components/PublicChat';
@@ -221,26 +221,50 @@ export default function LobbyPage() {
 
       {/* Server full banner */}
       {serverFull && (
-        <div className="w-full p-4 rounded-xl mb-6"
-          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-          <p className="text-red-400 font-bold text-sm mb-1">
-            {lang === 'th' ? '⚠️ ผู้เล่นออนไลน์เต็มจำนวนแล้ว (200/200)' : '⚠️ Server is at capacity (200/200 players)'}
-          </p>
-          <p className="text-slate-400 text-xs leading-relaxed mb-2">
-            {lang === 'th'
-              ? 'ระบบ Beta นี้รองรับผู้เล่นออนไลน์พร้อมกันสูงสุด 200 คน ขณะนี้ทุกที่นั่งถูกใช้งานอยู่'
-              : 'This Beta server supports up to 200 concurrent players. All slots are currently occupied.'}
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 text-xs">
-              {lang === 'th' ? '📌 สมัครบัญชีได้ปกติ และรอเล่นเมื่อมีที่ว่าง' : '📌 You can still register — play when a slot opens up'}
-            </span>
+        <div className="w-full p-4 rounded-xl mb-6 space-y-3"
+          style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <div>
+            <p className="text-red-400 font-bold text-sm mb-1">
+              {lang === 'th' ? '⚠️ ผู้เล่นออนไลน์เต็มจำนวนแล้ว (200/200)' : '⚠️ Server is at capacity (200/200 players)'}
+            </p>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              {lang === 'th'
+                ? 'ระบบ Beta ในช่วงนี้มีค่าใช้จ่าย Server จำกัดจำนวนผู้เล่นพร้อมกันไว้ที่ 200 คน ขณะนี้ทุกที่นั่งถูกใช้งานอยู่'
+                : 'During Beta, server costs limit us to 200 concurrent players. All slots are currently in use.'}
+            </p>
           </div>
-          <button onClick={() => window.location.reload()}
-            className="mt-3 w-full py-2 rounded-xl text-xs font-semibold transition"
-            style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
-            {lang === 'th' ? '🔄 ลอง Refresh อีกครั้ง' : '🔄 Refresh to try again'}
-          </button>
+
+          {/* Support CTA */}
+          <div className="rounded-xl p-3 flex items-start gap-3"
+            style={{ background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            <span className="text-lg flex-shrink-0">💛</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-yellow-300 text-xs font-semibold mb-0.5">
+                {lang === 'th' ? 'ช่วยเราขยาย Server ให้รองรับผู้เล่นได้มากขึ้น' : 'Help us expand the server to support more players'}
+              </p>
+              <p className="text-slate-500 text-[11px] leading-relaxed">
+                {lang === 'th'
+                  ? 'การสนับสนุนเล็กน้อยช่วยให้เราอัปเกรด Server และเปิดรับผู้เล่นได้มากขึ้นในอนาคต'
+                  : 'Even a small contribution helps us upgrade the server and welcome more players in the future.'}
+              </p>
+              <Link href="/donate"
+                className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-pink-400 hover:text-pink-300 transition">
+                <Heart size={11} fill="currentColor" />
+                {lang === 'th' ? 'สนับสนุนการพัฒนา →' : 'Support the project →'}
+              </Link>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={() => window.location.reload()}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold transition"
+              style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+              {lang === 'th' ? '🔄 Refresh อีกครั้ง' : '🔄 Refresh'}
+            </button>
+            <p className="flex-1 flex items-center justify-center text-[11px] text-slate-600">
+              {lang === 'th' ? 'สมัครบัญชีได้ตลอดเวลา' : 'Registration always open'}
+            </p>
+          </div>
         </div>
       )}
 
