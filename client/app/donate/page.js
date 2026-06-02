@@ -98,8 +98,19 @@ export default function DonatePage() {
           )}
         </div>
 
-        {/* QR Card — shown only after accepting */}
-        <div className={`rounded-2xl border border-white/[0.08] bg-[var(--card)] p-5 mb-6 text-center transition-all duration-300 ${accepted ? 'opacity-100' : 'opacity-30 pointer-events-none select-none'}`}>
+        {/* QR Card — hidden until disclaimer is accepted */}
+        {!accepted && (
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 mb-6 text-center">
+            <div className="py-6 flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center">
+                <span className="text-2xl">🔒</span>
+              </div>
+              <p className="text-slate-500 text-sm">{lang === 'th' ? 'กรุณายอมรับข้อตกลงด้านบนเพื่อดู QR Code' : 'Accept the terms above to reveal QR Code'}</p>
+            </div>
+          </div>
+        )}
+        {accepted && (
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--card)] p-5 mb-6 text-center anim-scale-in">
           <p className="text-slate-300 text-sm mb-1">{t.donateDesc1}</p>
           <p className="text-slate-500 text-xs mb-5">{t.donateDesc2}</p>
 
@@ -124,6 +135,7 @@ export default function DonatePage() {
           <p className="text-xs text-slate-400 font-medium">นายจักรรินทร์ ขาวงาม</p>
           <p className="text-xs text-slate-600 mt-0.5">PromptPay · กรุงไทย</p>
         </div>
+        )}
 
         {/* Thank you */}
         <div className="text-center">
