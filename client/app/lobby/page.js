@@ -226,7 +226,7 @@ export default function LobbyPage() {
           <span className="text-yellow-400 text-xs font-bold flex-shrink-0">📢</span>
           <div className="flex-1 overflow-hidden">
             <p className="text-yellow-300 text-xs font-medium whitespace-nowrap"
-              style={{ animation: 'marquee 18s linear infinite', display: 'inline-block' }}>
+              style={{ animation: 'marquee 35s linear infinite', display: 'inline-block' }}>
               {announcement.text}
             </p>
           </div>
