@@ -30,11 +30,9 @@ export default function LobbyPage() {
   const [toast, setToast]               = useState(null);
   const [challenge, setChallenge]         = useState(null);
   const [showPreMatch, setShowPreMatch]   = useState(false);
-  const [pidInput, setPidInput]           = useState('');
-  const [pidLoading, setPidLoading]       = useState(false);
-  const [chatMessages, setChatMessages]   = useState([]);
-  const [chatInput, setChatInput]         = useState('');
-  const chatEndRef = useRef(null);
+  const [pidInput, setPidInput]       = useState('');
+  const [pidLoading, setPidLoading]   = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const inQueueRef  = useRef(false);
   const searchTimer = useRef(null);
@@ -147,10 +145,9 @@ export default function LobbyPage() {
 
   const handleChallengeResponse = (accepted) => { getSocket()?.emit('challenge_response', { challengeId: challenge.challengeId, accepted }); setChallenge(null); };
 
-  const sendPublicMessage = () => {
-    if (!chatInput.trim()) return;
-    safeEmit('public_message', { message: chatInput.trim() });
-    setChatInput('');
+  const sendPublicMessage = (text) => {
+    if (!text?.trim()) return;
+    safeEmit('public_message', { message: text.trim() });
   };
 
   const handleChallengeById = () => {
