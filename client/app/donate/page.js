@@ -30,12 +30,42 @@ export default function DonatePage() {
           <p className="text-slate-400 text-sm leading-relaxed">{t.donateSubtitle}</p>
         </div>
 
-        {/* Free badge */}
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-4 border border-green-500/20 bg-green-500/5">
-          <Zap size={16} className="text-green-400 flex-shrink-0" />
+        {/* Beta — Unlimited free */}
+        <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl mb-3 border border-green-500/25 bg-green-500/8">
+          <Zap size={16} className="text-green-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-green-300 text-sm font-semibold">{t.donateFree}</p>
-            <p className="text-slate-500 text-xs mt-0.5">{t.donateFreeDesc}</p>
+            <p className="text-green-300 text-sm font-bold mb-0.5">{t.betaTitle}</p>
+            <p className="text-slate-400 text-xs leading-relaxed">{t.betaDesc}</p>
+          </div>
+        </div>
+
+        {/* Future plans */}
+        <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-purple-500/10">
+            <p className="text-purple-300 text-sm font-bold">{t.futureTitle}</p>
+          </div>
+          <div className="divide-y divide-purple-500/10">
+            {/* Free tier */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="text-center flex-shrink-0 w-16">
+                <p className="text-white font-bold text-xs leading-tight">{t.futureFreeLimit}</p>
+                <p className="text-slate-600 text-[9px] mt-0.5">{lang === 'th' ? 'ฟรี' : 'Free'}</p>
+              </div>
+              <div className="w-px h-8 bg-purple-500/20 flex-shrink-0" />
+              <p className="text-slate-400 text-xs leading-relaxed">{t.futureFreeDesc}</p>
+            </div>
+            {/* Subscription tier */}
+            <div className="flex items-start gap-3 px-4 py-3">
+              <div className="text-center flex-shrink-0 w-16">
+                <p className="text-purple-300 font-bold text-xs leading-tight">∞</p>
+                <p className="text-slate-600 text-[9px] mt-0.5">{lang === 'th' ? 'สมาชิก' : 'Member'}</p>
+              </div>
+              <div className="w-px h-8 bg-purple-500/20 flex-shrink-0" />
+              <div>
+                <p className="text-purple-200 text-xs font-semibold mb-0.5">{t.futureSubTitle}</p>
+                <p className="text-slate-500 text-[11px] leading-relaxed">{t.futureSubDesc}</p>
+              </div>
+            </div>
           </div>
         </div>
 
