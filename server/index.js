@@ -46,6 +46,8 @@ const io     = new Server(server, {
   transports: ['websocket', 'polling'],
 });
 
+app.set('io', io); // make io available to route handlers (announcements)
+
 connectDB().then(async () => {
   // Reset stale active rooms on startup
   try {

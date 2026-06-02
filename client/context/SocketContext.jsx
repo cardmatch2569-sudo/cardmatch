@@ -81,6 +81,7 @@ export function SocketProvider({ children }) {
     socket.on('challenge_id_error',  (...a) => lobbyCallbacksRef.current.onChallengeIdError?.(...a));
     socket.on('public_message',      (...a) => lobbyCallbacksRef.current.onPublicMessage?.(...a));
     socket.on('public_chat_history', (...a) => lobbyCallbacksRef.current.onPublicChatHistory?.(...a));
+    socket.on('announcement',        (...a) => lobbyCallbacksRef.current.onAnnouncement?.(...a));
 
     socketRef.current = socket;
     setSocketReady(true);

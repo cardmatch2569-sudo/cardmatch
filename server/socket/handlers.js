@@ -10,6 +10,7 @@ const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, user
 const activeRooms = new Map();       // roomId → { players: [userId] }
 const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
+let currentAnnouncement = null;      // { text, author, timestamp } | null
 
 const setupSocketHandlers = (io) => {
   // Authenticate socket on connection
@@ -37,6 +38,8 @@ const setupSocketHandlers = (io) => {
 
     // Send recent public chat history to newly connected user
     socket.emit('public_chat_history', publicChatBuffer);
+    // Send current announcement if one is active
+    if (currentAnnouncement) socket.emit('announcement', currentAnnouncement);
 
     // Fix: On reconnect, update socketId in any active queue entry
     // (socketId changes on reconnect; old entry would cause match_found to be lost)
@@ -245,4 +248,14 @@ const setupSocketHandlers = (io) => {
 
 const getOnlineUsers = () => onlineUsers;
 
-module.exports = { setupSocketHandlers, getOnlineUsers };
+const setAnnouncement = (io, text, author) => {
+  if (!text) {
+    currentAnnouncement = null;
+  } else {
+    currentAnnouncement = { text: text.slice(0, 200), author, timestamp: new Date().toISOString() };
+  }
+  io.emit('announcement', currentAnnouncement);
+};
+const getAnnouncement = () => currentAnnouncement;
+
+module.exports = { setupSocketHandlers, getOnlineUsers, setAnnouncement, getAnnouncement };

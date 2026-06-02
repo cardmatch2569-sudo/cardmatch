@@ -30,9 +30,10 @@ export default function LobbyPage() {
   const [toast, setToast]               = useState(null);
   const [challenge, setChallenge]         = useState(null);
   const [showPreMatch, setShowPreMatch]   = useState(false);
-  const [pidInput, setPidInput]       = useState('');
-  const [pidLoading, setPidLoading]   = useState(false);
-  const [chatMessages, setChatMessages] = useState([]);
+  const [pidInput, setPidInput]           = useState('');
+  const [pidLoading, setPidLoading]       = useState(false);
+  const [chatMessages, setChatMessages]   = useState([]);
+  const [announcement, setAnnouncement]   = useState(null);
 
   const inQueueRef  = useRef(false);
   const searchTimer = useRef(null);
@@ -53,6 +54,7 @@ export default function LobbyPage() {
     onChallengeIdError:   ({ message }) => { setPidLoading(false); showToast(message, 'error'); },
     onPublicMessage:     (msg)     => { setChatMessages(p => [...p.slice(-49), msg]); },
     onPublicChatHistory: (history) => { setChatMessages(history || []); },
+    onAnnouncement:      (data)    => { setAnnouncement(data); },
   });
 
   // Bug fix: only redirect after auth check completes (not during loading)
@@ -214,6 +216,23 @@ export default function LobbyPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Announcement ticker ─────────────────────────────────── */}
+      {announcement?.text && (
+        <div className="w-full overflow-hidden rounded-xl mb-4 flex items-center gap-3 px-3 py-2"
+          style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+          <span className="text-yellow-400 text-xs font-bold flex-shrink-0">📢</span>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-yellow-300 text-xs font-medium whitespace-nowrap"
+              style={{ animation: 'marquee 18s linear infinite', display: 'inline-block' }}>
+              {announcement.text}
+            </p>
+          </div>
+          <span className="text-yellow-700 text-[10px] flex-shrink-0 hidden sm:block">
+            — {announcement.author}
+          </span>
         </div>
       )}
 

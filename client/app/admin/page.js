@@ -17,6 +17,9 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [tab,       setTab]       = useState('overview');
+  const [annText,   setAnnText]   = useState('');
+  const [annActive, setAnnActive] = useState(null);
+  const [annSaving, setAnnSaving] = useState(false);
   const [stats,     setStats]     = useState(null);
   const [users,     setUsers]     = useState([]);
   const [userTotal, setUserTotal] = useState(0);
@@ -48,6 +51,9 @@ export default function AdminPage() {
   }, [authLoading, user, router]);
 
   const loadStats  = useCallback(async () => { try { const d = await api.get('/api/admin/stats');  setStats(d); } catch {} }, []);
+  const loadAnnouncement = useCallback(async () => { try { const { announcement } = await api.get('/api/admin/announcement'); setAnnActive(announcement); if (announcement?.text) setAnnText(announcement.text); } catch {} }, []);
+  const saveAnnouncement = async () => { if (!annText.trim()) return; setAnnSaving(true); try { const { announcement } = await api.post('/api/admin/announcement', { text: annText }); setAnnActive(announcement); } catch {} setAnnSaving(false); };
+  const clearAnnouncement = async () => { try { await api.delete('/api/admin/announcement'); setAnnActive(null); setAnnText(''); } catch {} };
   const loadUsers  = useCallback(async (page = 1, search = '') => {
     setTableLoading(true);
     try {
@@ -59,7 +65,7 @@ export default function AdminPage() {
   const loadRooms  = useCallback(async () => { try { const { rooms }  = await api.get('/api/admin/rooms');  setRooms(rooms); } catch {} }, []);
   const loadOnline = useCallback(async () => { try { const { online } = await api.get('/api/admin/online'); setOnline(online); } catch {} }, []);
 
-  useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); } }, [user, loadStats, loadOnline]);
+  useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); loadAnnouncement(); } }, [user, loadStats, loadOnline, loadAnnouncement]);
   useEffect(() => { if (tab === 'users')    loadUsers(1, ''); },   [tab, loadUsers]);
   useEffect(() => { if (tab === 'games')    loadGames(); },         [tab, loadGames]);
   useEffect(() => { if (tab === 'rooms')    loadRooms(); },         [tab, loadRooms]);
@@ -307,6 +313,42 @@ export default function AdminPage() {
           ))}
         </div>
       )}
+
+      {/* ── Announcement ────────────────────────────────────────── */}
+      <div className="card p-4 md:p-5 mb-5" style={{ borderColor: annActive ? 'rgba(251,191,36,0.3)' : 'var(--border)' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-base">📢</span>
+          <h3 className="font-bold text-white text-sm">{lang === 'th' ? 'ประชาสัมพันธ์' : 'Announcement'}</h3>
+          {annActive && <span className="badge badge-yellow text-[10px]">{lang === 'th' ? 'กำลังแสดง' : 'Live'}</span>}
+        </div>
+        {annActive && (
+          <div className="mb-3 px-3 py-2 rounded-lg text-xs text-yellow-300 overflow-hidden"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            <span className="font-medium">{lang === 'th' ? 'ข้อความปัจจุบัน: ' : 'Current: '}</span>{annActive.text}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            value={annText}
+            onChange={e => setAnnText(e.target.value.slice(0, 200))}
+            onKeyDown={e => e.key === 'Enter' && saveAnnouncement()}
+            placeholder={lang === 'th' ? 'พิมพ์ข้อความประชาสัมพันธ์ (สูงสุด 200 ตัวอักษร)' : 'Type announcement (max 200 chars)'}
+            className="input-base text-sm flex-1 py-2"
+          />
+          <button onClick={saveAnnouncement} disabled={!annText.trim() || annSaving}
+            className="btn-primary px-4 py-2 rounded-xl text-sm flex-shrink-0 disabled:opacity-40">
+            {annSaving ? '...' : (lang === 'th' ? 'ส่ง' : 'Send')}
+          </button>
+          {annActive && (
+            <button onClick={clearAnnouncement}
+              className="px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0 transition"
+              style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+              {lang === 'th' ? 'ลบ' : 'Clear'}
+            </button>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-700 mt-1.5 text-right">{annText.length}/200</p>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 overflow-x-auto" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>

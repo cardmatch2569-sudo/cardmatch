@@ -2,7 +2,7 @@ const express = require('express');
 const { protect, adminOnly } = require('../middleware/auth');
 const User     = require('../models/User');
 const { getPool } = require('../config/db');
-const { getOnlineUsers } = require('../socket/handlers');
+const { getOnlineUsers, setAnnouncement, getAnnouncement } = require('../socket/handlers');
 
 const router = express.Router();
 
@@ -135,6 +135,25 @@ router.get('/online', protect, adminOnly, (req, res) => {
     userId, username: info.username, avatar: info.avatar,
   }));
   res.json({ online });
+});
+
+// ── ANNOUNCEMENT ─────────────────────────────────────────────────
+router.get('/announcement', protect, adminOnly, (req, res) => {
+  res.json({ announcement: getAnnouncement() });
+});
+
+router.post('/announcement', protect, adminOnly, (req, res) => {
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ message: 'กรุณากรอกข้อความ' });
+  const io = req.app.get('io');
+  setAnnouncement(io, text.trim(), req.user.username);
+  res.json({ message: 'ส่งประกาศแล้ว', announcement: getAnnouncement() });
+});
+
+router.delete('/announcement', protect, adminOnly, (req, res) => {
+  const io = req.app.get('io');
+  setAnnouncement(io, null, null);
+  res.json({ message: 'ลบประกาศแล้ว' });
 });
 
 module.exports = router;
