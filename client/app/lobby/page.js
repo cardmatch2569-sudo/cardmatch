@@ -51,8 +51,8 @@ export default function LobbyPage() {
     onChallengeDeclined:  ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
     onChallengeIdSent:    ({ to }) => { setPidLoading(false); setPidInput(''); showToast(`${langRef.current === 'th' ? 'ส่งคำท้าถึง' : 'Challenge sent to'} ${to}`, 'success'); },
     onChallengeIdError:   ({ message }) => { setPidLoading(false); showToast(message, 'error'); },
-    onPublicMessage:      (msg) => { setChatMessages(p => [...p.slice(-49), msg]); setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50); },
-    onPublicChatHistory:  (history) => { setChatMessages(history || []); setTimeout(() => chatEndRef.current?.scrollIntoView(), 100); },
+    onPublicMessage:     (msg)     => { setChatMessages(p => [...p.slice(-49), msg]); },
+    onPublicChatHistory: (history) => { setChatMessages(history || []); },
   });
 
   // Bug fix: only redirect after auth check completes (not during loading)
