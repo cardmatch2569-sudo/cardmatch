@@ -12,6 +12,19 @@ const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
 let currentAnnouncement = null;      // { text, author, timestamp } | null
 
+// Rate limit state — userId → last event timestamp (ms)
+const rateLimits = {
+  publicMsg:  new Map(), // 1 msg / 1.5s
+  queueJoin:  new Map(), // 1 join / 3s
+  roomMsg:    new Map(), // 1 msg / 0.8s
+};
+const rateOk = (map, userId, minMs) => {
+  const now = Date.now();
+  if (now - (map.get(userId) || 0) < minMs) return false;
+  map.set(userId, now);
+  return true;
+};
+
 const setupSocketHandlers = (io) => {
   // Authenticate socket on connection
   io.use(async (socket, next) => {
@@ -58,6 +71,7 @@ const setupSocketHandlers = (io) => {
 
     // ── MATCHMAKING ────────────────────────────────────────────────
     socket.on('join_queue', async ({ gameTypeId }) => {
+      if (!rateOk(rateLimits.queueJoin, userId, 3000)) return;
       console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
       console.log(`[QUEUE] Current queues:`, JSON.stringify(Object.fromEntries(
         [...matchQueues.entries()].map(([k, v]) => [k, v.map(p => p.username)])
@@ -112,6 +126,7 @@ const setupSocketHandlers = (io) => {
     // ── PUBLIC LOBBY CHAT ─────────────────────────────────────────
     socket.on('public_message', ({ message }) => {
       if (!message?.trim()) return;
+      if (!rateOk(rateLimits.publicMsg, userId, 1500)) return;
       const msg = {
         from: { _id: userId, username: user.username, avatar: user.avatar },
         message: message.trim().slice(0, 300),
@@ -210,6 +225,7 @@ const setupSocketHandlers = (io) => {
     // ── CHAT ──────────────────────────────────────────────────────
     socket.on('send_message', ({ roomId, message }) => {
       if (!message?.trim()) return;
+      if (!rateOk(rateLimits.roomMsg, userId, 800)) return;
       // Bug fix: cap message length to prevent DoS / memory issues
       const trimmed = message.trim().slice(0, 500);
       io.to(roomId).emit('message_received', {

@@ -54,6 +54,23 @@ connectDB().then(async () => {
     await getPool().query(`UPDATE Rooms SET status='ended', ended_at=NOW() WHERE status='active'`);
   } catch {}
 
+  // Cleanup expired/used OTPs older than 1 hour
+  try {
+    const { rowCount } = await getPool().query(
+      `DELETE FROM EmailVerifications WHERE used=TRUE OR expires_at < NOW() - INTERVAL '1 hour'`
+    );
+    if (rowCount > 0) console.log(`[DB] Cleaned up ${rowCount} old OTP record(s)`);
+  } catch {}
+
+  // Schedule daily OTP cleanup (every 24h)
+  setInterval(async () => {
+    try {
+      await getPool().query(
+        `DELETE FROM EmailVerifications WHERE used=TRUE OR expires_at < NOW() - INTERVAL '1 hour'`
+      );
+    } catch {}
+  }, 24 * 60 * 60 * 1000);
+
   // Auto-seed game types if none exist
   try {
     const { rows } = await getPool().query('SELECT COUNT(*) AS cnt FROM GameTypes');
