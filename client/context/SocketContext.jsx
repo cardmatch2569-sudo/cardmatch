@@ -50,6 +50,10 @@ export function SocketProvider({ children }) {
       timeout:              10000,
     });
 
+    // Restore queue state after page refresh
+    const savedQueue = sessionStorage.getItem('cg_queue_game');
+    if (savedQueue && !queueRef.current) queueRef.current = savedQueue;
+
     socket.on('connect', () => {
       setConnected(true);
       console.log('[Socket] ✅ Connected via', socket.io.engine.transport.name, '| ID:', socket.id);
@@ -101,7 +105,12 @@ export function SocketProvider({ children }) {
   }, [user, setLobbyCallbacks]);
 
   const getSocket    = useCallback(() => socketRef.current, []);
-  const setQueueGame = useCallback((gameTypeId) => { queueRef.current = gameTypeId; }, []);
+  const setQueueGame = useCallback((gameTypeId) => {
+    queueRef.current = gameTypeId;
+    // Persist across page refresh
+    if (gameTypeId) sessionStorage.setItem('cg_queue_game', gameTypeId);
+    else sessionStorage.removeItem('cg_queue_game');
+  }, []);
 
   const pendingEmits = useRef([]);
   const safeEmit = useCallback((event, data) => {

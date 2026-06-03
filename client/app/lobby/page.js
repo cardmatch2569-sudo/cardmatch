@@ -22,7 +22,11 @@ export default function LobbyPage() {
   const pendingAutoQueue = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('autoQueue') || sessionStorage.getItem('cg_auto_queue') || null
     : null;
-  const [inQueue, setInQueue] = useState(!!pendingAutoQueue);
+  // Restore queue state if user refreshed while waiting
+  const restoredQueue = typeof window !== 'undefined'
+    ? sessionStorage.getItem('cg_queue_game') || null
+    : null;
+  const [inQueue, setInQueue] = useState(!!(pendingAutoQueue || restoredQueue));
   const [queueTime, setQueueTime]       = useState(0);
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
