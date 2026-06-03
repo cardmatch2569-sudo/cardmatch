@@ -282,6 +282,46 @@ export default function LobbyPage() {
         </div>
       )}
 
+      {/* ── How to Play ──────────────────────────────────────────── */}
+      {(() => {
+        const steps = lang === 'th' ? [
+          { icon: '🃏', title: 'เลือกเกม',        desc: 'เลือกประเภทเกมการ์ดที่ต้องการเล่น' },
+          { icon: '🔀', title: 'จับคู่',           desc: 'กด "จับคู่สุ่ม" หรือท้าเพื่อนด้วย Player ID' },
+          { icon: '📷', title: 'ทดสอบกล้อง',      desc: 'ตรวจสอบกล้องและไมค์ก่อนเข้าเกม' },
+          { icon: '🎮', title: 'เริ่มเล่น',        desc: 'เล่นการ์ดจริงผ่านวิดีโอสดกับคู่แข่ง' },
+        ] : [
+          { icon: '🃏', title: 'Pick a Game',    desc: 'Select the card game type you want to play' },
+          { icon: '🔀', title: 'Match Up',       desc: 'Quick Match or challenge via Player ID' },
+          { icon: '📷', title: 'Check Camera',   desc: 'Test your camera & mic before entering' },
+          { icon: '🎮', title: 'Play Live',      desc: 'Play physical cards via live video call' },
+        ];
+        return (
+          <div className="mb-6 card p-4" style={{ borderColor: 'rgba(124,58,237,0.15)' }}>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
+              {lang === 'th' ? '✨ วิธีการเล่น' : '✨ How to Play'}
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {steps.map((s, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0"
+                    style={{ background: 'rgba(124,58,237,0.1)' }}>
+                    {s.icon}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 text-purple-400"
+                        style={{ background: 'rgba(124,58,237,0.15)' }}>{i + 1}</span>
+                      <p className="text-white text-xs font-semibold">{s.title}</p>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6 md:mb-8 gap-2 w-full min-w-0">
         <div className="min-w-0">
