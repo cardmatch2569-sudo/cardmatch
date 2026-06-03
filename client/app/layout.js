@@ -5,8 +5,8 @@ import Footer from '../components/Footer';
 import ViewportHeight from '../components/ViewportHeight';
 
 export const metadata = {
-  title: 'CardMatch - หาคู่เล่นการ์ดเกม',
-  description: 'จับคู่ผู้เล่นการ์ดเกมและเล่นผ่านวิดีโอสด',
+  title: 'CardMatch - หาเพื่อนเล่นการ์ดเกมส์',
+  description: 'หาเพื่อนเล่นการ์ดเกมส์และเล่นผ่านวิดีโอสด',
   manifest: '/manifest.json',
   icons: {
     icon: [

@@ -140,7 +140,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-white">CardMatch</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {lang === 'th' ? 'หาคู่เล่นการ์ดเกม' : 'Card Game Matchmaking'}
+            {lang === 'th' ? 'หาเพื่อนเล่นการ์ดเกมส์' : 'Find Friends to Play Card Games'}
           </p>
         </div>
 

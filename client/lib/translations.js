@@ -11,7 +11,7 @@ const translations = {
     online: 'ออนไลน์',
 
     // Landing
-    heroTitle: 'หาคู่เล่นการ์ดเกม',
+    heroTitle: 'หาเพื่อนเล่นการ์ดเกมส์',
     heroSubtitle: 'จับคู่กับผู้เล่นทั่วไทย เล่นการ์ดเกมสดๆ ผ่านกล้อง',
     heroBtn: 'เริ่มเล่นเลย',
     howItWorks: 'วิธีการเล่น',

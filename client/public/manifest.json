@@ -1,5 +1,5 @@
 {
-  "name": "CardMatch - หาคู่เล่นการ์ดเกม",
+  "name": "CardMatch - หาเพื่อนเล่นการ์ดเกมส์",
   "short_name": "CardMatch",
   "description": "จับคู่ผู้เล่นการ์ดเกมและเล่นผ่านวิดีโอสด",
   "start_url": "/",
@@ -35,7 +35,7 @@
     {
       "name": "ล็อบบี้",
       "url": "/lobby",
-      "description": "ค้นหาคู่เล่น"
+      "description": "หาเพื่อนเล่นการ์ดเกมส์"
     }
   ]
 }

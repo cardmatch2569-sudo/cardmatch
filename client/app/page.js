@@ -73,7 +73,7 @@ export default function HomePage() {
           {/* Headline */}
           <h1 className="anim-fade-up delay-100 text-5xl md:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight">
             {lang === 'th' ? (
-              <>หาคู่เล่น<br /><span className="gradient-text text-glow">การ์ดเกม</span></>
+              <>หาเพื่อนเล่น<br /><span className="gradient-text text-glow">การ์ดเกมส์</span></>
             ) : (
               <>Find Your<br /><span className="gradient-text text-glow">Card Rival</span></>
             )}
