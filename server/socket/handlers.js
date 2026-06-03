@@ -283,7 +283,7 @@ const setAnnouncement = (io, text, author) => {
   if (!text) {
     currentAnnouncement = null;
   } else {
-    currentAnnouncement = { text: text.slice(0, 200), author, timestamp: new Date().toISOString() };
+    currentAnnouncement = { text: text.slice(0, 400), author, timestamp: new Date().toISOString() };
   }
   io.emit('announcement', currentAnnouncement);
 };

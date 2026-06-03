@@ -330,9 +330,9 @@ export default function AdminPage() {
         <div className="flex gap-2">
           <input
             value={annText}
-            onChange={e => setAnnText(e.target.value.slice(0, 200))}
+            onChange={e => setAnnText(e.target.value.slice(0, 400))}
             onKeyDown={e => e.key === 'Enter' && saveAnnouncement()}
-            placeholder={lang === 'th' ? 'พิมพ์ข้อความประชาสัมพันธ์ (สูงสุด 200 ตัวอักษร)' : 'Type announcement (max 200 chars)'}
+            placeholder={lang === 'th' ? 'พิมพ์ข้อความประชาสัมพันธ์ (สูงสุด 400 ตัวอักษร)' : 'Type announcement (max 400 chars)'}
             className="input-base text-sm flex-1 py-2"
           />
           <button onClick={saveAnnouncement} disabled={!annText.trim() || annSaving}
@@ -347,7 +347,7 @@ export default function AdminPage() {
             </button>
           )}
         </div>
-        <p className="text-[11px] text-slate-700 mt-1.5 text-right">{annText.length}/200</p>
+        <p className="text-[11px] text-slate-700 mt-1.5 text-right">{annText.length}/400</p>
       </div>
 
       {/* Tabs */}

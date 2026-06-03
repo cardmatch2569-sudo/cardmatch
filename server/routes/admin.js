@@ -145,6 +145,7 @@ router.get('/announcement', protect, adminOnly, (req, res) => {
 router.post('/announcement', protect, adminOnly, (req, res) => {
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ message: 'กรุณากรอกข้อความ' });
+    if (text.length > 400) return res.status(400).json({ message: 'ข้อความยาวเกิน 400 ตัวอักษร' });
   const io = req.app.get('io');
   setAnnouncement(io, text.trim(), req.user.username);
   res.json({ message: 'ส่งประกาศแล้ว', announcement: getAnnouncement() });
