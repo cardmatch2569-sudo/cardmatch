@@ -90,7 +90,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === 'users')      loadUsers(1, ''); },    [tab, loadUsers]);
   useEffect(() => { if (tab === 'games')      loadGames(); },          [tab, loadGames]);
   useEffect(() => { if (tab === 'rooms')      loadRooms(); },          [tab, loadRooms]);
-  useEffect(() => { if (tab === 'tournament') loadTournaments(); },    [tab, loadTournaments]);
+  useEffect(() => { if (tab === 'tournament') { loadTournaments(); if (!games.length) loadGames(); } }, [tab, loadTournaments, loadGames, games.length]);
   useEffect(() => { if (tab === 'overview')   { loadStats(); loadOnline(); } }, [tab, loadStats, loadOnline]);
 
   // Tournament socket: admin match alerts + real-time updates

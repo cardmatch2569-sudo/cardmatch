@@ -1,7 +1,7 @@
 const express = require('express');
 const { protect, adminOnly } = require('../middleware/auth');
 const { getPool } = require('../config/db');
-const { getTournaments, getTourneyMatchesMap } = require('../socket/handlers');
+const { getTournaments, getTourneyMatchesMap, getOnlineUsers } = require('../socket/handlers');
 
 const router = express.Router();
 
@@ -59,9 +59,9 @@ router.get('/:id', protect, async (req, res) => {
       phase:      liveMap.get(m.room_id)?.phase || m.status,
     }));
 
+    const online = getOnlineUsers();
     const playersInfo = [...t.players].map(id => {
-      const { getOnlineUsers } = require('../socket/handlers');
-      const info = getOnlineUsers().get(id);
+      const info = online.get(id);
       return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
     });
 
