@@ -114,6 +114,10 @@ export default function RoomPage() {
   const [remoteIsLandscape, setRemoteIsLandscape] = useState(false);
   // Tap-to-expand self PiP
   const [pipExpanded, setPipExpanded] = useState(false);
+  // Second Screen (watch link)
+  const [watchToken,   setWatchToken]   = useState(null);
+  const [watchCopied,  setWatchCopied]  = useState(false);
+  const watchPeerRef = useRef(null); // peer connection to Device 2
   // PWA hint — shown once on iOS Safari when user taps expand
   const [showPwaHint, setShowPwaHint] = useState(false);
   const pwaHintTimer = useRef(null);
@@ -291,11 +295,42 @@ export default function RoomPage() {
 
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
     socket.on('ice_candidate', onIce); socket.on('message_received', onMessage); socket.on('partner_disconnected', onPartnerLeft);
+
+    // Watch (Second Screen) events
+    socket.on('watch_token_ready', ({ token, roomId: rid }) => setWatchToken(token));
+    socket.on('watch_viewer_joined', async ({ viewerSocketId }) => {
+      // Device 2 connected — create WebRTC and forward opponent's stream
+      const remoteStream = remoteVideoRef.current?.srcObject;
+      if (!remoteStream) return;
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+      });
+      watchPeerRef.current = pc;
+      remoteStream.getTracks().forEach(tk => pc.addTrack(tk, remoteStream));
+      pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('watch_ice_owner', { viewerSocketId, candidate }); };
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('watch_offer', { viewerSocketId, offer });
+    });
+    socket.on('watch_answer', async ({ answer }) => {
+      if (watchPeerRef.current) await watchPeerRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+    });
+    socket.on('watch_ice_viewer', async ({ candidate }) => {
+      try { if (watchPeerRef.current) await watchPeerRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    });
+    socket.on('watch_viewer_left', () => { watchPeerRef.current?.close(); watchPeerRef.current = null; });
     init();
 
     return () => {
       aborted = true;
       clearTimeout(pwaHintTimer.current);
+      watchPeerRef.current?.close();
+      socket.off('watch_token_ready'); socket.off('watch_viewer_joined');
+      socket.off('watch_answer'); socket.off('watch_ice_viewer'); socket.off('watch_viewer_left');
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
@@ -328,6 +363,26 @@ export default function RoomPage() {
   };
 
   const toggleCamera = () => { const tk = localStreamRef.current?.getVideoTracks()[0]; if (tk) { tk.enabled = !tk.enabled; setCameraOn(tk.enabled); } };
+
+  const requestWatchLink = () => {
+    const socket = getSocket();
+    if (!socket) return;
+    if (watchToken) {
+      // Already have token — just copy
+      copyWatchLink(watchToken);
+    } else {
+      socket.emit('request_watch_token', { roomId });
+    }
+  };
+  const copyWatchLink = (token) => {
+    const url = `${window.location.origin}/watch/${roomId}?t=${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setWatchCopied(true);
+      setTimeout(() => setWatchCopied(false), 2500);
+    }).catch(() => {});
+  };
+  // Auto-copy when token arrives
+  useEffect(() => { if (watchToken) copyWatchLink(watchToken); }, [watchToken]);
   const toggleMic    = () => { const tk = localStreamRef.current?.getAudioTracks()[0];  if (tk) { tk.enabled = !tk.enabled; setMicOn(tk.enabled); } };
 
   const flipCamera = useCallback(async () => {
@@ -502,6 +557,14 @@ export default function RoomPage() {
           {peerConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
           <span>{peerConnected ? (lang === 'th' ? 'เชื่อมต่อแล้ว' : 'Connected') : (lang === 'th' ? 'รอการเชื่อมต่อ...' : 'Waiting...')}</span>
         </div>
+
+        {/* Second Screen button */}
+        <button onClick={requestWatchLink}
+          title={lang === 'th' ? 'จอที่ 2 — คัดลอก link ดูกล้องคู่แข่ง' : 'Second Screen — copy watch link'}
+          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm text-sm"
+          style={{ background: watchCopied ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.12)', border: `1px solid ${watchCopied ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.2)'}` }}>
+          {watchCopied ? '✓' : '📱'}
+        </button>
 
         <button onClick={toggleFullscreen}
           title={isExpanded ? (lang === 'th' ? 'ออกจากเต็มจอ' : 'Exit fullscreen') : (lang === 'th' ? 'ขยายเต็มจอ' : 'Fullscreen')}
