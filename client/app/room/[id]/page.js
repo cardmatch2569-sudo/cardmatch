@@ -114,6 +114,8 @@ export default function RoomPage() {
   const [remoteIsLandscape, setRemoteIsLandscape] = useState(false);
   // Tap-to-expand self PiP
   const [pipExpanded, setPipExpanded] = useState(false);
+  // PWA hint — shown once on iOS Safari when user taps expand
+  const [showPwaHint, setShowPwaHint] = useState(false);
   // Manual rotation offsets (multiples of 90°) — user can adjust each independently
   const [remoteRotation, setRemoteRotation] = useState(0);
   const [localRotation,  setLocalRotation]  = useState(0);
@@ -168,6 +170,14 @@ export default function RoomPage() {
     } catch {
       // iOS Safari fallback: rotate the whole container 90° via CSS
       setForcedLandscape(true);
+      // Show PWA hint once — only on iOS Safari, only if not already added to Home Screen
+      const isStandalone = window.navigator.standalone === true;
+      const hintShown = localStorage.getItem('cg_pwa_hint');
+      if (!isStandalone && !hintShown) {
+        setShowPwaHint(true);
+        localStorage.setItem('cg_pwa_hint', '1');
+        setTimeout(() => setShowPwaHint(false), 5000);
+      }
     }
   }, [forcedLandscape]);
 
@@ -394,6 +404,19 @@ export default function RoomPage() {
             {[0, 0.15, 0.3].map((d, i) => (
               <div key={i} className="w-1.5 h-1.5 rounded-full bg-purple-600" style={{ animation: `blink 1.2s ease ${d}s infinite` }} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── PWA hint — tiny, auto-dismiss, shown once ── */}
+      {showPwaHint && (
+        <div className="absolute z-30 left-1/2 -translate-x-1/2 anim-fade-up"
+          style={{ bottom: `calc(80px + max(0px, ${safeBottom}))` }}>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] text-white/80"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <span>📲</span>
+            <span>{lang === 'th' ? 'เพิ่มใน Home Screen เพื่อใช้แบบเต็มจอ' : 'Add to Home Screen for true fullscreen'}</span>
+            <button onClick={() => setShowPwaHint(false)} className="text-white/50 hover:text-white ml-1">✕</button>
           </div>
         </div>
       )}
