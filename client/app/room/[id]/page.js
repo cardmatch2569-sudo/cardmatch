@@ -520,12 +520,12 @@ export default function RoomPage() {
         onClick={() => setPipExpanded(p => !p)}
         className="absolute z-20 cursor-pointer"
         style={pipExpanded ? {
-          // Expanded: centered in container — safe for all orientations
+          // Expanded: centered, no forced aspect-ratio — show full camera frame
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: cssLandscapeActive ? 'min(200px, 48vw)' : 'min(280px, 70vw)',
-          aspectRatio: '4/3',
+          width: cssLandscapeActive ? 'min(180px, 44vw)' : 'min(260px, 65vw)',
+          height: cssLandscapeActive ? 'min(130px, 33vw)' : 'min(195px, 49vw)',
           transition: 'all 0.25s ease',
           zIndex: 25,
           bottom: 'auto',
@@ -539,16 +539,28 @@ export default function RoomPage() {
           transition: 'all 0.25s ease',
         }}>
         <div className="relative rounded-xl overflow-hidden shadow-2xl border w-full h-full"
-          style={{ borderColor: pipExpanded ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.2)' }}>
+          style={{
+            borderColor: pipExpanded ? 'rgba(124,58,237,0.6)' : 'rgba(255,255,255,0.2)',
+            background: '#000',
+          }}>
           <video ref={localVideoRef} autoPlay playsInline muted
-            className="w-full h-full object-cover"
-            style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg)${facingMode === 'user' ? ' scaleX(-1)' : ''}` }} />
+            className="w-full h-full"
+            style={{
+              objectFit: pipExpanded ? 'contain' : 'cover', // expanded=full frame, small=fill
+              transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg)${facingMode === 'user' ? ' scaleX(-1)' : ''}`,
+            }} />
           {!cameraOn && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
               <VideoOff size={pipExpanded ? 22 : 14} className="text-slate-400" />
             </div>
           )}
-          <div className="absolute bottom-1 left-1.5 text-[9px] text-slate-300 bg-black/60 px-1 rounded">{t.you}</div>
+          {pipExpanded ? (
+            <div className="absolute bottom-1 left-1 right-1 text-center text-[9px] text-purple-300 bg-black/60 px-1 py-0.5 rounded">
+              {lang === 'th' ? '📷 ภาพที่คู่แข่งเห็น' : '📷 What opponent sees'}
+            </div>
+          ) : (
+            <div className="absolute bottom-1 left-1.5 text-[9px] text-slate-300 bg-black/60 px-1 rounded">{t.you}</div>
+          )}
           {/* Expand/collapse indicator */}
           <div className="absolute top-1 right-1 bg-black/50 rounded-md px-1 py-0.5 text-[9px] text-white/60">
             {pipExpanded ? '✕' : '⤢'}
