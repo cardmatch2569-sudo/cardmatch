@@ -36,6 +36,8 @@ export default function LobbyPage() {
   const [showPreMatch, setShowPreMatch]   = useState(false);
   const [pidInput, setPidInput]           = useState('');
   const [pidLoading, setPidLoading]       = useState(false);
+  const [pidPending, setPidPending]       = useState(null); // { username } — waiting for response
+  const pidTimeoutRef = useRef(null);
   const [chatMessages, setChatMessages]   = useState([]);
   const [announcement, setAnnouncement]   = useState(null);
 
@@ -52,10 +54,18 @@ export default function LobbyPage() {
     onMatchFound:        ({ roomId, gameType, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); setTimeout(() => router.push(`/room/${roomId}`), 600); },
     onQueueLeft:         () => setQueue(false),
     onChallengeReceived: (data) => setChallenge(data),
-    onChallengeAccepted: ({ roomId, gameType }) => { if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); router.push(`/room/${roomId}`); },
-    onChallengeDeclined:  ({ by }) => showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'),
-    onChallengeIdSent:    ({ to }) => { setPidLoading(false); setPidInput(''); showToast(`${langRef.current === 'th' ? 'ส่งคำท้าถึง' : 'Challenge sent to'} ${to}`, 'success'); },
-    onChallengeIdError:   ({ message }) => { setPidLoading(false); showToast(message, 'error'); },
+    onChallengeAccepted: ({ roomId, gameType }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); router.push(`/room/${roomId}`); },
+    onChallengeDeclined:  ({ by }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'); },
+    onChallengeIdSent:    ({ to }) => {
+      setPidLoading(false); setPidInput('');
+      setPidPending({ username: to });
+      showToast(`${langRef.current === 'th' ? 'ส่งคำท้าถึง' : 'Challenge sent to'} ${to} — ${langRef.current === 'th' ? 'รอการตอบรับ...' : 'waiting for response...'}`, 'success');
+    },
+    onChallengeIdError:   ({ message }) => {
+      setPidLoading(false);
+      clearTimeout(pidTimeoutRef.current);
+      showToast(message, 'error');
+    },
     onPublicMessage:     (msg)     => { setChatMessages(p => [...p.slice(-49), msg]); },
     onPublicChatHistory: (history) => { setChatMessages(history || []); },
     onAnnouncement:      (data)    => { setAnnouncement(data); },
@@ -160,8 +170,15 @@ export default function LobbyPage() {
   const handleChallengeById = () => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
     if (pidInput.length !== 6) return;
+    if (inQueue) return showToast(lang === 'th' ? 'ออกจากคิวก่อนท้าด้วย ID' : 'Leave queue before challenging by ID', 'error');
     setPidLoading(true);
     safeEmit('challenge_by_player_id', { playerId: pidInput.toUpperCase(), gameTypeId: selectedGame._id });
+    // Auto-reset loading if server doesn't respond within 10s
+    clearTimeout(pidTimeoutRef.current);
+    pidTimeoutRef.current = setTimeout(() => {
+      setPidLoading(false);
+      showToast(lang === 'th' ? 'ไม่ได้รับการตอบกลับ ลองอีกครั้ง' : 'No response, please try again', 'error');
+    }, 10000);
   };
   const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
 
@@ -546,6 +563,26 @@ export default function LobbyPage() {
                 ? 'Player ID ของคุณอยู่ที่หน้าโปรไฟล์'
                 : 'Your Player ID is on your profile page'}
             </p>
+
+            {/* Pending challenge indicator */}
+            {pidPending && (
+              <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                <Loader2 size={14} className="text-purple-400 animate-spin flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-purple-300 text-xs font-medium">
+                    {lang === 'th' ? `รอ ${pidPending.username} ตอบรับ...` : `Waiting for ${pidPending.username}...`}
+                  </p>
+                  <p className="text-slate-600 text-[10px]">
+                    {lang === 'th' ? 'คำท้าจะหมดอายุใน 30 วินาที' : 'Challenge expires in 30 seconds'}
+                  </p>
+                </div>
+                <button onClick={() => { setPidPending(null); clearTimeout(pidTimeoutRef.current); }}
+                  className="text-slate-600 hover:text-slate-400 transition p-1">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
