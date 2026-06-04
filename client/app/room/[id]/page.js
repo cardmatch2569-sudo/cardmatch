@@ -361,6 +361,8 @@ export default function RoomPage() {
   const safeRight  = 'env(safe-area-inset-right,  0px)';
 
   // cssLandscapeActive → CSS rotate 90°; system already landscape → normal fixed
+  // When rotated +90°: device's physical TOP → container LEFT, physical BOTTOM → container RIGHT
+  // So we swap safe-area-insets: paddingLeft=safeTop, paddingRight=safeBottom
   return (
     <div className="z-50 bg-black overflow-hidden"
       style={cssLandscapeActive ? {
@@ -370,6 +372,8 @@ export default function RoomPage() {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%) rotate(90deg)',
+        paddingLeft:  'env(safe-area-inset-top,    0px)',
+        paddingRight: 'env(safe-area-inset-bottom, 0px)',
       } : { position: 'fixed', inset: 0 }}>
 
       {/* ── Opponent video fills the ENTIRE background ── */}
