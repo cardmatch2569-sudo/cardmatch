@@ -491,10 +491,13 @@ export default function RoomPage() {
       </div>
 
       {/* ── Self PiP — bottom-right above controls bar ── */}
+      {/* cssLandscapeActive: container right=phys.bottom(safeBottom), bottom=phys.left(no safe area) */}
       <div className="absolute z-20"
         style={{
-          bottom: `calc(68px + max(8px, ${safeBottom}))`,
-          right:  `max(8px, ${cssLandscapeActive ? safeBottom : safeRight})`,
+          bottom: cssLandscapeActive
+            ? 'calc(68px + 8px)'
+            : `calc(68px + max(8px, ${safeBottom}))`,
+          right: `max(8px, ${cssLandscapeActive ? safeBottom : safeRight})`,
           width: 'clamp(80px, 24vw, 150px)',
           aspectRatio: '4/3',
         }}>
