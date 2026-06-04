@@ -575,62 +575,69 @@ export default function RoomPage() {
           paddingBottom: cssLandscapeActive ? '8px' : `max(8px, ${safeBottom})`,
           paddingLeft:   `max(12px, ${cssLandscapeActive ? safeTop : safeLeft})`,
           paddingRight:  `max(12px, ${cssLandscapeActive ? safeBottom : safeRight})`,
-          background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 100%)',
         }}>
 
-        {/* Rotate opponent video */}
+        {/* Rotate opponent */}
         <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
           title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
-          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 backdrop-blur-sm bg-white/15 text-white border border-white/20">
+          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-40 hover:opacity-80"
+          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
           <RotateCw size={14} />
           <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'คู่แข่ง' : 'Opp'}</span>
         </button>
 
         <button onClick={toggleCamera}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm
-            ${cameraOn ? 'bg-white/15 text-white border border-white/20' : 'bg-red-600/80 text-white'}`}>
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
+            ${cameraOn ? 'opacity-40 hover:opacity-80' : 'opacity-90'}`}
+          style={cameraOn
+            ? { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+            : { background: 'rgba(239,68,68,0.75)', color: 'white' }}>
           {cameraOn ? <Video size={18} /> : <VideoOff size={18} />}
         </button>
 
-        {/* Flip camera — only shown when device has front+back cameras */}
+        {/* Flip camera */}
         {hasFlipCamera && (
           <button onClick={flipCamera}
-            title={lang === 'th'
-              ? (facingMode === 'user' ? 'สลับกล้องหลัง' : 'สลับกล้องหน้า')
-              : (facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera')}
-            className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 backdrop-blur-sm bg-white/15 text-white border border-white/20">
+            title={lang === 'th' ? (facingMode === 'user' ? 'สลับกล้องหลัง' : 'สลับกล้องหน้า') : (facingMode === 'user' ? 'Switch to back' : 'Switch to front')}
+            className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-40 hover:opacity-80"
+            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
             <SwitchCamera size={16} />
-            <span className="text-[8px] leading-none opacity-70">
-              {facingMode === 'user'
-                ? (lang === 'th' ? 'หลัง' : 'Back')
-                : (lang === 'th' ? 'หน้า' : 'Front')}
-            </span>
+            <span className="text-[8px] leading-none opacity-70">{facingMode === 'user' ? (lang === 'th' ? 'หลัง' : 'Back') : (lang === 'th' ? 'หน้า' : 'Front')}</span>
           </button>
         )}
 
-        {/* Leave — center, larger */}
+        {/* Leave — always visible for safety */}
         <button onClick={handleLeave}
-          className="w-14 h-14 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-500 text-white transition-all active:scale-95 shadow-xl shadow-red-900/50">
+          className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
+          style={{ background: 'rgba(239,68,68,0.85)', boxShadow: '0 4px 15px rgba(239,68,68,0.3)' }}>
           <PhoneOff size={20} />
         </button>
 
         <button onClick={toggleMic}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm
-            ${micOn ? 'bg-white/15 text-white border border-white/20' : 'bg-red-600/80 text-white'}`}>
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
+            ${micOn ? 'opacity-40 hover:opacity-80' : 'opacity-90'}`}
+          style={micOn
+            ? { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+            : { background: 'rgba(239,68,68,0.75)', color: 'white' }}>
           {micOn ? <Mic size={18} /> : <MicOff size={18} />}
         </button>
 
-        {/* Rotate own video */}
+        {/* Rotate own */}
         <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
           title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
-          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 backdrop-blur-sm bg-white/15 text-white border border-white/20">
+          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-40 hover:opacity-80"
+          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
           <RotateCw size={14} />
           <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'ของฉัน' : 'Mine'}</span>
         </button>
 
         <button onClick={() => setChatOpen(p => !p)}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 backdrop-blur-sm relative
-            ${chatOpen ? 'bg-purple-500/50 text-purple-200 border border-purple-500/50' : 'bg-white/15 text-white border border-white/20'}`}>
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100 relative
+            ${chatOpen ? 'opacity-90' : 'opacity-40 hover:opacity-80'}`}
+          style={chatOpen
+            ? { background: 'rgba(124,58,237,0.5)', border: '1px solid rgba(124,58,237,0.5)', color: '#c4b5fd' }
+            : { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
           <MessageSquare size={18} />
           {unread > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">
