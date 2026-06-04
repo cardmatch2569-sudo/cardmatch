@@ -65,7 +65,7 @@ function ChatPanel({ messages, msgInput, setMsgInput, onSend, onClose, user, lan
             className="input-base text-sm flex-1 py-2" style={{ minHeight: '44px' }}
             enterKeyHint="send" />
           <button onClick={onSend} disabled={!msgInput.trim()}
-            className="w-11 h-11 rounded-lg flex items-center justify-center transition flex-shrink-0 disabled:opacity-40"
+            className="w-11 h-11 rounded-lg flex items-center justify-center transition flex-shrink-0 disabled:opacity-60"
             style={{ background: 'rgba(124,58,237,0.8)', color: 'white' }}>
             <Send size={16} />
           </button>
@@ -581,7 +581,7 @@ export default function RoomPage() {
         {/* Rotate opponent */}
         <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
           title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
-          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-40 hover:opacity-80"
+          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
           style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
           <RotateCw size={14} />
           <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'คู่แข่ง' : 'Opp'}</span>
@@ -589,7 +589,7 @@ export default function RoomPage() {
 
         <button onClick={toggleCamera}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
-            ${cameraOn ? 'opacity-40 hover:opacity-80' : 'opacity-90'}`}
+            ${cameraOn ? 'opacity-60 hover:opacity-80' : 'opacity-90'}`}
           style={cameraOn
             ? { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
             : { background: 'rgba(239,68,68,0.75)', color: 'white' }}>
@@ -600,7 +600,7 @@ export default function RoomPage() {
         {hasFlipCamera && (
           <button onClick={flipCamera}
             title={lang === 'th' ? (facingMode === 'user' ? 'สลับกล้องหลัง' : 'สลับกล้องหน้า') : (facingMode === 'user' ? 'Switch to back' : 'Switch to front')}
-            className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-40 hover:opacity-80"
+            className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
             style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
             <SwitchCamera size={16} />
             <span className="text-[8px] leading-none opacity-70">{facingMode === 'user' ? (lang === 'th' ? 'หลัง' : 'Back') : (lang === 'th' ? 'หน้า' : 'Front')}</span>
@@ -616,7 +616,7 @@ export default function RoomPage() {
 
         <button onClick={toggleMic}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
-            ${micOn ? 'opacity-40 hover:opacity-80' : 'opacity-90'}`}
+            ${micOn ? 'opacity-60 hover:opacity-80' : 'opacity-90'}`}
           style={micOn
             ? { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
             : { background: 'rgba(239,68,68,0.75)', color: 'white' }}>
@@ -626,7 +626,7 @@ export default function RoomPage() {
         {/* Rotate own */}
         <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
           title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
-          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-40 hover:opacity-80"
+          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
           style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
           <RotateCw size={14} />
           <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'ของฉัน' : 'Mine'}</span>
@@ -634,7 +634,7 @@ export default function RoomPage() {
 
         <button onClick={() => setChatOpen(p => !p)}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100 relative
-            ${chatOpen ? 'opacity-90' : 'opacity-40 hover:opacity-80'}`}
+            ${chatOpen ? 'opacity-90' : 'opacity-60 hover:opacity-80'}`}
           style={chatOpen
             ? { background: 'rgba(124,58,237,0.5)', border: '1px solid rgba(124,58,237,0.5)', color: '#c4b5fd' }
             : { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
