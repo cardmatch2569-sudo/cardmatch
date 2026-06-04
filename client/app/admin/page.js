@@ -2,15 +2,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import {
   Shield, Users, Gamepad2, Radio, Plus, Pencil, Trash2, X, Save,
   ToggleLeft, ToggleRight, Search, RefreshCw, Crown, UserX,
-  Activity, Clock, CheckCircle, XCircle, Loader2,
+  Activity, Clock, CheckCircle, XCircle, Loader2, Trophy, Play, Eye, Gavel, Bell,
 } from 'lucide-react';
 
-const TABS = ['overview', 'users', 'games', 'rooms'];
+const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
 const EMPTY_GAME = { name: '', nameTh: '', description: '', descriptionTh: '', imageUrl: '', color: '#7c3aed', isActive: true };
+const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 16 };
 
 export default function AdminPage() {
   const { user, loading: authLoading, lang, isAdminMode, toggleViewMode } = useAuth();
@@ -40,6 +42,21 @@ export default function AdminPage() {
   const [deleteError,    setDeleteError]    = useState('');
   const [deleting,       setDeleting]       = useState(false);
 
+  // Tournament state
+  const [tournaments,     setTournaments]     = useState([]);
+  const [tourneyForm,     setTourneyForm]     = useState(EMPTY_TOURNEY);
+  const [tourneyCreating, setTourneyCreating] = useState(false);
+  const [alerts,          setAlerts]          = useState([]); // { id, type, roomId, matchId, players }
+  // Spectate state
+  const [spectateRoomId,  setSpectateRoomId]  = useState(null);
+  const [spectatePlayer1, setSpectatePlayer1] = useState('');
+  const [spectatePlayer2, setSpectatePlayer2] = useState('');
+  const spectateVideo1Ref  = useRef(null);
+  const spectateVideo2Ref  = useRef(null);
+  const spectateConnsRef   = useRef(new Map()); // userId → RTCPeerConnection
+  // Decide match state
+  const [decideMatch, setDecideMatch] = useState(null); // { roomId, players: [p1Id, p2Id], names: [n1, n2] }
+
   // Bug fix: debounce ref for user search
   const searchTimer = useRef(null);
 
@@ -65,11 +82,92 @@ export default function AdminPage() {
   const loadRooms  = useCallback(async () => { try { const { rooms }  = await api.get('/api/admin/rooms');  setRooms(rooms); } catch {} }, []);
   const loadOnline = useCallback(async () => { try { const { online } = await api.get('/api/admin/online'); setOnline(online); } catch {} }, []);
 
-  useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); loadAnnouncement(); } }, [user, loadStats, loadOnline, loadAnnouncement]);
-  useEffect(() => { if (tab === 'users')    loadUsers(1, ''); },   [tab, loadUsers]);
-  useEffect(() => { if (tab === 'games')    loadGames(); },         [tab, loadGames]);
-  useEffect(() => { if (tab === 'rooms')    loadRooms(); },         [tab, loadRooms]);
-  useEffect(() => { if (tab === 'overview') { loadStats(); loadOnline(); } }, [tab, loadStats, loadOnline]);
+  const loadTournaments = useCallback(async () => {
+    try { const { tournaments: list } = await api.get('/api/tournament'); setTournaments(list || []); } catch {}
+  }, []);
+
+  useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); loadAnnouncement(); loadTournaments(); } }, [user, loadStats, loadOnline, loadAnnouncement, loadTournaments]);
+  useEffect(() => { if (tab === 'users')      loadUsers(1, ''); },    [tab, loadUsers]);
+  useEffect(() => { if (tab === 'games')      loadGames(); },          [tab, loadGames]);
+  useEffect(() => { if (tab === 'rooms')      loadRooms(); },          [tab, loadRooms]);
+  useEffect(() => { if (tab === 'tournament') loadTournaments(); },    [tab, loadTournaments]);
+  useEffect(() => { if (tab === 'overview')   { loadStats(); loadOnline(); } }, [tab, loadStats, loadOnline]);
+
+  // Tournament socket: admin match alerts + real-time updates
+  const { getSocket } = useSocket();
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+    const socket = getSocket();
+    if (!socket) return;
+
+    const onAlert = (data) => {
+      setAlerts(p => [{ id: Date.now(), ...data }, ...p.slice(0, 9)]);
+      // Auto-dismiss after 30s
+      setTimeout(() => setAlerts(p => p.filter(a => a.id !== data.id)), 30000);
+    };
+    const onCreated = (t) => setTournaments(p => [t, ...p.filter(x => x.id !== t.id)]);
+    const onClosed  = ({ tournamentId }) => setTournaments(p => p.filter(x => x.id !== tournamentId));
+    const onCount   = ({ tournamentId, playerCount }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, playerCount } : x));
+    const onStarted = ({ tournamentId }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'active' } : x));
+
+    // Admin spectate WebRTC
+    const onSpectateOffer = ({ from, fromUsername, offer, roomId }) => {
+      if (roomId !== spectateRoomId) return;
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+      });
+      pc.ontrack = ({ streams }) => {
+        const existing = spectateConnsRef.current.size;
+        if (existing === 0) {
+          if (spectateVideo1Ref.current) spectateVideo1Ref.current.srcObject = streams[0];
+          setSpectatePlayer1(fromUsername);
+        } else {
+          if (spectateVideo2Ref.current) spectateVideo2Ref.current.srcObject = streams[0];
+          setSpectatePlayer2(fromUsername);
+        }
+      };
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) socket.emit('admin_peer_ice', { roomId, targetUserId: from, candidate });
+      };
+      pc.setRemoteDescription(new RTCSessionDescription(offer));
+      pc.createAnswer().then(answer => {
+        pc.setLocalDescription(answer);
+        socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
+      }).catch(() => {});
+      spectateConnsRef.current.set(from, pc);
+    };
+    const onSpectateIce = ({ candidate, from }) => {
+      const pc = spectateConnsRef.current.get(from);
+      try { pc?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
+    const onSpectateEnded = () => stopSpectating();
+
+    socket.on('admin_match_alert',   onAlert);
+    socket.on('tournament_created',  onCreated);
+    socket.on('tournament_closed',   onClosed);
+    socket.on('tournament_player_count', onCount);
+    socket.on('tournament_started',  onStarted);
+    socket.on('admin_peer_offer',    onSpectateOffer);
+    socket.on('admin_peer_ice',      onSpectateIce);
+    socket.on('spectate_ended',      onSpectateEnded);
+
+    return () => {
+      socket.off('admin_match_alert',   onAlert);
+      socket.off('tournament_created',  onCreated);
+      socket.off('tournament_closed',   onClosed);
+      socket.off('tournament_player_count', onCount);
+      socket.off('tournament_started',  onStarted);
+      socket.off('admin_peer_offer',    onSpectateOffer);
+      socket.off('admin_peer_ice',      onSpectateIce);
+      socket.off('spectate_ended',      onSpectateEnded);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, getSocket, spectateRoomId]);
 
   // Bug fix: debounced user search
   const handleUserSearch = (q) => {
@@ -140,6 +238,55 @@ export default function AdminPage() {
 
   const closeDeleteModal = () => { setModal(null); setDeleteTarget(null); setDeletePassword(''); setDeleteError(''); };
 
+  // Tournament actions
+  const handleCreateTourney = () => {
+    if (!tourneyForm.name.trim() || !tourneyForm.gameTypeId) return;
+    setTourneyCreating(true);
+    const socket = getSocket();
+    if (!socket) { setTourneyCreating(false); return; }
+    socket.emit('create_tournament', { name: tourneyForm.name.trim(), gameTypeId: tourneyForm.gameTypeId, maxPlayers: tourneyForm.maxPlayers });
+    socket.once('tournament_created_ok', () => { setTourneyForm(EMPTY_TOURNEY); setTourneyCreating(false); loadTournaments(); });
+    setTimeout(() => setTourneyCreating(false), 5000);
+  };
+
+  const handleStartTourney = (tournamentId) => {
+    getSocket()?.emit('start_tournament', { tournamentId });
+  };
+
+  const handleCloseTourney = (tournamentId) => {
+    if (!confirm(lang === 'th' ? 'ปิด Tournament นี้?' : 'Close this tournament?')) return;
+    getSocket()?.emit('close_tournament', { tournamentId });
+  };
+
+  const startSpectating = (roomId) => {
+    setSpectateRoomId(roomId);
+    setSpectatePlayer1('');
+    setSpectatePlayer2('');
+    spectateConnsRef.current.forEach(pc => pc.close());
+    spectateConnsRef.current = new Map();
+    if (spectateVideo1Ref.current) spectateVideo1Ref.current.srcObject = null;
+    if (spectateVideo2Ref.current) spectateVideo2Ref.current.srcObject = null;
+    getSocket()?.emit('admin_watch_room', { roomId });
+  };
+
+  const stopSpectating = () => {
+    if (spectateRoomId) getSocket()?.emit('admin_stop_watching', { roomId: spectateRoomId });
+    spectateConnsRef.current.forEach(pc => pc.close());
+    spectateConnsRef.current = new Map();
+    setSpectateRoomId(null);
+    setSpectatePlayer1('');
+    setSpectatePlayer2('');
+  };
+
+  const handleDecideMatch = (winnerId) => {
+    if (!decideMatch) return;
+    getSocket()?.emit('admin_decide_match', { roomId: decideMatch.roomId, winnerId });
+    setDecideMatch(null);
+    setAlerts(p => p.filter(a => a.roomId !== decideMatch.roomId));
+  };
+
+  const dismissAlert = (id) => setAlerts(p => p.filter(a => a.id !== id));
+
   if (authLoading || !user?.isAdmin) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
@@ -148,10 +295,19 @@ export default function AdminPage() {
 
   // Short labels for mobile, full for desktop
   const tabLabels = {
-    overview: <><span className="hidden sm:inline">📊 </span><span className="sm:hidden">📊</span><span className="hidden sm:inline">{lang === 'th' ? 'ภาพรวม' : 'Overview'}</span></>,
-    users:    <><span className="hidden sm:inline">👥 </span><span className="sm:hidden">👥</span><span className="hidden sm:inline">{lang === 'th' ? 'ผู้ใช้' : 'Users'}</span></>,
-    games:    <><span className="hidden sm:inline">🃏 </span><span className="sm:hidden">🃏</span><span className="hidden sm:inline">{lang === 'th' ? 'เกม' : 'Games'}</span></>,
-    rooms:    <><span className="hidden sm:inline">🎮 </span><span className="sm:hidden">🎮</span><span className="hidden sm:inline">{lang === 'th' ? 'ห้อง' : 'Rooms'}</span></>,
+    overview:   <><span className="hidden sm:inline">📊 </span><span className="sm:hidden">📊</span><span className="hidden sm:inline">{lang === 'th' ? 'ภาพรวม' : 'Overview'}</span></>,
+    users:      <><span className="hidden sm:inline">👥 </span><span className="sm:hidden">👥</span><span className="hidden sm:inline">{lang === 'th' ? 'ผู้ใช้' : 'Users'}</span></>,
+    games:      <><span className="hidden sm:inline">🃏 </span><span className="sm:hidden">🃏</span><span className="hidden sm:inline">{lang === 'th' ? 'เกม' : 'Games'}</span></>,
+    rooms:      <><span className="hidden sm:inline">🎮 </span><span className="sm:hidden">🎮</span><span className="hidden sm:inline">{lang === 'th' ? 'ห้อง' : 'Rooms'}</span></>,
+    tournament: (
+      <span className="relative flex items-center gap-1">
+        <span>🏆</span>
+        <span className="hidden sm:inline">{lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament'}</span>
+        {alerts.length > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">{alerts.length}</span>
+        )}
+      </span>
+    ),
   };
 
   const statCards = stats ? [
@@ -221,6 +377,92 @@ export default function AdminPage() {
                   : (lang === 'th' ? '🗑 ลบถาวร' : '🗑 Delete permanently')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Spectate modal ─────────────────────────────────────── */}
+      {spectateRoomId && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)' }}>
+          <div className="w-full max-w-3xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                <Eye size={18} className="text-yellow-400" />
+                {lang === 'th' ? 'ดูการแข่ง' : 'Watching Match'}
+              </h2>
+              <button onClick={stopSpectating}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-red-400 transition hover:bg-red-500/10"
+                style={{ border: '1px solid rgba(239,68,68,0.3)' }}>
+                <X size={14} /> {lang === 'th' ? 'หยุดดู' : 'Stop Watching'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[{ ref: spectateVideo1Ref, name: spectatePlayer1 }, { ref: spectateVideo2Ref, name: spectatePlayer2 }].map((v, i) => (
+                <div key={i} className="relative rounded-2xl overflow-hidden aspect-video bg-black"
+                  style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <video ref={v.ref} autoPlay playsInline muted={false}
+                    className="w-full h-full object-cover" />
+                  {!v.name && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
+                    </div>
+                  )}
+                  {v.name && (
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-xs font-semibold text-white"
+                      style={{ background: 'rgba(0,0,0,0.65)' }}>
+                      {v.name}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {decideMatch && (
+              <div className="mt-4 card p-4 text-center" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
+                <p className="text-yellow-300 font-semibold text-sm mb-3">
+                  {lang === 'th' ? 'ผลไม่ตรงกัน — เลือกผู้ชนะ' : 'Conflict — Choose winner'}
+                </p>
+                <div className="flex gap-3 justify-center">
+                  {decideMatch.players.map((pid, i) => (
+                    <button key={pid} onClick={() => handleDecideMatch(pid)}
+                      className="px-6 py-2.5 rounded-xl font-semibold text-sm transition active:scale-95"
+                      style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' }}>
+                      🏆 {decideMatch.names[i] || `Player ${i + 1}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Decide match modal ──────────────────────────────────── */}
+      {decideMatch && !spectateRoomId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="anim-scale-in card w-full max-w-sm p-6 text-center"
+            style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(251,191,36,0.3)' }}>
+            <div className="text-4xl mb-3">⚖️</div>
+            <h2 className="text-white font-bold text-lg mb-2">
+              {lang === 'th' ? 'ตัดสินผลการแข่ง' : 'Decide Match Result'}
+            </h2>
+            <p className="text-slate-500 text-sm mb-5">
+              {lang === 'th' ? 'เลือกผู้ชนะ' : 'Select the winner'}
+            </p>
+            <div className="flex gap-3 justify-center mb-4">
+              {decideMatch.players.map((pid, i) => (
+                <button key={pid} onClick={() => handleDecideMatch(pid)}
+                  className="flex-1 py-3 rounded-xl font-semibold text-sm transition active:scale-95"
+                  style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80' }}>
+                  🏆 {decideMatch.names[i] || `P${i + 1}`}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setDecideMatch(null)}
+              className="btn-ghost w-full py-2 rounded-xl text-xs">
+              {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+            </button>
           </div>
         </div>
       )}
@@ -628,6 +870,163 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* ── TOURNAMENT ──────────────────────────────────────────── */}
+      {tab === 'tournament' && (
+        <div className="space-y-5">
+
+          {/* Alerts */}
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              {alerts.map(a => (
+                <div key={a.id} className="card p-4 flex items-start gap-3"
+                  style={{ borderColor: a.type === 'conflict' || a.type === 'timeout' ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)' }}>
+                  <Bell size={16} className={a.type === 'conflict' || a.type === 'timeout' ? 'text-red-400 flex-shrink-0 mt-0.5' : 'text-yellow-400 flex-shrink-0 mt-0.5'} />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">
+                      {a.type === 'call'      && (lang === 'th' ? '📣 ผู้เล่นเรียก Admin' : '📣 Player called Admin')}
+                      {a.type === 'conflict'  && (lang === 'th' ? '⚠️ ผลไม่ตรงกัน — ต้องตัดสิน' : '⚠️ Result conflict — decision needed')}
+                      {a.type === 'timeout'   && (lang === 'th' ? '⏰ หมดเวลา — ต้องตัดสิน' : '⏰ Timeout — decision needed')}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">Room: {a.roomId?.slice(0, 12)}...</p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {(a.type === 'conflict' || a.type === 'timeout') && a.roomId && (
+                      <button
+                        onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || [] })}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                        style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                        <Gavel size={11} /> {lang === 'th' ? 'ตัดสิน' : 'Decide'}
+                      </button>
+                    )}
+                    {a.roomId && (
+                      <button onClick={() => startSpectating(a.roomId)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                        style={{ background: 'rgba(124,58,237,0.15)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.3)' }}>
+                        <Eye size={11} /> {lang === 'th' ? 'ดู' : 'Watch'}
+                      </button>
+                    )}
+                    <button onClick={() => dismissAlert(a.id)} className="text-slate-600 hover:text-slate-400 p-1">
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Create tournament form */}
+          <div className="card p-5">
+            <h3 className="font-bold text-white flex items-center gap-2 mb-4">
+              <Plus size={15} className="text-purple-400" />
+              {lang === 'th' ? 'สร้างทัวร์นาเมนต์' : 'Create Tournament'}
+            </h3>
+            <div className="space-y-3">
+              <input
+                value={tourneyForm.name}
+                onChange={e => setTourneyForm(f => ({ ...f, name: e.target.value.slice(0, 100) }))}
+                placeholder={lang === 'th' ? 'ชื่อทัวร์นาเมนต์' : 'Tournament name'}
+                className="input-base text-sm"
+              />
+              <select
+                value={tourneyForm.gameTypeId}
+                onChange={e => setTourneyForm(f => ({ ...f, gameTypeId: e.target.value }))}
+                className="input-base text-sm">
+                <option value="">{lang === 'th' ? 'เลือกเกม' : 'Select game'}</option>
+                {games.map(g => (
+                  <option key={g._id} value={g._id}>{g.name}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-3">
+                <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'ผู้เล่นสูงสุด' : 'Max players'}</label>
+                {[8, 16, 32].map(n => (
+                  <button key={n} onClick={() => setTourneyForm(f => ({ ...f, maxPlayers: n }))}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold transition"
+                    style={tourneyForm.maxPlayers === n
+                      ? { background: 'rgba(124,58,237,0.3)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.5)' }
+                      : { background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleCreateTourney}
+              disabled={!tourneyForm.name.trim() || !tourneyForm.gameTypeId || tourneyCreating}
+              className="btn-primary w-full py-2.5 rounded-xl text-sm mt-4 gap-1.5 disabled:opacity-40">
+              {tourneyCreating
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {lang === 'th' ? 'กำลังสร้าง...' : 'Creating...'}</>
+                : <><Trophy size={14} /> {lang === 'th' ? 'สร้างทัวร์นาเมนต์' : 'Create Tournament'}</>}
+            </button>
+          </div>
+
+          {/* Active tournaments */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2">
+                <Trophy size={14} className="text-yellow-400" />
+                {lang === 'th' ? 'ทัวร์นาเมนต์ที่เปิดอยู่' : 'Active Tournaments'}
+              </h3>
+              <button onClick={loadTournaments} className="text-slate-600 hover:text-slate-400 transition">
+                <RefreshCw size={13} />
+              </button>
+            </div>
+
+            {tournaments.length === 0 ? (
+              <div className="card p-8 text-center">
+                <div className="text-4xl mb-3">🏆</div>
+                <p className="text-slate-700 text-sm">{lang === 'th' ? 'ยังไม่มีทัวร์นาเมนต์' : 'No tournaments'}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tournaments.map(t => (
+                  <div key={t.id} className="card p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-white truncate">{t.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs font-semibold ${t.status === 'active' ? 'text-yellow-400' : 'text-green-400'}`}>
+                            {t.status === 'active'
+                              ? (lang === 'th' ? '⚔️ กำลังแข่ง' : '⚔️ Active')
+                              : (lang === 'th' ? '✅ รับสมัคร' : '✅ Waiting')}
+                          </span>
+                          <span className="text-xs text-slate-600">
+                            <Users size={10} className="inline mr-0.5" />
+                            {t.playerCount}/{t.maxPlayers}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        {t.status === 'waiting' && (
+                          <button
+                            onClick={() => handleStartTourney(t.id)}
+                            disabled={(t.playerCount || 0) < 2}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40"
+                            style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                            <Play size={11} /> {lang === 'th' ? 'เริ่ม' : 'Start'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleCloseTourney(t.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                          style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+                          <X size={11} /> {lang === 'th' ? 'ปิด' : 'Close'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {(t.playerCount || 0) < 2 && t.status === 'waiting' && (
+                      <p className="text-xs text-slate-600 mt-1">
+                        {lang === 'th' ? 'ต้องการผู้เล่นอย่างน้อย 2 คนเพื่อเริ่ม' : 'Need at least 2 players to start'}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

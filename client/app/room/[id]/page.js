@@ -6,8 +6,26 @@ import { useSocket } from '../../../context/SocketContext';
 import translations from '../../../lib/translations';
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, Send,
-  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera, Shuffle, Home,
+  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera, Shuffle, Home, Flag,
 } from 'lucide-react';
+
+// ── Tournament countdown timer ─────────────────────────────────────
+function TournamentTimer({ timeoutAt }) {
+  const [secs, setSecs] = useState(null);
+  useEffect(() => {
+    if (!timeoutAt) return;
+    const update = () => setSecs(Math.max(0, Math.ceil((timeoutAt - Date.now()) / 1000)));
+    update();
+    const t = setInterval(update, 500);
+    return () => clearInterval(t);
+  }, [timeoutAt]);
+  if (secs === null) return null;
+  return (
+    <div className={`text-4xl font-black tabular-nums ${secs <= 10 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
+      {secs}s
+    </div>
+  );
+}
 
 // Returns absolute-position + size style for a full-screen rotated video element
 function fullscreenRotateStyle(deg) {
@@ -93,6 +111,7 @@ export default function RoomPage() {
   const localStreamRef = useRef(null);
   const leftRef        = useRef(false);
   const chatOpenRef    = useRef(false);
+  const adminPeerRef   = useRef(null); // WebRTC connection to admin spectate
 
   const [messages,      setMessages]      = useState([]);
   const [msgInput,      setMsgInput]      = useState('');
@@ -124,6 +143,23 @@ export default function RoomPage() {
   const [facingMode,      setFacingMode]      = useState('user');
   const [hasFlipCamera,   setHasFlipCamera]   = useState(false);
   const chatEndRef = useRef(null);
+
+  // Tournament match state
+  const [isTournament,   setIsTournament]   = useState(false);
+  const [tourneyPhase,   setTourneyPhase]   = useState('playing'); // playing | result_reporting | admin_decision | done
+  const [myResult,       setMyResult]       = useState(null);      // 'win' | 'lose' | null
+  const [opponentResult, setOpponentResult] = useState(null);
+  const [matchResult,    setMatchResult]    = useState(null);      // { winnerId, loserId, method }
+  const [timeoutAt,      setTimeoutAt]      = useState(null);
+  const [adminWatching,  setAdminWatching]  = useState(false);
+  const [adminCalledMsg, setAdminCalledMsg] = useState('');
+
+  // Detect tournament match from sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsTournament(sessionStorage.getItem('cg_is_tournament') === '1');
+    }
+  }, []);
 
   useEffect(() => {
     chatOpenRef.current = chatOpen;
@@ -289,6 +325,63 @@ export default function RoomPage() {
       setEndModal('partner_left');
     };
 
+    // Tournament socket handlers
+    const onResultPhaseStarted = ({ timeoutAt: ta }) => {
+      setTourneyPhase('result_reporting');
+      setTimeoutAt(ta);
+    };
+    const onOpponentDeclared = ({ result }) => setOpponentResult(result);
+    const onMatchResultFinal = ({ winnerId, loserId, method }) => {
+      setTourneyPhase('done');
+      setMatchResult({ winnerId, loserId, method });
+    };
+    const onMatchConflict   = () => setTourneyPhase('admin_decision');
+    const onMatchNeedsAdmin = () => setTourneyPhase('admin_decision');
+
+    // Admin spectate
+    const onAdminWatching = () => {
+      setAdminWatching(true);
+      const s = getSocket();
+      if (!s || !localStreamRef.current) return;
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+      });
+      localStreamRef.current.getTracks().forEach(tk => pc.addTrack(tk, localStreamRef.current));
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) s.emit('admin_peer_ice', { roomId, candidate });
+      };
+      pc.createOffer().then(offer => {
+        pc.setLocalDescription(offer);
+        s.emit('admin_peer_offer', { roomId, offer });
+      }).catch(() => {});
+      adminPeerRef.current = pc;
+    };
+    const onAdminPeerAnswer = ({ answer }) => {
+      adminPeerRef.current?.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
+    };
+    const onAdminPeerIce = ({ candidate }) => {
+      try { adminPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
+    const onAdminLeft = () => {
+      setAdminWatching(false);
+      adminPeerRef.current?.close();
+      adminPeerRef.current = null;
+    };
+
+    socket.on('result_phase_started', onResultPhaseStarted);
+    socket.on('opponent_declared',    onOpponentDeclared);
+    socket.on('match_result_final',   onMatchResultFinal);
+    socket.on('match_conflict',       onMatchConflict);
+    socket.on('match_needs_admin',    onMatchNeedsAdmin);
+    socket.on('admin_watching',       onAdminWatching);
+    socket.on('admin_peer_answer',    onAdminPeerAnswer);
+    socket.on('admin_peer_ice',       onAdminPeerIce);
+    socket.on('admin_left',           onAdminLeft);
+    socket.on('admin_called',         ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); });
+
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
     socket.on('ice_candidate', onIce); socket.on('message_received', onMessage); socket.on('partner_disconnected', onPartnerLeft);
 
@@ -297,6 +390,25 @@ export default function RoomPage() {
     return () => {
       aborted = true;
       clearTimeout(pwaHintTimer.current);
+      socket.off('result_phase_started', onResultPhaseStarted);
+      socket.off('opponent_declared',    onOpponentDeclared);
+      socket.off('match_result_final',   onMatchResultFinal);
+      socket.off('match_conflict',       onMatchConflict);
+      socket.off('match_needs_admin',    onMatchNeedsAdmin);
+      socket.off('admin_watching',       onAdminWatching);
+      socket.off('admin_peer_answer',    onAdminPeerAnswer);
+      socket.off('admin_peer_ice',       onAdminPeerIce);
+      socket.off('admin_left',           onAdminLeft);
+      socket.off('admin_called');
+      adminPeerRef.current?.close();
+      adminPeerRef.current = null;
+      // Clear tournament sessionStorage
+      try {
+        sessionStorage.removeItem('cg_is_tournament');
+        sessionStorage.removeItem('cg_tournament_id');
+        sessionStorage.removeItem('cg_tournament_match_id');
+      } catch {}
+
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
@@ -360,6 +472,14 @@ export default function RoomPage() {
     } catch (e) { console.warn('[flipCamera]', e.message); }
   }, [facingMode]);
   const sendMessage  = () => { if (!msgInput.trim()) return; getSocket()?.emit('send_message', { roomId, message: msgInput }); setMsgInput(''); };
+
+  // Tournament actions
+  const handleEndGame = () => getSocket()?.emit('end_game', { roomId });
+  const handleDeclareResult = (result) => {
+    setMyResult(result);
+    getSocket()?.emit('declare_result', { roomId, result });
+  };
+  const handleCallAdmin = () => getSocket()?.emit('call_admin', { roomId });
 
   if (loading || !user) return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50">
@@ -611,6 +731,17 @@ export default function RoomPage() {
           </button>
         )}
 
+        {/* Tournament: End Game button */}
+        {isTournament && tourneyPhase === 'playing' && (
+          <button onClick={handleEndGame}
+            title={lang === 'th' ? 'จบเกมส์' : 'End Game'}
+            className="w-12 h-12 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 opacity-80 hover:opacity-100"
+            style={{ background: 'rgba(251,191,36,0.25)', border: '1px solid rgba(251,191,36,0.5)', color: '#fbbf24' }}>
+            <Flag size={15} />
+            <span className="text-[7px] leading-none">จบ</span>
+          </button>
+        )}
+
         {/* Leave — always visible for safety */}
         <button onClick={handleLeave}
           className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
@@ -650,6 +781,132 @@ export default function RoomPage() {
           )}
         </button>
       </div>
+
+      {/* ── Admin watching indicator ── */}
+      {adminWatching && (
+        <div className="absolute top-0 left-0 right-0 z-25 pointer-events-none flex justify-center"
+          style={{ paddingTop: `calc(52px + max(0px, ${safeTop}))` }}>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px]"
+            style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+            {lang === 'th' ? 'Admin กำลังดูอยู่' : 'Admin is watching'}
+          </div>
+        </div>
+      )}
+
+      {/* ── Admin called toast ── */}
+      {adminCalledMsg && (
+        <div className="absolute z-30 left-1/2 -translate-x-1/2 anim-fade-up"
+          style={{ bottom: `calc(90px + max(0px, ${safeBottom}))` }}>
+          <div className="px-4 py-2 rounded-full text-xs text-white"
+            style={{ background: 'rgba(251,191,36,0.25)', border: '1px solid rgba(251,191,36,0.4)' }}>
+            {adminCalledMsg}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tournament Result Overlay ── */}
+      {isTournament && tourneyPhase !== 'playing' && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(14px)' }}>
+          <div className="card w-full max-w-sm p-6 text-center anim-scale-in"
+            style={{ background: 'rgba(10,10,22,0.98)', borderColor: 'rgba(124,58,237,0.3)' }}>
+
+            {/* Result reporting phase */}
+            {tourneyPhase === 'result_reporting' && !matchResult && (
+              <>
+                <div className="text-4xl mb-3">🏁</div>
+                <h2 className="text-white font-bold text-lg mb-1">
+                  {lang === 'th' ? 'จบเกมส์แล้ว' : 'Game Over'}
+                </h2>
+                <p className="text-slate-500 text-sm mb-4">
+                  {lang === 'th' ? 'เลือกผลการแข่งขันของคุณ' : 'Select your match result'}
+                </p>
+                <TournamentTimer timeoutAt={timeoutAt} />
+                {!myResult ? (
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={() => handleDeclareResult('win')}
+                      className="flex-1 py-4 rounded-2xl font-bold text-lg transition active:scale-95"
+                      style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' }}>
+                      🏆<br /><span className="text-sm">{lang === 'th' ? 'ฉันชนะ' : 'I Won'}</span>
+                    </button>
+                    <button onClick={() => handleDeclareResult('lose')}
+                      className="flex-1 py-4 rounded-2xl font-bold text-lg transition active:scale-95"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+                      💔<br /><span className="text-sm">{lang === 'th' ? 'ฉันแพ้' : 'I Lost'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-5 space-y-3">
+                    <div className={`px-5 py-3 rounded-2xl font-bold text-base ${myResult === 'win' ? 'text-green-400' : 'text-red-400'}`}
+                      style={{ background: myResult === 'win' ? 'rgba(74,222,128,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${myResult === 'win' ? 'rgba(74,222,128,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                      {myResult === 'win' ? '🏆 ' : '💔 '}
+                      {myResult === 'win' ? (lang === 'th' ? 'ฉันชนะ' : 'I Won') : (lang === 'th' ? 'ฉันแพ้' : 'I Lost')}
+                    </div>
+                    {opponentResult ? (
+                      <p className="text-slate-500 text-xs">{lang === 'th' ? 'คู่แข่งเลือกแล้ว — กำลังยืนยัน...' : 'Opponent selected — confirming...'}</p>
+                    ) : (
+                      <p className="text-slate-600 text-xs animate-pulse">{lang === 'th' ? 'รอคู่แข่งเลือกผล...' : 'Waiting for opponent...'}</p>
+                    )}
+                    <button onClick={handleCallAdmin}
+                      className="text-xs text-slate-600 hover:text-slate-400 underline transition">
+                      📣 {lang === 'th' ? 'เรียก Admin' : 'Call Admin'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Admin decision phase */}
+            {tourneyPhase === 'admin_decision' && (
+              <>
+                <div className="text-4xl mb-3">⚖️</div>
+                <h2 className="text-white font-bold text-lg mb-2">
+                  {lang === 'th' ? 'รอ Admin ตัดสิน' : 'Awaiting Admin Decision'}
+                </h2>
+                <p className="text-slate-500 text-sm mb-4">
+                  {lang === 'th' ? 'Admin กำลังพิจารณาผลการแข่ง' : 'Admin is reviewing the match result'}
+                </p>
+                <div className="flex justify-center">
+                  <div className="w-8 h-8 border-2 border-yellow-600/30 border-t-yellow-500 rounded-full animate-spin" />
+                </div>
+              </>
+            )}
+
+            {/* Done — show final result */}
+            {tourneyPhase === 'done' && matchResult && (
+              <>
+                <div className="text-5xl mb-4">
+                  {matchResult.winnerId === user._id ? '🏆' : '💔'}
+                </div>
+                <h2 className={`font-bold text-xl mb-2 ${matchResult.winnerId === user._id ? 'text-green-400' : 'text-red-400'}`}>
+                  {matchResult.winnerId === user._id
+                    ? (lang === 'th' ? 'คุณชนะ!' : 'You Won!')
+                    : (lang === 'th' ? 'คุณแพ้' : 'You Lost')}
+                </h2>
+                {matchResult.method === 'admin_decision' && (
+                  <p className="text-xs text-slate-600 mb-1">{lang === 'th' ? 'ผลตัดสินโดย Admin' : 'Decided by Admin'}</p>
+                )}
+                {matchResult.method === 'timeout_one_sided' && (
+                  <p className="text-xs text-slate-600 mb-1">{lang === 'th' ? 'ผลโดยอัตโนมัติ (หมดเวลา)' : 'Auto result (timeout)'}</p>
+                )}
+                <div className="flex gap-3 mt-5">
+                  <button onClick={findNextPlayer}
+                    className="btn-primary flex-1 py-3 rounded-xl text-sm gap-1.5">
+                    <Shuffle size={14} />
+                    {lang === 'th' ? 'หาผู้เล่นคนต่อไป' : 'Find Next'}
+                  </button>
+                  <button onClick={goToLobby}
+                    className="btn-ghost flex-1 py-3 rounded-xl text-sm gap-1.5 flex items-center justify-center">
+                    <Home size={14} />
+                    {lang === 'th' ? 'Lobby' : 'Lobby'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Desktop sidebar chat ── */}
       {chatOpen && (

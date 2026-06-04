@@ -92,6 +92,44 @@ const initTables = async () => {
     )
   `);
 
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS Tournaments (
+      id           VARCHAR(36) PRIMARY KEY,
+      name         VARCHAR(100) NOT NULL,
+      game_type_id VARCHAR(36) NOT NULL,
+      status       VARCHAR(20)  DEFAULT 'waiting',
+      max_players  INTEGER      DEFAULT 16,
+      created_by   VARCHAR(36)  NOT NULL,
+      created_at   TIMESTAMP    DEFAULT NOW(),
+      started_at   TIMESTAMP,
+      ended_at     TIMESTAMP
+    )
+  `);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS TournamentPlayers (
+      tournament_id VARCHAR(36) NOT NULL,
+      user_id       VARCHAR(36) NOT NULL,
+      joined_at     TIMESTAMP   DEFAULT NOW(),
+      PRIMARY KEY (tournament_id, user_id)
+    )
+  `);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS TournamentMatches (
+      id            VARCHAR(36) PRIMARY KEY,
+      tournament_id VARCHAR(36) NOT NULL,
+      room_id       VARCHAR(50) NOT NULL,
+      player1_id    VARCHAR(36) NOT NULL,
+      player2_id    VARCHAR(36) NOT NULL,
+      winner_id     VARCHAR(36),
+      status        VARCHAR(20)  DEFAULT 'playing',
+      round         INTEGER      DEFAULT 1,
+      created_at    TIMESTAMP    DEFAULT NOW(),
+      ended_at      TIMESTAMP
+    )
+  `);
+
   if (noId.length) console.log(`[DB] Generated player_id for ${noId.length} existing user(s)`);
   console.log('Tables initialized (PostgreSQL)');
 };

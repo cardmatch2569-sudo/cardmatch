@@ -16,6 +16,7 @@ const authRoutes              = require('./routes/auth');
 const userRoutes              = require('./routes/users');
 const gameRoutes              = require('./routes/games');
 const adminRoutes             = require('./routes/admin');
+const tournamentRoutes        = require('./routes/tournament');
 const { setupSocketHandlers } = require('./socket/handlers');
 
 const isAllowedOrigin = (origin) => {
@@ -126,6 +127,7 @@ app.use('/api/auth',  authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tournament', tournamentRoutes);
 
 setupSocketHandlers(io);
 

@@ -30,8 +30,9 @@ export default function Navbar() {
   const close = () => setMobileOpen(false);
 
   const navLinks = [
-    { href: '/lobby', label: t.lobby,                       icon: <Swords size={15} />,   always: true },
-    { href: '/setup', label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, always: true },
+    { href: '/lobby',      label: t.lobby,                            icon: <Swords size={15} />,  always: true },
+    { href: '/tournament', label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament', icon: <span className="text-sm">🏆</span>, always: true },
+    { href: '/setup',      label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, always: true },
     ...(isAdminMode ? [{ href: '/admin', label: t.admin, icon: <Shield size={15} />, admin: true }] : []),
   ];
 

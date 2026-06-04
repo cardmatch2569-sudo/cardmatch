@@ -3,29 +3,35 @@ const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
 const Room = require('../models/Room');
 const GameType = require('../models/GameType');
+const { getPool } = require('../config/db');
 
-// In-memory state
-const onlineUsers = new Map();       // userId → { socketId, username, avatar }
+// ── In-memory state ────────────────────────────────────────────────
+const onlineUsers = new Map();       // userId → { socketId, username, avatar, isAdmin }
 const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, username }]
-const activeRooms = new Map();       // roomId → { players: [userId] }
+const activeRooms = new Map();       // roomId → { players: [userId], isTournament?: boolean }
 const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
 
-// Basic content filter — blocks clearly illegal/harmful content
+// Tournament in-memory state
+const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, maxPlayers, createdBy, players: Set<userId> }
+const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map<userId,'win'|'lose'>, phase, timer }
+const adminWatching  = new Map();    // roomId → { adminUserId, adminSocketId }
+
+// Basic content filter
 const BLOCKED_PATTERNS = [
-  /เบอร์โทร|line\s*id|โทร\s*หา|ติดต่อ\s*ได้ที่/i,  // contact solicitation
-  /ยาเสพติด|ยาบ้า|กัญชา|heroin|cocaine/i,            // drugs
-  /ลามก|โป๊|porn|xxx|sex\s*for/i,                      // pornography
-  /พนัน|บาคาร่า|casino|gambling/i,                    // gambling
+  /เบอร์โทร|line\s*id|โทร\s*หา|ติดต่อ\s*ได้ที่/i,
+  /ยาเสพติด|ยาบ้า|กัญชา|heroin|cocaine/i,
+  /ลามก|โป๊|porn|xxx|sex\s*for/i,
+  /พนัน|บาคาร่า|casino|gambling/i,
 ];
 const isBlocked = (text) => BLOCKED_PATTERNS.some(p => p.test(text));
-let currentAnnouncement = null;      // { text, author, timestamp } | null
+let currentAnnouncement = null;
 
-// Rate limit state — userId → last event timestamp (ms)
+// Rate limit state
 const rateLimits = {
-  publicMsg:  new Map(), // 1 msg / 1.5s
-  queueJoin:  new Map(), // 1 join / 3s
-  roomMsg:    new Map(), // 1 msg / 0.8s
+  publicMsg:  new Map(),
+  queueJoin:  new Map(),
+  roomMsg:    new Map(),
 };
 const rateOk = (map, userId, minMs) => {
   const now = Date.now();
@@ -34,12 +40,68 @@ const rateOk = (map, userId, minMs) => {
   return true;
 };
 
-const MAX_CONCURRENT_USERS = 1000; // Railway Hobby plan: 8GB RAM, 8 vCPU
+const MAX_CONCURRENT_USERS = 1000;
+
+// ── Tournament helpers ─────────────────────────────────────────────
+
+const getTournamentPublic = (t) => ({
+  id: t.id,
+  name: t.name,
+  gameTypeId: t.gameTypeId,
+  status: t.status,
+  maxPlayers: t.maxPlayers,
+  playerCount: t.players.size,
+});
+
+const notifyAdmins = (io, type, data) => {
+  for (const [, info] of onlineUsers) {
+    if (info.isAdmin) {
+      io.to(info.socketId).emit('admin_match_alert', { type, ...data });
+    }
+  }
+};
+
+const finalizeMatch = async (io, roomId, match, winnerId, method) => {
+  clearTimeout(match.timer);
+  match.phase = 'done';
+  match.winnerId = winnerId;
+  const loserId = match.players.find(p => p !== winnerId);
+  if (!loserId) return;
+
+  io.to(roomId).emit('match_result_final', { winnerId, loserId, method });
+
+  try {
+    const pool = getPool();
+    await pool.query(
+      "UPDATE TournamentMatches SET winner_id=$1, status='done', ended_at=NOW() WHERE id=$2",
+      [winnerId, match.matchId]
+    );
+    await pool.query('UPDATE Users SET wins=wins+1, total_games=total_games+1 WHERE id=$1', [winnerId]);
+    await pool.query('UPDATE Users SET losses=losses+1, total_games=total_games+1 WHERE id=$1', [loserId]);
+  } catch (e) { console.error('[finalizeMatch]', e.message); }
+};
+
+const handleMatchTimeout = (io, roomId) => {
+  const match = tourneyMatches.get(roomId);
+  if (!match || match.phase !== 'result_reporting') return;
+
+  if (match.results.size === 0) {
+    match.phase = 'admin_decision';
+    io.to(roomId).emit('match_needs_admin', { reason: 'timeout_no_response' });
+    notifyAdmins(io, 'timeout', {
+      roomId, matchId: match.matchId, tournamentId: match.tournamentId, players: match.players,
+    });
+  } else {
+    const [[declarerId, result]] = [...match.results.entries()];
+    const winnerId = result === 'win' ? declarerId : match.players.find(p => p !== declarerId);
+    finalizeMatch(io, roomId, match, winnerId, 'timeout_one_sided');
+  }
+};
+
+// ── Main Socket Setup ──────────────────────────────────────────────
 
 const setupSocketHandlers = (io) => {
-  // Authenticate socket on connection
   io.use(async (socket, next) => {
-    // Reject if server is at capacity
     if (onlineUsers.size >= MAX_CONCURRENT_USERS) {
       return next(new Error('SERVER_FULL'));
     }
@@ -56,81 +118,58 @@ const setupSocketHandlers = (io) => {
   });
 
   io.on('connection', (socket) => {
-    const user = socket.user;
+    const user   = socket.user;
     const userId = user._id;
 
-    onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar });
+    onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar, isAdmin: !!user.isAdmin });
     io.emit('online_count', { count: onlineUsers.size });
     console.log(`[+] ${user.username} (${socket.id})`);
 
-    // Send recent public chat history to newly connected user
     socket.emit('public_chat_history', publicChatBuffer);
-    // Send current announcement if one is active
     if (currentAnnouncement) socket.emit('announcement', currentAnnouncement);
 
-    // Fix: On reconnect, update socketId in any active queue entry
-    // (socketId changes on reconnect; old entry would cause match_found to be lost)
-    let wasInQueue = false;
-    matchQueues.forEach((queue, gameTypeId) => {
+    // Send open tournaments to newly connected user
+    const openTournaments = [...tournaments.values()]
+      .filter(t => t.status !== 'ended')
+      .map(getTournamentPublic);
+    if (openTournaments.length) socket.emit('tournament_list', openTournaments);
+
+    // Queue reconnect fix
+    matchQueues.forEach((queue) => {
       const entry = queue.find(p => p.userId === userId);
       if (entry && entry.socketId !== socket.id) {
-        console.log(`[QUEUE] Updated socketId for ${user.username}: ${entry.socketId} → ${socket.id}`);
         entry.socketId = socket.id;
-        wasInQueue = true;
+        console.log(`[QUEUE] Updated socketId for ${user.username}`);
       }
     });
-    if (wasInQueue) {
-      console.log(`[QUEUE] ${user.username} re-joined queue after reconnect`);
-    }
 
     // ── MATCHMAKING ────────────────────────────────────────────────
     socket.on('join_queue', async ({ gameTypeId }) => {
       if (!rateOk(rateLimits.queueJoin, userId, 3000)) return;
       console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
-      console.log(`[QUEUE] Current queues:`, JSON.stringify(Object.fromEntries(
-        [...matchQueues.entries()].map(([k, v]) => [k, v.map(p => p.username)])
-      )));
-      console.log(`[QUEUE] Online users: ${[...onlineUsers.values()].map(u => u.username).join(', ')}`);
 
-      if (!gameTypeId) {
-        console.log(`[QUEUE] ❌ REJECTED: no gameTypeId`);
-        return;
-      }
-
+      if (!gameTypeId) return;
       const queue = matchQueues.get(gameTypeId) || [];
-      const alreadyIn = queue.find((p) => p.userId === userId);
-      if (alreadyIn) {
-        console.log(`[QUEUE] ⚠️ ${user.username} already in queue`);
-        return;
-      }
-      const alreadyInRoom = [...activeRooms.values()].some(r => r.players.includes(userId));
-      if (alreadyInRoom) {
-        console.log(`[QUEUE] ⚠️ ${user.username} already in active room`);
-        return;
-      }
+      if (queue.find((p) => p.userId === userId)) return;
+      if ([...activeRooms.values()].some(r => r.players.includes(userId))) return;
 
       const waiting = queue.find((p) => p.userId !== userId);
       if (waiting) {
         console.log(`[QUEUE] ✅ MATCH! ${user.username} <-> ${waiting.username}`);
         matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== waiting.userId));
 
-        const roomId = uuidv4();
+        const roomId   = uuidv4();
         const gameType = await GameType.findById(gameTypeId);
         const gameInfo = { _id: gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
 
         try { await Room.create({ roomId, gameTypeId, players: [waiting.userId, userId] }); }
-        catch (e) {
-          console.error('[Room.create] matchmaking failed:', e.message);
-          socket.emit('error', { message: 'Failed to create room, please try again' });
-          return;
-        }
+        catch (e) { socket.emit('error', { message: 'Failed to create room' }); return; }
         activeRooms.set(roomId, { players: [waiting.userId, userId] });
 
         const opponentInfo = onlineUsers.get(waiting.userId) || {};
-        io.to(waiting.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: userId, username: user.username, avatar: user.avatar } });
-        socket.emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: waiting.userId, username: waiting.username, avatar: opponentInfo.avatar } });
+        io.to(waiting.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: userId,         username: user.username,     avatar: user.avatar          } });
+        socket.emit(             'match_found', { roomId, gameType: gameInfo, opponent: { _id: waiting.userId, username: waiting.username, avatar: opponentInfo.avatar } });
       } else {
-        console.log(`[QUEUE] 📋 ${user.username} added to queue (waiting for opponent)`);
         queue.push({ userId, socketId: socket.id, username: user.username });
         matchQueues.set(gameTypeId, queue);
         socket.emit('queue_joined', { gameTypeId, position: queue.length });
@@ -149,7 +188,7 @@ const setupSocketHandlers = (io) => {
       };
       publicChatBuffer.push(msg);
       if (publicChatBuffer.length > 50) publicChatBuffer.shift();
-      io.emit('public_message', msg); // broadcast to all connected users
+      io.emit('public_message', msg);
     });
 
     socket.on('leave_queue', () => {
@@ -160,16 +199,13 @@ const setupSocketHandlers = (io) => {
     });
 
     // ── DIRECT CHALLENGE ──────────────────────────────────────────
-    // Challenge by Player ID (e.g. "A3B7C2")
     socket.on('challenge_by_player_id', async ({ playerId, gameTypeId }) => {
       if (!playerId || !gameTypeId) return;
-      // Block if in active room
       if ([...activeRooms.values()].some(r => r.players.includes(userId)))
         return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าได้ขณะอยู่ในห้องแข่ง' });
-      // Block if in matchmaking queue
-      const inQueue = [...matchQueues.values()].some(q => q.some(p => p.userId === userId));
-      if (inQueue)
+      if ([...matchQueues.values()].some(q => q.some(p => p.userId === userId)))
         return socket.emit('challenge_id_error', { message: 'กรุณาออกจากคิวก่อนท้าด้วย Player ID' });
+
       const targetUser = await User.findByPlayerId(playerId);
       if (!targetUser) return socket.emit('challenge_id_error', { message: 'ไม่พบผู้เล่น ID นี้' });
       if (targetUser._id === userId) return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าตัวเองได้' });
@@ -177,7 +213,7 @@ const setupSocketHandlers = (io) => {
       if (!target) return socket.emit('challenge_id_error', { message: `${targetUser.username} ออฟไลน์อยู่` });
 
       const challengeId = uuidv4();
-      const gameType = await GameType.findById(gameTypeId);
+      const gameType    = await GameType.findById(gameTypeId);
       pendingChallenges.set(challengeId, { from: userId, to: targetUser._id, gameTypeId });
       setTimeout(() => pendingChallenges.delete(challengeId), 30000);
       io.to(target.socketId).emit('challenge_received', {
@@ -194,7 +230,7 @@ const setupSocketHandlers = (io) => {
       if (!target) return socket.emit('error', { message: 'Player is offline' });
 
       const challengeId = uuidv4();
-      const gameType = await GameType.findById(gameTypeId);
+      const gameType    = await GameType.findById(gameTypeId);
       pendingChallenges.set(challengeId, { from: userId, to: targetUserId, gameTypeId });
       setTimeout(() => pendingChallenges.delete(challengeId), 30000);
 
@@ -218,38 +254,32 @@ const setupSocketHandlers = (io) => {
         return;
       }
 
-      const roomId = uuidv4();
+      const roomId   = uuidv4();
       const gameType = await GameType.findById(challenge.gameTypeId);
       const gameInfo = { _id: challenge.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
 
       try { await Room.create({ roomId, gameTypeId: challenge.gameTypeId, players: [challenge.from, userId] }); }
-      catch (e) {
-        console.error('[Room.create] challenge failed:', e.message);
-        socket.emit('error', { message: 'Failed to create room, please try again' });
-        return;
-      }
+      catch (e) { socket.emit('error', { message: 'Failed to create room' }); return; }
       activeRooms.set(roomId, { players: [challenge.from, userId] });
 
-      io.to(fromInfo.socketId).emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: userId, username: user.username, avatar: user.avatar } });
-      socket.emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: challenge.from, username: fromInfo.username, avatar: fromInfo.avatar } });
+      io.to(fromInfo.socketId).emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: userId,         username: user.username,     avatar: user.avatar          } });
+      socket.emit(             'challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: challenge.from, username: fromInfo.username, avatar: fromInfo.avatar } });
     });
 
     // ── WEBRTC SIGNALING ──────────────────────────────────────────
     const inRoom = (roomId) => activeRooms.get(roomId)?.players.includes(userId);
-    socket.on('join_room',      ({ roomId }) => { socket.join(roomId); socket.to(roomId).emit('peer_joined', { userId }); });
-    socket.on('offer',          ({ roomId, offer })     => { if (!inRoom(roomId)) return; socket.to(roomId).emit('offer',         { offer, from: userId }); });
-    socket.on('answer',         ({ roomId, answer })    => { if (!inRoom(roomId)) return; socket.to(roomId).emit('answer',        { answer, from: userId }); });
-    socket.on('ice_candidate',  ({ roomId, candidate }) => { if (!inRoom(roomId)) return; socket.to(roomId).emit('ice_candidate', { candidate, from: userId }); });
+    socket.on('join_room',     ({ roomId }) => { socket.join(roomId); socket.to(roomId).emit('peer_joined',    { userId }); });
+    socket.on('offer',         ({ roomId, offer })     => { if (!inRoom(roomId)) return; socket.to(roomId).emit('offer',        { offer,     from: userId }); });
+    socket.on('answer',        ({ roomId, answer })    => { if (!inRoom(roomId)) return; socket.to(roomId).emit('answer',       { answer,    from: userId }); });
+    socket.on('ice_candidate', ({ roomId, candidate }) => { if (!inRoom(roomId)) return; socket.to(roomId).emit('ice_candidate',{ candidate, from: userId }); });
 
     // ── CHAT ──────────────────────────────────────────────────────
     socket.on('send_message', ({ roomId, message }) => {
       if (!message?.trim()) return;
       if (!rateOk(rateLimits.roomMsg, userId, 800)) return;
-      // Bug fix: cap message length to prevent DoS / memory issues
-      const trimmed = message.trim().slice(0, 500);
       io.to(roomId).emit('message_received', {
         from: { _id: userId, username: user.username, avatar: user.avatar },
-        message: trimmed,
+        message: message.trim().slice(0, 500),
         timestamp: new Date().toISOString(),
       });
     });
@@ -260,6 +290,264 @@ const setupSocketHandlers = (io) => {
       socket.to(roomId).emit('partner_disconnected');
       try { await Room.updateStatus(roomId, 'ended'); } catch {}
       activeRooms.delete(roomId);
+      const tm = tourneyMatches.get(roomId);
+      if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
+      const aw = adminWatching.get(roomId);
+      if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
+    });
+
+    // ── TOURNAMENT MANAGEMENT (Admin) ─────────────────────────────
+    socket.on('create_tournament', async ({ name, gameTypeId, maxPlayers }) => {
+      if (!user.isAdmin) return;
+      if (!name?.trim() || !gameTypeId) return socket.emit('tournament_error', { message: 'กรุณากรอกข้อมูลให้ครบ' });
+      const id = uuidv4();
+      const tournament = {
+        id,
+        name: name.trim().slice(0, 100),
+        gameTypeId,
+        status: 'waiting',
+        maxPlayers: Math.min(Math.max(parseInt(maxPlayers) || 16, 2), 64),
+        createdBy: userId,
+        players: new Set(),
+      };
+      tournaments.set(id, tournament);
+      try {
+        await getPool().query(
+          `INSERT INTO Tournaments (id, name, game_type_id, status, max_players, created_by) VALUES ($1,$2,$3,'waiting',$4,$5)`,
+          [id, tournament.name, gameTypeId, tournament.maxPlayers, userId]
+        );
+      } catch (e) { console.error('[create_tournament]', e.message); }
+      io.emit('tournament_created', getTournamentPublic(tournament));
+      socket.emit('tournament_created_ok', { id });
+    });
+
+    socket.on('start_tournament', async ({ tournamentId }) => {
+      if (!user.isAdmin) return;
+      const t = tournaments.get(tournamentId);
+      if (!t || t.status !== 'waiting') return socket.emit('tournament_error', { message: 'ไม่พบหรือเริ่มไปแล้ว' });
+      if (t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
+
+      t.status = 'active';
+      const players = [...t.players];
+      for (let i = players.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [players[i], players[j]] = [players[j], players[i]];
+      }
+
+      const gameType      = await GameType.findById(t.gameTypeId);
+      const gameInfo      = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+      const createdMatches = [];
+
+      for (let i = 0; i < players.length - 1; i += 2) {
+        const p1Id = players[i], p2Id = players[i + 1];
+        const roomId  = uuidv4();
+        const matchId = uuidv4();
+        const p1Info  = onlineUsers.get(p1Id);
+        const p2Info  = onlineUsers.get(p2Id);
+
+        try { await Room.create({ roomId, gameTypeId: t.gameTypeId, players: [p1Id, p2Id] }); }
+        catch (e) { console.error('[start_tournament] Room.create:', e.message); continue; }
+
+        activeRooms.set(roomId, { players: [p1Id, p2Id], isTournament: true });
+        tourneyMatches.set(roomId, {
+          matchId, tournamentId, players: [p1Id, p2Id],
+          results: new Map(), phase: 'playing', timer: null,
+        });
+
+        try {
+          await getPool().query(
+            `INSERT INTO TournamentMatches (id, tournament_id, room_id, player1_id, player2_id, status) VALUES ($1,$2,$3,$4,$5,'playing')`,
+            [matchId, tournamentId, roomId, p1Id, p2Id]
+          );
+        } catch (e) { console.error('[start_tournament] TM insert:', e.message); }
+
+        if (p1Info) io.to(p1Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p2Id, username: p2Info?.username || '?', avatar: p2Info?.avatar || '' }, isTournament: true, tournamentId, matchId });
+        if (p2Info) io.to(p2Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p1Id, username: p1Info?.username || '?', avatar: p1Info?.avatar || '' }, isTournament: true, tournamentId, matchId });
+
+        createdMatches.push({ matchId, roomId, player1Id: p1Id, player2Id: p2Id });
+      }
+
+      if (players.length % 2 === 1) {
+        const byeId   = players[players.length - 1];
+        const byeInfo = onlineUsers.get(byeId);
+        if (byeInfo) io.to(byeInfo.socketId).emit('tournament_bye', { message: 'คุณได้รับ BYE รอบนี้' });
+      }
+
+      try { await getPool().query("UPDATE Tournaments SET status='active', started_at=NOW() WHERE id=$1", [tournamentId]); } catch {}
+
+      io.to(`tournament:${tournamentId}`).emit('tournament_started', { tournamentId, matches: createdMatches });
+      io.emit('tournament_updated', getTournamentPublic(t));
+    });
+
+    socket.on('close_tournament', async ({ tournamentId }) => {
+      if (!user.isAdmin) return;
+      const t = tournaments.get(tournamentId);
+      if (!t) return;
+      t.status = 'ended';
+      try { await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW() WHERE id=$1", [tournamentId]); } catch {}
+      io.to(`tournament:${tournamentId}`).emit('tournament_closed', { tournamentId });
+      io.emit('tournament_closed', { tournamentId });
+      tournaments.delete(tournamentId);
+    });
+
+    // ── TOURNAMENT LOBBY (Players) ────────────────────────────────
+    socket.on('join_tournament', async ({ tournamentId }) => {
+      const t = tournaments.get(tournamentId);
+      if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament นี้' });
+      if (t.status !== 'waiting') return socket.emit('tournament_error', { message: 'Tournament นี้เริ่มไปแล้ว' });
+      if (t.players.size >= t.maxPlayers) return socket.emit('tournament_error', { message: 'ห้องเต็มแล้ว' });
+
+      t.players.add(userId);
+      socket.join(`tournament:${tournamentId}`);
+
+      try {
+        await getPool().query(
+          `INSERT INTO TournamentPlayers (tournament_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+          [tournamentId, userId]
+        );
+      } catch {}
+
+      const playersInfo = [...t.players].map(id => {
+        const info = onlineUsers.get(id);
+        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
+      });
+
+      io.to(`tournament:${tournamentId}`).emit('tournament_player_update', { tournamentId, playersInfo, playerCount: t.players.size });
+      io.emit('tournament_player_count', { tournamentId, playerCount: t.players.size });
+      socket.emit('tournament_joined_ok', { tournamentId, playersInfo, tournament: getTournamentPublic(t) });
+    });
+
+    socket.on('leave_tournament', async ({ tournamentId }) => {
+      const t = tournaments.get(tournamentId);
+      if (!t) return;
+      t.players.delete(userId);
+      socket.leave(`tournament:${tournamentId}`);
+
+      try {
+        await getPool().query(
+          `DELETE FROM TournamentPlayers WHERE tournament_id=$1 AND user_id=$2`,
+          [tournamentId, userId]
+        );
+      } catch {}
+
+      const playersInfo = [...t.players].map(id => {
+        const info = onlineUsers.get(id);
+        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
+      });
+
+      io.to(`tournament:${tournamentId}`).emit('tournament_player_update', { tournamentId, playersInfo, playerCount: t.players.size });
+      io.emit('tournament_player_count', { tournamentId, playerCount: t.players.size });
+      socket.emit('tournament_left_ok', { tournamentId });
+    });
+
+    // ── TOURNAMENT MATCH RESULT ───────────────────────────────────
+    socket.on('end_game', ({ roomId }) => {
+      const tm = tourneyMatches.get(roomId);
+      if (!tm || tm.phase !== 'playing') return;
+      if (!tm.players.includes(userId)) return;
+
+      tm.phase = 'result_reporting';
+      const timeoutAt = Date.now() + 60000;
+      tm.timer = setTimeout(() => handleMatchTimeout(io, roomId), 60000);
+
+      io.to(roomId).emit('result_phase_started', { endedBy: userId, timeoutAt });
+    });
+
+    socket.on('declare_result', ({ roomId, result }) => {
+      const tm = tourneyMatches.get(roomId);
+      if (!tm || tm.phase !== 'result_reporting') return;
+      if (!tm.players.includes(userId)) return;
+      if (!['win', 'lose'].includes(result)) return;
+
+      tm.results.set(userId, result);
+      socket.to(roomId).emit('opponent_declared', { userId, result });
+
+      if (tm.results.size === 2) {
+        clearTimeout(tm.timer);
+        const [p1, p2] = tm.players;
+        const r1 = tm.results.get(p1), r2 = tm.results.get(p2);
+
+        if ((r1 === 'win' && r2 === 'lose') || (r1 === 'lose' && r2 === 'win')) {
+          const winnerId = r1 === 'win' ? p1 : p2;
+          finalizeMatch(io, roomId, tm, winnerId, 'consensus');
+        } else {
+          tm.phase = 'admin_decision';
+          io.to(roomId).emit('match_conflict', {});
+          notifyAdmins(io, 'conflict', {
+            roomId, matchId: tm.matchId, tournamentId: tm.tournamentId,
+            players: tm.players,
+          });
+        }
+      }
+    });
+
+    socket.on('call_admin', ({ roomId }) => {
+      const tm = tourneyMatches.get(roomId);
+      if (!tm || !tm.players.includes(userId)) return;
+      notifyAdmins(io, 'call', {
+        roomId, matchId: tm.matchId, tournamentId: tm.tournamentId,
+        players: tm.players, calledBy: userId,
+      });
+      socket.emit('admin_called', { message: 'ส่งสัญญาณเรียก Admin แล้ว กรุณารอสักครู่' });
+    });
+
+    socket.on('admin_decide_match', ({ roomId, winnerId }) => {
+      if (!user.isAdmin) return;
+      const tm = tourneyMatches.get(roomId);
+      if (!tm || !tm.players.includes(winnerId)) return;
+      finalizeMatch(io, roomId, tm, winnerId, 'admin_decision');
+    });
+
+    // ── ADMIN SPECTATE ────────────────────────────────────────────
+    socket.on('admin_watch_room', ({ roomId }) => {
+      if (!user.isAdmin) return;
+      const room = activeRooms.get(roomId);
+      if (!room) return socket.emit('error', { message: 'ห้องนี้ไม่พบ' });
+
+      adminWatching.set(roomId, { adminUserId: userId, adminSocketId: socket.id });
+      socket.join(roomId);
+      io.to(roomId).emit('admin_watching', { adminUsername: user.username });
+    });
+
+    socket.on('admin_stop_watching', ({ roomId }) => {
+      if (!user.isAdmin) return;
+      const aw = adminWatching.get(roomId);
+      if (aw && aw.adminUserId === userId) {
+        socket.leave(roomId);
+        adminWatching.delete(roomId);
+        io.to(roomId).emit('admin_left', {});
+      }
+    });
+
+    // Admin spectate WebRTC — player sends offer to admin
+    socket.on('admin_peer_offer', ({ roomId, offer }) => {
+      const aw = adminWatching.get(roomId);
+      if (!aw) return;
+      if (!activeRooms.get(roomId)?.players.includes(userId)) return;
+      io.to(aw.adminSocketId).emit('admin_peer_offer', { from: userId, fromUsername: user.username, offer, roomId });
+    });
+
+    // Admin sends answer to a specific player
+    socket.on('admin_peer_answer', ({ roomId, targetUserId, answer }) => {
+      if (!user.isAdmin) return;
+      const playerInfo = onlineUsers.get(targetUserId);
+      if (playerInfo) io.to(playerInfo.socketId).emit('admin_peer_answer', { answer, roomId });
+    });
+
+    // ICE candidates — either direction
+    socket.on('admin_peer_ice', ({ roomId, targetUserId, candidate }) => {
+      if (targetUserId) {
+        // Admin → Player
+        if (!user.isAdmin) return;
+        const playerInfo = onlineUsers.get(targetUserId);
+        if (playerInfo) io.to(playerInfo.socketId).emit('admin_peer_ice', { candidate, from: 'admin', roomId });
+      } else {
+        // Player → Admin
+        const aw = adminWatching.get(roomId);
+        if (!aw) return;
+        if (!activeRooms.get(roomId)?.players.includes(userId)) return;
+        io.to(aw.adminSocketId).emit('admin_peer_ice', { candidate, from: userId, roomId });
+      }
     });
 
     // ── DISCONNECT ────────────────────────────────────────────────
@@ -273,6 +561,23 @@ const setupSocketHandlers = (io) => {
           socket.to(roomId).emit('partner_disconnected');
           try { await Room.updateStatus(roomId, 'ended'); } catch {}
           activeRooms.delete(roomId);
+          const tm = tourneyMatches.get(roomId);
+          if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
+          const aw = adminWatching.get(roomId);
+          if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
+        }
+      }
+      // Remove from waiting tournaments on disconnect
+      for (const t of tournaments.values()) {
+        if (t.players.has(userId) && t.status === 'waiting') {
+          t.players.delete(userId);
+          try { await getPool().query('DELETE FROM TournamentPlayers WHERE tournament_id=$1 AND user_id=$2', [t.id, userId]); } catch {}
+          const playersInfo = [...t.players].map(id => {
+            const info = onlineUsers.get(id);
+            return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
+          });
+          io.to(`tournament:${t.id}`).emit('tournament_player_update', { tournamentId: t.id, playersInfo, playerCount: t.players.size });
+          io.emit('tournament_player_count', { tournamentId: t.id, playerCount: t.players.size });
         }
       }
       io.emit('online_count', { count: onlineUsers.size });
@@ -281,8 +586,9 @@ const setupSocketHandlers = (io) => {
   });
 };
 
-const getOnlineUsers = () => onlineUsers;
-
+const getOnlineUsers  = () => onlineUsers;
+const getTournaments  = () => tournaments;
+const getTourneyMatchesMap = () => tourneyMatches;
 
 const setAnnouncement = (io, text, author) => {
   if (!text) {
@@ -294,4 +600,4 @@ const setAnnouncement = (io, text, author) => {
 };
 const getAnnouncement = () => currentAnnouncement;
 
-module.exports = { setupSocketHandlers, getOnlineUsers, setAnnouncement, getAnnouncement };
+module.exports = { setupSocketHandlers, getOnlineUsers, getTournaments, getTourneyMatchesMap, setAnnouncement, getAnnouncement };
