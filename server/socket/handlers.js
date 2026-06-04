@@ -10,7 +10,6 @@ const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, user
 const activeRooms = new Map();       // roomId → { players: [userId] }
 const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
-const watchTokens = new Map();       // token → { roomId, ownerUserId, expiresAt }
 
 // Basic content filter — blocks clearly illegal/harmful content
 const BLOCKED_PATTERNS = [
@@ -40,17 +39,6 @@ const MAX_CONCURRENT_USERS = 1000; // Railway Hobby plan: 8GB RAM, 8 vCPU
 const setupSocketHandlers = (io) => {
   // Authenticate socket on connection
   io.use(async (socket, next) => {
-    // Watch viewer — bypass normal auth, validate watch token instead
-    const wt = socket.handshake.auth?.watchToken;
-    if (wt) {
-      const td = watchTokens.get(wt);
-      if (!td || Date.now() > td.expiresAt) return next(new Error('WATCH_TOKEN_INVALID'));
-      socket.isWatcher = true;
-      socket.watchToken = wt;
-      socket.watchRoomId = td.roomId;
-      socket.watchOwnerUserId = td.ownerUserId;
-      return next();
-    }
     // Reject if server is at capacity
     if (onlineUsers.size >= MAX_CONCURRENT_USERS) {
       return next(new Error('SERVER_FULL'));
@@ -68,20 +56,12 @@ const setupSocketHandlers = (io) => {
   });
 
   io.on('connection', (socket) => {
-    // Watch viewer — separate handling, not a full player
-    if (socket.isWatcher) {
-      setupWatchHandlers(io, socket);
-      return;
-    }
-
     const user = socket.user;
     const userId = user._id;
 
     onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar });
     io.emit('online_count', { count: onlineUsers.size });
     console.log(`[+] ${user.username} (${socket.id})`);
-    // Register watch handlers for room owner too
-    setupWatchHandlers(io, socket);
 
     // Send recent public chat history to newly connected user
     socket.emit('public_chat_history', publicChatBuffer);
@@ -303,37 +283,6 @@ const setupSocketHandlers = (io) => {
 
 const getOnlineUsers = () => onlineUsers;
 
-// ── WATCH (Second Screen) handlers ──────────────────────────────
-const setupWatchHandlers = (io, socket) => {
-  if (socket.isWatcher) {
-    // Watcher: notify the OPPONENT to send their LOCAL camera directly to Device 2
-    // This avoids canvas/re-transmit — opponent's local stream CAN be forwarded
-    const room = activeRooms.get(socket.watchRoomId);
-    const opponentId = room?.players.find(p => p !== socket.watchOwnerUserId);
-    const targetInfo = opponentId ? onlineUsers.get(opponentId) : onlineUsers.get(socket.watchOwnerUserId);
-    if (targetInfo) {
-      io.to(targetInfo.socketId).emit('watch_viewer_joined', { viewerSocketId: socket.id });
-    }
-    // Relay signals — watcher ↔ opponent (or owner as fallback)
-    socket.on('watch_answer',    ({ answer })    => { if (targetInfo) io.to(targetInfo.socketId).emit('watch_answer', { answer, viewerSocketId: socket.id }); });
-    socket.on('watch_ice_viewer',({ candidate }) => { if (targetInfo) io.to(targetInfo.socketId).emit('watch_ice_viewer', { candidate }); });
-    socket.on('disconnect', () => { if (targetInfo) io.to(targetInfo.socketId).emit('watch_viewer_left'); });
-    return;
-  }
-  // Room owner: generate watch token + relay signals
-  socket.on('request_watch_token', ({ roomId }) => {
-    const userId = socket.user._id;
-    if (!activeRooms.get(roomId)?.players.includes(userId)) return;
-    // Invalidate any old token for this room+user
-    watchTokens.forEach((v, k) => { if (v.roomId === roomId && v.ownerUserId === userId) watchTokens.delete(k); });
-    const token = require('crypto').randomBytes(4).toString('hex').toUpperCase(); // 8-char token
-    watchTokens.set(token, { roomId, ownerUserId: userId, expiresAt: Date.now() + 3_600_000 });
-    setTimeout(() => watchTokens.delete(token), 3_600_000);
-    socket.emit('watch_token_ready', { token, roomId });
-  });
-  socket.on('watch_offer',    ({ viewerSocketId, offer })    => io.to(viewerSocketId).emit('watch_offer',     { offer }));
-  socket.on('watch_ice_owner',({ viewerSocketId, candidate }) => io.to(viewerSocketId).emit('watch_ice_owner', { candidate }));
-};
 
 const setAnnouncement = (io, text, author) => {
   if (!text) {
