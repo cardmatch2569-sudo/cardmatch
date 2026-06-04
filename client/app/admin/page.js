@@ -46,6 +46,7 @@ export default function AdminPage() {
   const [tournaments,     setTournaments]     = useState([]);
   const [tourneyForm,     setTourneyForm]     = useState(EMPTY_TOURNEY);
   const [tourneyCreating, setTourneyCreating] = useState(false);
+  const [tourneyError,    setTourneyError]    = useState('');
   const [alerts,          setAlerts]          = useState([]); // { id, type, roomId, matchId, players }
   // Spectate state
   const [spectateRoomId,  setSpectateRoomId]  = useState(null);
@@ -86,11 +87,11 @@ export default function AdminPage() {
     try { const { tournaments: list } = await api.get('/api/tournament'); setTournaments(list || []); } catch {}
   }, []);
 
-  useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); loadAnnouncement(); loadTournaments(); } }, [user, loadStats, loadOnline, loadAnnouncement, loadTournaments]);
+  useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); loadAnnouncement(); loadTournaments(); loadGames(); } }, [user, loadStats, loadOnline, loadAnnouncement, loadTournaments, loadGames]);
   useEffect(() => { if (tab === 'users')      loadUsers(1, ''); },    [tab, loadUsers]);
   useEffect(() => { if (tab === 'games')      loadGames(); },          [tab, loadGames]);
   useEffect(() => { if (tab === 'rooms')      loadRooms(); },          [tab, loadRooms]);
-  useEffect(() => { if (tab === 'tournament') { loadTournaments(); if (!games.length) loadGames(); } }, [tab, loadTournaments, loadGames, games.length]);
+  useEffect(() => { if (tab === 'tournament') loadTournaments(); }, [tab, loadTournaments]);
   useEffect(() => { if (tab === 'overview')   { loadStats(); loadOnline(); } }, [tab, loadStats, loadOnline]);
 
   // Tournament socket: admin match alerts + real-time updates
@@ -240,13 +241,34 @@ export default function AdminPage() {
 
   // Tournament actions
   const handleCreateTourney = () => {
-    if (!tourneyForm.name.trim() || !tourneyForm.gameTypeId) return;
+    setTourneyError('');
+    if (!tourneyForm.name.trim()) {
+      setTourneyError(lang === 'th' ? 'กรุณากรอกชื่อทัวร์นาเมนต์' : 'Please enter a tournament name');
+      return;
+    }
+    if (!tourneyForm.gameTypeId) {
+      setTourneyError(lang === 'th' ? 'กรุณาเลือกเกม' : 'Please select a game');
+      return;
+    }
     setTourneyCreating(true);
     const socket = getSocket();
-    if (!socket) { setTourneyCreating(false); return; }
+    if (!socket) {
+      setTourneyError(lang === 'th' ? 'ยังไม่ได้เชื่อมต่อ Socket' : 'Not connected');
+      setTourneyCreating(false);
+      return;
+    }
     socket.emit('create_tournament', { name: tourneyForm.name.trim(), gameTypeId: tourneyForm.gameTypeId, maxPlayers: tourneyForm.maxPlayers });
-    socket.once('tournament_created_ok', () => { setTourneyForm(EMPTY_TOURNEY); setTourneyCreating(false); loadTournaments(); });
-    setTimeout(() => setTourneyCreating(false), 5000);
+    socket.once('tournament_created_ok', () => {
+      setTourneyForm(EMPTY_TOURNEY);
+      setTourneyCreating(false);
+      setTourneyError('');
+      loadTournaments();
+    });
+    socket.once('tournament_error', ({ message }) => {
+      setTourneyError(message);
+      setTourneyCreating(false);
+    });
+    setTimeout(() => setTourneyCreating(false), 8000);
   };
 
   const handleStartTourney = (tournamentId) => {
@@ -920,22 +942,38 @@ export default function AdminPage() {
               <Plus size={15} className="text-purple-400" />
               {lang === 'th' ? 'สร้างทัวร์นาเมนต์' : 'Create Tournament'}
             </h3>
+            {tourneyError && (
+              <div className="px-3 py-2 rounded-lg text-xs text-red-400 mb-1"
+                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                ⚠ {tourneyError}
+              </div>
+            )}
             <div className="space-y-3">
               <input
                 value={tourneyForm.name}
-                onChange={e => setTourneyForm(f => ({ ...f, name: e.target.value.slice(0, 100) }))}
+                onChange={e => { setTourneyForm(f => ({ ...f, name: e.target.value.slice(0, 100) })); setTourneyError(''); }}
                 placeholder={lang === 'th' ? 'ชื่อทัวร์นาเมนต์' : 'Tournament name'}
                 className="input-base text-sm"
               />
-              <select
-                value={tourneyForm.gameTypeId}
-                onChange={e => setTourneyForm(f => ({ ...f, gameTypeId: e.target.value }))}
-                className="input-base text-sm">
-                <option value="">{lang === 'th' ? 'เลือกเกม' : 'Select game'}</option>
-                {games.map(g => (
-                  <option key={g._id} value={g._id}>{g.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={tourneyForm.gameTypeId}
+                  onChange={e => { setTourneyForm(f => ({ ...f, gameTypeId: e.target.value })); setTourneyError(''); }}
+                  className="input-base text-sm w-full pr-8 appearance-none"
+                  style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}>
+                  <option value="">
+                    {games.length === 0
+                      ? (lang === 'th' ? 'กำลังโหลดเกม...' : 'Loading games...')
+                      : (lang === 'th' ? '— เลือกเกม —' : '— Select game —')}
+                  </option>
+                  {games.map(g => (
+                    <option key={g._id} value={g._id}>{g.name}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                  ▾
+                </div>
+              </div>
               <div className="flex items-center gap-3">
                 <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'ผู้เล่นสูงสุด' : 'Max players'}</label>
                 {[8, 16, 32].map(n => (
