@@ -96,8 +96,9 @@ router.delete('/users/:id', protect, adminOnly, async (req, res) => {
     const { password } = req.body;
     if (!password) return res.status(400).json({ message: 'กรุณากรอกรหัสผ่าน Admin เพื่อยืนยัน' });
 
-    // Verify Admin's own password
+    // Verify Admin's own password (Google-only admins cannot use this feature)
     const admin = await User.findById(req.user._id);
+    if (!admin.password) return res.status(400).json({ message: 'บัญชี Google Admin ไม่รองรับการลบผู้ใช้ด้วยรหัสผ่าน กรุณาใช้บัญชีที่มีรหัสผ่าน' });
     const valid = await User.comparePassword(password, admin.password);
     if (!valid) return res.status(403).json({ message: 'รหัสผ่าน Admin ไม่ถูกต้อง' });
 

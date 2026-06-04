@@ -9,12 +9,13 @@ export default function PublicChat({ lang, user, messages, onSend }) {
   const chatEndRef             = useRef(null);
   const prevLenRef             = useRef(messages.length);
 
-  // Count unread when chat is closed
+  // Count unread when chat is closed — update prevLen BEFORE checking open
   useEffect(() => {
-    if (!open && messages.length > prevLenRef.current) {
-      setUnread(p => p + (messages.length - prevLenRef.current));
-    }
+    const prev = prevLenRef.current;
     prevLenRef.current = messages.length;
+    if (!open && messages.length > prev) {
+      setUnread(p => p + (messages.length - prev));
+    }
   }, [messages.length, open]);
 
   // Auto-scroll on open or new messages

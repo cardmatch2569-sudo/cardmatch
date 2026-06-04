@@ -75,11 +75,12 @@ export default function LobbyPage() {
     if (!pendingAutoQueue || !games.length) return;
     const game = games.find(g => g._id === pendingAutoQueue);
     if (!game) return;
-    sessionStorage.removeItem('cg_auto_queue'); // consume the signal
+    sessionStorage.removeItem('cg_auto_queue');
+    sessionStorage.removeItem('cg_queue_game'); // also clear restored queue signal
     setSelectedGame(game);
     setQueueGame(game._id);
     safeEmit('join_queue', { gameTypeId: game._id });
-    inQueueRef.current = true;
+    setQueue(true); // FIX: use setQueue() to keep inQueue state + inQueueRef in sync
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games]);
 

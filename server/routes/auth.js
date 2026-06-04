@@ -108,6 +108,8 @@ const checkOtpRate = (email) => {
   if (e.count >= 5) return false;
   e.count++; otpVerifyAttempts.set(email, e); return true;
 };
+// Clean up expired OTP rate limit entries every 15 minutes
+setInterval(() => { const now = Date.now(); otpVerifyAttempts.forEach((v, k) => { if (now > v.resetAt) otpVerifyAttempts.delete(k); }); }, 15 * 60 * 1000);
 
 // ── VERIFY OTP — Step 2 ───────────────────────────────────────────
 router.post('/verify-otp', async (req, res) => {
@@ -204,7 +206,7 @@ router.post('/reset-password', async (req, res) => {
 
     const bcrypt = require('bcryptjs');
     const hashed = await bcrypt.hash(newPassword, 10);
-    await getPool().query('UPDATE Users SET password=$1, updated_at=NOW() WHERE email=$2', [hashed, email.toLowerCase().trim()]);
+    await getPool().query('UPDATE Users SET password=$1, updated_at=NOW() WHERE email=$2', [hashed, email.toLowerCase().trim()]); // normalized consistently
     await EmailVerification.markUsed(otpRow.id);
 
     res.json({ message: 'เปลี่ยนรหัสผ่านสำเร็จแล้ว กรุณาเข้าสู่ระบบด้วยรหัสใหม่' });

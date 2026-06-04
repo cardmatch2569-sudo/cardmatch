@@ -50,9 +50,12 @@ export function SocketProvider({ children }) {
       timeout:              10000,
     });
 
-    // Restore queue state after page refresh
+    // Restore queue state after page refresh (consume and clear immediately)
     const savedQueue = sessionStorage.getItem('cg_queue_game');
-    if (savedQueue && !queueRef.current) queueRef.current = savedQueue;
+    if (savedQueue && !queueRef.current) {
+      queueRef.current = savedQueue;
+      sessionStorage.removeItem('cg_queue_game'); // consumed — lobby will re-set it via setQueueGame
+    }
 
     socket.on('connect', () => {
       setConnected(true);
@@ -65,6 +68,7 @@ export function SocketProvider({ children }) {
 
     socket.on('disconnect', (reason) => {
       setConnected(false);
+      pendingEmits.current = []; // clear queued emits on disconnect to prevent duplicates
       console.log('[Socket] ❌ Disconnected:', reason);
     });
 
