@@ -20,7 +20,7 @@ const tournamentRoutes        = require('./routes/tournament');
 const { setupSocketHandlers } = require('./socket/handlers');
 
 const isAllowedOrigin = (origin) => {
-  if (!origin) return false; // Block requests with no Origin header
+  if (!origin) return true; // No Origin = non-browser (server/health-check), safe to allow
   const exact = process.env.CLIENT_URL;
   if (exact && origin === exact) return true;
   // Allow localhost/LAN in dev; block everything else in prod
@@ -51,7 +51,7 @@ const checkLoginRate = (ip) => {
 setInterval(() => { const now = Date.now(); loginAttempts.forEach((v, k) => { if (now > v.resetAt) loginAttempts.delete(k); }); }, 30 * 60 * 1000);
 
 const corsOptions = {
-  origin: (origin, cb) => isAllowedOrigin(origin) ? cb(null, true) : cb(new Error(`CORS blocked: ${origin}`)),
+  origin: (origin, cb) => isAllowedOrigin(origin) ? cb(null, true) : cb(null, false),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 };
