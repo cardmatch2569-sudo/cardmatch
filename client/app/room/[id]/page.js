@@ -784,7 +784,7 @@ export default function RoomPage() {
 
       {/* ── Admin watching indicator ── */}
       {adminWatching && (
-        <div className="absolute top-0 left-0 right-0 z-25 pointer-events-none flex justify-center"
+        <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none flex justify-center"
           style={{ paddingTop: `calc(52px + max(0px, ${safeTop}))` }}>
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px]"
             style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>

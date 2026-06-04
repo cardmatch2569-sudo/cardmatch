@@ -74,6 +74,7 @@ export default function TournamentWaitingRoom() {
 
     const onStarted = ({ tournamentId: tid }) => {
       if (!mounted || tid !== tournamentId) return;
+      leftRef.current = true; // tournament started — don't emit leave_tournament on unmount
       setStatus('started');
     };
 

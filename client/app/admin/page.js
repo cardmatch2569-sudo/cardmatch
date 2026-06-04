@@ -50,6 +50,7 @@ export default function AdminPage() {
   const [alerts,          setAlerts]          = useState([]); // { id, type, roomId, matchId, players }
   // Spectate state
   const [spectateRoomId,  setSpectateRoomId]  = useState(null);
+  const spectateRoomIdRef  = useRef(null);      // ref mirror — always current in closures
   const [spectatePlayer1, setSpectatePlayer1] = useState('');
   const [spectatePlayer2, setSpectatePlayer2] = useState('');
   const spectateVideo1Ref  = useRef(null);
@@ -102,9 +103,9 @@ export default function AdminPage() {
     if (!socket) return;
 
     const onAlert = (data) => {
-      setAlerts(p => [{ id: Date.now(), ...data }, ...p.slice(0, 9)]);
-      // Auto-dismiss after 30s
-      setTimeout(() => setAlerts(p => p.filter(a => a.id !== data.id)), 30000);
+      const alertId = Date.now() + Math.random();
+      setAlerts(p => [{ id: alertId, ...data }, ...p.slice(0, 9)]);
+      setTimeout(() => setAlerts(p => p.filter(a => a.id !== alertId)), 30000);
     };
     const onCreated = (t) => setTournaments(p => [t, ...p.filter(x => x.id !== t.id)]);
     const onClosed  = ({ tournamentId }) => setTournaments(p => p.filter(x => x.id !== tournamentId));
@@ -115,7 +116,7 @@ export default function AdminPage() {
 
     // Admin spectate WebRTC
     const onSpectateOffer = ({ from, fromUsername, offer, roomId }) => {
-      if (roomId !== spectateRoomId) return;
+      if (roomId !== spectateRoomIdRef.current) return;
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -168,7 +169,7 @@ export default function AdminPage() {
       socket.off('spectate_ended',      onSpectateEnded);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, getSocket, spectateRoomId]);
+  }, [user, getSocket]);
 
   // Bug fix: debounced user search
   const handleUserSearch = (q) => {
@@ -258,17 +259,26 @@ export default function AdminPage() {
       return;
     }
     socket.emit('create_tournament', { name: tourneyForm.name.trim(), gameTypeId: tourneyForm.gameTypeId, maxPlayers: tourneyForm.maxPlayers });
-    socket.once('tournament_created_ok', () => {
+    const onOk = () => {
+      socket.off('tournament_error', onFail);
       setTourneyForm(EMPTY_TOURNEY);
       setTourneyCreating(false);
       setTourneyError('');
       loadTournaments();
-    });
-    socket.once('tournament_error', ({ message }) => {
+    };
+    const onFail = ({ message }) => {
+      socket.off('tournament_created_ok', onOk);
       setTourneyError(message);
       setTourneyCreating(false);
-    });
-    setTimeout(() => setTourneyCreating(false), 8000);
+    };
+    socket.once('tournament_created_ok', onOk);
+    socket.once('tournament_error', onFail);
+    // Timeout fallback — clean up both listeners
+    setTimeout(() => {
+      socket.off('tournament_created_ok', onOk);
+      socket.off('tournament_error', onFail);
+      setTourneyCreating(false);
+    }, 8000);
   };
 
   const handleStartTourney = (tournamentId) => {
@@ -281,6 +291,7 @@ export default function AdminPage() {
   };
 
   const startSpectating = (roomId) => {
+    spectateRoomIdRef.current = roomId;
     setSpectateRoomId(roomId);
     setSpectatePlayer1('');
     setSpectatePlayer2('');
@@ -292,7 +303,9 @@ export default function AdminPage() {
   };
 
   const stopSpectating = () => {
-    if (spectateRoomId) getSocket()?.emit('admin_stop_watching', { roomId: spectateRoomId });
+    const rid = spectateRoomIdRef.current;
+    if (rid) getSocket()?.emit('admin_stop_watching', { roomId: rid });
+    spectateRoomIdRef.current = null;
     spectateConnsRef.current.forEach(pc => pc.close());
     spectateConnsRef.current = new Map();
     setSpectateRoomId(null);
@@ -914,7 +927,7 @@ export default function AdminPage() {
                   <div className="flex gap-2 flex-shrink-0">
                     {(a.type === 'conflict' || a.type === 'timeout') && a.roomId && (
                       <button
-                        onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || [] })}
+                        onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || a.players?.map((_, i) => `Player ${i+1}`) || [] })}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
                         style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
                         <Gavel size={11} /> {lang === 'th' ? 'ตัดสิน' : 'Decide'}

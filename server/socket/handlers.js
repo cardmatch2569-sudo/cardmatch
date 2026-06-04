@@ -89,7 +89,9 @@ const handleMatchTimeout = (io, roomId) => {
     match.phase = 'admin_decision';
     io.to(roomId).emit('match_needs_admin', { reason: 'timeout_no_response' });
     notifyAdmins(io, 'timeout', {
-      roomId, matchId: match.matchId, tournamentId: match.tournamentId, players: match.players,
+      roomId, matchId: match.matchId, tournamentId: match.tournamentId,
+      players: match.players,
+      playerNames: match.players.map(id => onlineUsers.get(id)?.username || '?'),
     });
   } else {
     const [[declarerId, result]] = [...match.results.entries()];
@@ -375,7 +377,9 @@ const setupSocketHandlers = (io) => {
 
       try { await getPool().query("UPDATE Tournaments SET status='active', started_at=NOW() WHERE id=$1", [tournamentId]); } catch {}
 
+      // Broadcast to room members AND globally (covers reconnected players not in the socket room)
       io.to(`tournament:${tournamentId}`).emit('tournament_started', { tournamentId, matches: createdMatches });
+      io.emit('tournament_started', { tournamentId, matches: createdMatches });
       io.emit('tournament_updated', getTournamentPublic(t));
     });
 
@@ -476,6 +480,7 @@ const setupSocketHandlers = (io) => {
           notifyAdmins(io, 'conflict', {
             roomId, matchId: tm.matchId, tournamentId: tm.tournamentId,
             players: tm.players,
+            playerNames: tm.players.map(id => onlineUsers.get(id)?.username || '?'),
           });
         }
       }
