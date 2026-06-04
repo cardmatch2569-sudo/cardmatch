@@ -12,7 +12,7 @@ import {
 
 const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
 const EMPTY_GAME = { name: '', nameTh: '', description: '', descriptionTh: '', imageUrl: '', color: '#7c3aed', isActive: true };
-const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 10 };
+const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 8 };
 
 export default function AdminPage() {
   const { user, loading: authLoading, lang, isAdminMode, toggleViewMode } = useAuth();
@@ -989,7 +989,7 @@ export default function AdminPage() {
               </div>
               <div className="flex items-center gap-3">
                 <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'ผู้เล่นสูงสุด' : 'Max players'}</label>
-                {[10, 20, 30].map(n => (
+                {[8, 16, 32].map(n => (
                   <button key={n} onClick={() => setTourneyForm(f => ({ ...f, maxPlayers: n }))}
                     className="px-4 py-1.5 rounded-lg text-xs font-semibold transition"
                     style={tourneyForm.maxPlayers === n
