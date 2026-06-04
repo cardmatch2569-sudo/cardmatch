@@ -520,14 +520,16 @@ export default function RoomPage() {
         onClick={() => setPipExpanded(p => !p)}
         className="absolute z-20 cursor-pointer"
         style={pipExpanded ? {
-          // Expanded: large overlay bottom-center
-          bottom: cssLandscapeActive ? 'calc(68px + 8px)' : `calc(68px + max(8px, ${safeBottom}))`,
+          // Expanded: centered in container — safe for all orientations
+          top: '50%',
           left: '50%',
-          transform: 'translateX(-50%)',
-          width: 'min(320px, 80vw)',
+          transform: 'translate(-50%, -50%)',
+          width: cssLandscapeActive ? 'min(200px, 48vw)' : 'min(280px, 70vw)',
           aspectRatio: '4/3',
           transition: 'all 0.25s ease',
           zIndex: 25,
+          bottom: 'auto',
+          right: 'auto',
         } : {
           // Normal: small corner
           bottom: cssLandscapeActive ? 'calc(68px + 8px)' : `calc(68px + max(8px, ${safeBottom}))`,
