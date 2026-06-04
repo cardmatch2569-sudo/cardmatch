@@ -306,15 +306,18 @@ const getOnlineUsers = () => onlineUsers;
 // ── WATCH (Second Screen) handlers ──────────────────────────────
 const setupWatchHandlers = (io, socket) => {
   if (socket.isWatcher) {
-    // Watcher: notify the room owner that viewer connected
-    const ownerInfo = onlineUsers.get(socket.watchOwnerUserId);
-    if (ownerInfo) {
-      io.to(ownerInfo.socketId).emit('watch_viewer_joined', { viewerSocketId: socket.id });
+    // Watcher: notify the OPPONENT to send their LOCAL camera directly to Device 2
+    // This avoids canvas/re-transmit — opponent's local stream CAN be forwarded
+    const room = activeRooms.get(socket.watchRoomId);
+    const opponentId = room?.players.find(p => p !== socket.watchOwnerUserId);
+    const targetInfo = opponentId ? onlineUsers.get(opponentId) : onlineUsers.get(socket.watchOwnerUserId);
+    if (targetInfo) {
+      io.to(targetInfo.socketId).emit('watch_viewer_joined', { viewerSocketId: socket.id });
     }
-    // Relay WebRTC signals between watcher and room owner
-    socket.on('watch_answer',    ({ answer })    => { const o = onlineUsers.get(socket.watchOwnerUserId); if (o) io.to(o.socketId).emit('watch_answer', { answer, viewerSocketId: socket.id }); });
-    socket.on('watch_ice_viewer',({ candidate }) => { const o = onlineUsers.get(socket.watchOwnerUserId); if (o) io.to(o.socketId).emit('watch_ice_viewer', { candidate }); });
-    socket.on('disconnect', () => { const o = onlineUsers.get(socket.watchOwnerUserId); if (o) io.to(o.socketId).emit('watch_viewer_left'); });
+    // Relay signals — watcher ↔ opponent (or owner as fallback)
+    socket.on('watch_answer',    ({ answer })    => { if (targetInfo) io.to(targetInfo.socketId).emit('watch_answer', { answer, viewerSocketId: socket.id }); });
+    socket.on('watch_ice_viewer',({ candidate }) => { if (targetInfo) io.to(targetInfo.socketId).emit('watch_ice_viewer', { candidate }); });
+    socket.on('disconnect', () => { if (targetInfo) io.to(targetInfo.socketId).emit('watch_viewer_left'); });
     return;
   }
   // Room owner: generate watch token + relay signals
