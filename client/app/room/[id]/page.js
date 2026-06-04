@@ -372,8 +372,6 @@ export default function RoomPage() {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%) rotate(90deg)',
-        paddingLeft:  'env(safe-area-inset-top,    0px)',
-        paddingRight: 'env(safe-area-inset-bottom, 0px)',
       } : { position: 'fixed', inset: 0 }}>
 
       {/* ── Opponent video fills the ENTIRE background ── */}
@@ -463,12 +461,13 @@ export default function RoomPage() {
       )}
 
       {/* ── TOP BAR — always visible ── */}
+      {/* When cssLandscapeActive: container left=phys.top(notch), right=phys.bottom(homeBar) */}
       <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between"
         style={{
-          paddingTop:   `max(8px, ${safeTop})`,
+          paddingTop:    cssLandscapeActive ? '8px' : `max(8px, ${safeTop})`,
           paddingBottom: '8px',
-          paddingLeft:  `max(12px, ${safeLeft})`,
-          paddingRight: `max(12px, ${safeRight})`,
+          paddingLeft:   `max(12px, ${cssLandscapeActive ? safeTop : safeLeft})`,
+          paddingRight:  `max(12px, ${cssLandscapeActive ? safeBottom : safeRight})`,
           background: 'linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, transparent 100%)',
         }}>
         {/* Connection status */}
@@ -487,7 +486,7 @@ export default function RoomPage() {
 
       {/* ── Opponent label ── */}
       <div className="absolute z-20 badge badge-purple text-xs"
-        style={{ bottom: `calc(68px + max(0px, ${safeBottom}))`, left: `max(10px, ${safeLeft})` }}>
+        style={{ bottom: `calc(68px + max(0px, ${safeBottom}))`, left: `max(10px, ${cssLandscapeActive ? safeTop : safeLeft})` }}>
         {t.opponent}
       </div>
 
@@ -495,7 +494,7 @@ export default function RoomPage() {
       <div className="absolute z-20"
         style={{
           bottom: `calc(68px + max(8px, ${safeBottom}))`,
-          right:  `max(8px, ${safeRight})`,
+          right:  `max(8px, ${cssLandscapeActive ? safeBottom : safeRight})`,
           width: 'clamp(80px, 24vw, 150px)',
           aspectRatio: '4/3',
         }}>
@@ -516,9 +515,9 @@ export default function RoomPage() {
       <div className="absolute left-0 right-0 bottom-0 z-20 flex items-center justify-center gap-3"
         style={{
           paddingTop:    '8px',
-          paddingBottom: `max(8px, ${safeBottom})`,
-          paddingLeft:   `max(12px, ${safeLeft})`,
-          paddingRight:  `max(12px, ${safeRight})`,
+          paddingBottom: cssLandscapeActive ? '8px' : `max(8px, ${safeBottom})`,
+          paddingLeft:   `max(12px, ${cssLandscapeActive ? safeTop : safeLeft})`,
+          paddingRight:  `max(12px, ${cssLandscapeActive ? safeBottom : safeRight})`,
           background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
         }}>
 
