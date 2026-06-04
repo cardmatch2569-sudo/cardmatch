@@ -959,15 +959,15 @@ export default function AdminPage() {
                 <select
                   value={tourneyForm.gameTypeId}
                   onChange={e => { setTourneyForm(f => ({ ...f, gameTypeId: e.target.value })); setTourneyError(''); }}
-                  className="input-base text-sm w-full pr-8 appearance-none"
-                  style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}>
-                  <option value="">
+                  className="input-base text-sm w-full pr-8"
+                  style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none', background: 'var(--bg-2,#0f0f1e)', color: 'var(--text,#e2e8f0)' }}>
+                  <option value="" style={{ background: '#0f0f1e', color: '#94a3b8' }}>
                     {games.length === 0
                       ? (lang === 'th' ? 'กำลังโหลดเกม...' : 'Loading games...')
                       : (lang === 'th' ? '— เลือกเกม —' : '— Select game —')}
                   </option>
                   {games.map(g => (
-                    <option key={g._id} value={g._id}>{g.name}</option>
+                    <option key={g._id} value={g._id} style={{ background: '#0f0f1e', color: '#e2e8f0' }}>{g.name}</option>
                   ))}
                 </select>
                 <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
