@@ -309,15 +309,35 @@ export default function RoomPage() {
           setTimeout(() => sendOffer(attempt + 1), 1000);
           return;
         }
+        // WebRTC received tracks are read-only — capture via canvas to re-stream
+        const videoEl = remoteVideoRef.current;
+        if (!videoEl) return;
+
+        let forwardStream;
+        if (videoEl.captureStream) {
+          forwardStream = videoEl.captureStream(30);
+        } else if (videoEl.mozCaptureStream) {
+          forwardStream = videoEl.mozCaptureStream(30);
+        } else {
+          // Canvas fallback for older browsers
+          const canvas = document.createElement('canvas');
+          canvas.width = videoEl.videoWidth || 640;
+          canvas.height = videoEl.videoHeight || 480;
+          const ctx = canvas.getContext('2d');
+          const draw = () => { if (videoEl.readyState >= 2) ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height); requestAnimationFrame(draw); };
+          draw();
+          forwardStream = canvas.captureStream(30);
+        }
+
         const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
-        ],
-      });
-      watchPeerRef.current = pc;
-      remoteStream.getTracks().forEach(tk => pc.addTrack(tk, remoteStream));
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+          ],
+        });
+        watchPeerRef.current = pc;
+        forwardStream.getTracks().forEach(tk => pc.addTrack(tk, forwardStream));
         pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('watch_ice_owner', { viewerSocketId, candidate }); };
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
