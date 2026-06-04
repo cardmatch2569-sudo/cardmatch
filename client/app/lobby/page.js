@@ -104,6 +104,7 @@ export default function LobbyPage() {
     return () => {
       if (inQueueRef.current) getSocket()?.emit('leave_queue');
       clearTimeout(searchTimer.current);
+      clearTimeout(pidTimeoutRef.current);
     };
   }, [getSocket]);
 

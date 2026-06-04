@@ -195,8 +195,8 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, code, newPassword } = req.body;
-    if (!email || !code || !newPassword) return res.status(400).json({ message: 'ข้อมูลไม่ครบถ้วน' });
-    if (newPassword.length < 6) return res.status(400).json({ message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' });
+    if (!email || !code || !newPassword?.trim()) return res.status(400).json({ message: 'ข้อมูลไม่ครบถ้วน' });
+    if (newPassword.trim().length < 6) return res.status(400).json({ message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' });
 
     const otpRow = await EmailVerification.verify(email, code);
     if (!otpRow) return res.status(400).json({ message: 'รหัสไม่ถูกต้องหรือหมดอายุแล้ว' });

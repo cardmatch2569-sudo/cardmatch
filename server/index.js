@@ -47,7 +47,10 @@ const checkLoginRate = (ip) => {
   return true;
 };
 // Clean up old entries every 30 minutes
-setInterval(() => { const now = Date.now(); loginAttempts.forEach((v, k) => { if (now > v.resetAt) loginAttempts.delete(k); }); }, 30 * 60 * 1000);
+const loginCleanupTimer = setInterval(() => { const now = Date.now(); loginAttempts.forEach((v, k) => { if (now > v.resetAt) loginAttempts.delete(k); }); }, 30 * 60 * 1000);
+// Graceful shutdown — clear timers so process exits cleanly
+process.on('SIGTERM', () => { clearInterval(loginCleanupTimer); process.exit(0); });
+process.on('SIGINT',  () => { clearInterval(loginCleanupTimer); process.exit(0); });
 
 const corsOptions = {
   origin: (origin, cb) => isAllowedOrigin(origin) ? cb(null, true) : cb(new Error(`CORS blocked: ${origin}`)),

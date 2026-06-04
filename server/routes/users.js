@@ -69,9 +69,9 @@ router.put('/me', protect, async (req, res) => {
 router.put('/me/password', protect, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword)
+    if (!currentPassword?.trim() || !newPassword?.trim())
       return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบ' });
-    if (newPassword.length < 6)
+    if (newPassword.trim().length < 6)
       return res.status(400).json({ message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร' });
 
     const user = await User.findById(req.user._id);

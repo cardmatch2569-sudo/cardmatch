@@ -41,7 +41,7 @@ function ChatPanel({ messages, msgInput, setMsgInput, onSend, onClose, user, lan
         {messages.map((msg, i) => {
           const isMe = msg.from._id === user._id;
           return (
-            <div key={i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+            <div key={msg.timestamp ? `${msg.from._id}-${msg.timestamp}` : i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
               <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed
                 ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm text-slate-200'}`}
                 style={isMe
@@ -116,6 +116,7 @@ export default function RoomPage() {
   const [pipExpanded, setPipExpanded] = useState(false);
   // PWA hint — shown once on iOS Safari when user taps expand
   const [showPwaHint, setShowPwaHint] = useState(false);
+  const pwaHintTimer = useRef(null);
   // Manual rotation offsets (multiples of 90°) — user can adjust each independently
   const [remoteRotation, setRemoteRotation] = useState(0);
   const [localRotation,  setLocalRotation]  = useState(0);
@@ -176,7 +177,7 @@ export default function RoomPage() {
       if (!isStandalone && !hintShown) {
         setShowPwaHint(true);
         localStorage.setItem('cg_pwa_hint', '1');
-        setTimeout(() => setShowPwaHint(false), 5000);
+        pwaHintTimer.current = setTimeout(() => setShowPwaHint(false), 5000);
       }
     }
   }, [forcedLandscape]);
@@ -294,6 +295,7 @@ export default function RoomPage() {
 
     return () => {
       aborted = true;
+      clearTimeout(pwaHintTimer.current);
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
