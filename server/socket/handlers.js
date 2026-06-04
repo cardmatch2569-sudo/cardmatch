@@ -35,7 +35,7 @@ const rateOk = (map, userId, minMs) => {
   return true;
 };
 
-const MAX_CONCURRENT_USERS = 200; // Safe limit for Railway Starter plan (~512MB RAM)
+const MAX_CONCURRENT_USERS = 1000; // Railway Hobby plan: 8GB RAM, 8 vCPU
 
 const setupSocketHandlers = (io) => {
   // Authenticate socket on connection

@@ -248,7 +248,7 @@ export default function LobbyPage() {
           style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
           <div>
             <p className="text-red-400 font-bold text-sm mb-1">
-              {lang === 'th' ? '⚠️ ผู้เล่นออนไลน์เต็มจำนวนแล้ว (200/200)' : '⚠️ Server is at capacity (200/200 players)'}
+              {lang === 'th' ? '⚠️ ผู้เล่นออนไลน์เต็มจำนวนแล้ว (1000/1000)' : '⚠️ Server is at capacity (1000/1000 players)'}
             </p>
             <p className="text-slate-400 text-xs leading-relaxed">
               {lang === 'th'

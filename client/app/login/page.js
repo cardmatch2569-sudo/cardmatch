@@ -274,8 +274,8 @@ export default function LoginPage() {
                 <span className="flex-shrink-0 mt-0.5">🧪</span>
                 <p className="text-xs text-yellow-300/80 leading-relaxed break-words">
                   {lang === 'th'
-                    ? 'Beta Test — สมัครได้ไม่จำกัด รองรับผู้เล่นพร้อมกันสูงสุด 200 คน'
-                    : 'Beta — unlimited signups, max 200 concurrent players'}
+                    ? 'Beta Test — สมัครได้ไม่จำกัด รองรับผู้เล่นพร้อมกันสูงสุด 1,000 คน'
+                    : 'Beta — unlimited signups, max 1,000 concurrent players'}
                 </p>
               </div>
             </>
