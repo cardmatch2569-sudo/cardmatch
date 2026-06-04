@@ -309,25 +309,28 @@ export default function RoomPage() {
           setTimeout(() => sendOffer(attempt + 1), 1000);
           return;
         }
-        // WebRTC received tracks are read-only — capture via canvas to re-stream
         const videoEl = remoteVideoRef.current;
         if (!videoEl) return;
 
-        let forwardStream;
-        if (videoEl.captureStream) {
-          forwardStream = videoEl.captureStream(30);
-        } else if (videoEl.mozCaptureStream) {
-          forwardStream = videoEl.mozCaptureStream(30);
-        } else {
-          // Canvas fallback for older browsers
-          const canvas = document.createElement('canvas');
-          canvas.width = videoEl.videoWidth || 640;
-          canvas.height = videoEl.videoHeight || 480;
-          const ctx = canvas.getContext('2d');
-          const draw = () => { if (videoEl.readyState >= 2) ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height); requestAnimationFrame(draw); };
-          draw();
-          forwardStream = canvas.captureStream(30);
-        }
+        // Canvas approach — works on all browsers including iOS Safari
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth || 640;
+        canvas.height = videoEl.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+
+        // Use setInterval (not rAF) — works in background tabs
+        const drawTimer = setInterval(() => {
+          if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+            if (canvas.width !== videoEl.videoWidth) canvas.width = videoEl.videoWidth;
+            if (canvas.height !== videoEl.videoHeight) canvas.height = videoEl.videoHeight;
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          }
+        }, 33); // ~30fps
+
+        // Wait 500ms for canvas to have content before creating offer
+        await new Promise(r => setTimeout(r, 500));
+
+        const forwardStream = canvas.captureStream(30);
 
         const pc = new RTCPeerConnection({
           iceServers: [
@@ -337,6 +340,7 @@ export default function RoomPage() {
           ],
         });
         watchPeerRef.current = pc;
+        watchPeerRef.current._drawTimer = drawTimer; // store to clear on cleanup
         forwardStream.getTracks().forEach(tk => pc.addTrack(tk, forwardStream));
         pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('watch_ice_owner', { viewerSocketId, candidate }); };
         const offer = await pc.createOffer();
@@ -357,6 +361,7 @@ export default function RoomPage() {
     return () => {
       aborted = true;
       clearTimeout(pwaHintTimer.current);
+      if (watchPeerRef.current?._drawTimer) clearInterval(watchPeerRef.current._drawTimer);
       watchPeerRef.current?.close();
       socket.off('watch_token_ready'); socket.off('watch_viewer_joined');
       socket.off('watch_answer'); socket.off('watch_ice_viewer'); socket.off('watch_viewer_left');
