@@ -18,6 +18,16 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting]       = useState(false);
   const [showDelPass, setShowDelPass] = useState(false);
+  // Change password
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [curPass,      setCurPass]      = useState('');
+  const [newPass,      setNewPass]      = useState('');
+  const [newPassConf,  setNewPassConf]  = useState('');
+  const [showCurPass,  setShowCurPass]  = useState(false);
+  const [showNewPass,  setShowNewPass]  = useState(false);
+  const [pwError,      setPwError]      = useState('');
+  const [pwSuccess,    setPwSuccess]    = useState('');
+  const [pwSaving,     setPwSaving]     = useState(false);
   // Prevent retrying if the endpoint is not yet available
   const pidTriedRef = useRef(false);
 
@@ -30,6 +40,20 @@ export default function ProfilePage() {
   };
 
   // Generate player_id via dedicated endpoint (once per session)
+  const changePassword = async () => {
+    setPwError(''); setPwSuccess('');
+    if (newPass !== newPassConf) return setPwError(lang === 'th' ? 'รหัสผ่านใหม่ไม่ตรงกัน' : 'Passwords do not match');
+    if (newPass.length < 6) return setPwError(lang === 'th' ? 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' : 'Min 6 characters');
+    setPwSaving(true);
+    try {
+      const { message } = await api.put('/api/users/me/password', { currentPassword: curPass, newPassword: newPass });
+      setPwSuccess(message);
+      setCurPass(''); setNewPass(''); setNewPassConf('');
+      setTimeout(() => { setShowChangePw(false); setPwSuccess(''); }, 2000);
+    } catch (err) { setPwError(err.message); }
+    finally { setPwSaving(false); }
+  };
+
   const deleteAccount = async () => {
     setDeleting(true);
     setDeleteError('');
@@ -206,6 +230,79 @@ export default function ProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* ── Change Password ─────────────────────────────────────── */}
+      {!user.googleId && (
+        <div className="max-w-2xl mx-auto px-4 pb-4">
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Lock size={15} className="text-purple-400" />
+                <h3 className="text-sm font-bold text-white">
+                  {lang === 'th' ? 'เปลี่ยนรหัสผ่าน' : 'Change Password'}
+                </h3>
+              </div>
+              <button onClick={() => { setShowChangePw(p => !p); setPwError(''); setPwSuccess(''); setCurPass(''); setNewPass(''); setNewPassConf(''); }}
+                className="text-xs text-slate-500 hover:text-purple-400 transition px-2 py-1 rounded-lg hover:bg-purple-500/10">
+                {showChangePw ? (lang === 'th' ? 'ยกเลิก' : 'Cancel') : (lang === 'th' ? 'เปลี่ยน' : 'Change')}
+              </button>
+            </div>
+
+            {showChangePw && (
+              <div className="space-y-3">
+                {pwSuccess && (
+                  <div className="px-3 py-2 rounded-xl text-xs text-green-400" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
+                    ✓ {pwSuccess}
+                  </div>
+                )}
+                {/* Current password */}
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                  <input type={showCurPass ? 'text' : 'password'}
+                    value={curPass} onChange={e => { setCurPass(e.target.value); setPwError(''); }}
+                    placeholder={lang === 'th' ? 'รหัสผ่านปัจจุบัน' : 'Current password'}
+                    className="input-base pl-9 pr-10 text-sm" autoComplete="current-password" />
+                  <button type="button" onClick={() => setShowCurPass(p => !p)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 flex items-center justify-center"
+                    style={{ width: 36, height: 36 }}>
+                    {showCurPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                {/* New password */}
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                  <input type={showNewPass ? 'text' : 'password'}
+                    value={newPass} onChange={e => { setNewPass(e.target.value); setPwError(''); }}
+                    placeholder={lang === 'th' ? 'รหัสผ่านใหม่ (6+ ตัว)' : 'New password (6+)'}
+                    className="input-base pl-9 pr-10 text-sm" autoComplete="new-password" />
+                  <button type="button" onClick={() => setShowNewPass(p => !p)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 flex items-center justify-center"
+                    style={{ width: 36, height: 36 }}>
+                    {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                {/* Confirm */}
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                  <input type={showNewPass ? 'text' : 'password'}
+                    value={newPassConf} onChange={e => { setNewPassConf(e.target.value); setPwError(''); }}
+                    placeholder={lang === 'th' ? 'ยืนยันรหัสผ่านใหม่' : 'Confirm new password'}
+                    className={`input-base pl-9 text-sm ${newPassConf && newPass !== newPassConf ? 'border-red-500/60' : newPassConf && newPass === newPassConf ? 'border-green-500/60' : ''}`}
+                    autoComplete="new-password" />
+                </div>
+                {pwError && <p className="text-xs text-red-400">⚠ {pwError}</p>}
+                <button onClick={changePassword}
+                  disabled={pwSaving || !curPass || !newPass || !newPassConf}
+                  className="btn-primary w-full py-2.5 rounded-xl text-sm disabled:opacity-40">
+                  {pwSaving
+                    ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /></span>
+                    : (lang === 'th' ? '🔐 บันทึกรหัสผ่านใหม่' : '🔐 Save New Password')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="max-w-2xl mx-auto px-4 pb-10">

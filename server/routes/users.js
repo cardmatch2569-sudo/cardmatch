@@ -65,6 +65,31 @@ router.put('/me', protect, async (req, res) => {
   }
 });
 
+// ── CHANGE PASSWORD ───────────────────────────────────────────────
+router.put('/me/password', protect, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบ' });
+    if (newPassword.length < 6)
+      return res.status(400).json({ message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร' });
+
+    const user = await User.findById(req.user._id);
+    // Google-only accounts have no password
+    if (!user.password)
+      return res.status(400).json({ message: 'บัญชี Google ไม่รองรับการเปลี่ยนรหัสผ่าน' });
+
+    const valid = await User.comparePassword(currentPassword, user.password);
+    if (!valid) return res.status(403).json({ message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' });
+    if (currentPassword === newPassword)
+      return res.status(400).json({ message: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await getPool().query('UPDATE Users SET password=$1, updated_at=NOW() WHERE id=$2', [hashed, req.user._id]);
+    res.json({ message: 'เปลี่ยนรหัสผ่านสำเร็จแล้ว' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // ── DELETE OWN ACCOUNT (requires password confirmation) ──────────
 router.delete('/me', protect, async (req, res) => {
   try {
