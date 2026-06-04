@@ -299,10 +299,17 @@ export default function RoomPage() {
     // Watch (Second Screen) events
     socket.on('watch_token_ready', ({ token, roomId: rid }) => setWatchToken(token));
     socket.on('watch_viewer_joined', async ({ viewerSocketId }) => {
-      // Device 2 connected — create WebRTC and forward opponent's stream
-      const remoteStream = remoteVideoRef.current?.srcObject;
-      if (!remoteStream) return;
-      const pc = new RTCPeerConnection({
+      // Retry until opponent's stream is available (may not be ready immediately)
+      const MAX_ATTEMPTS = 15;
+      const sendOffer = async (attempt = 0) => {
+        const remoteStream = remoteVideoRef.current?.srcObject;
+        const hasTracks = remoteStream && remoteStream.getTracks().length > 0;
+        if (!hasTracks) {
+          if (attempt >= MAX_ATTEMPTS) return; // Give up after 15s
+          setTimeout(() => sendOffer(attempt + 1), 1000);
+          return;
+        }
+        const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
@@ -311,10 +318,12 @@ export default function RoomPage() {
       });
       watchPeerRef.current = pc;
       remoteStream.getTracks().forEach(tk => pc.addTrack(tk, remoteStream));
-      pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('watch_ice_owner', { viewerSocketId, candidate }); };
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('watch_offer', { viewerSocketId, offer });
+        pc.onicecandidate = ({ candidate }) => { if (candidate) socket.emit('watch_ice_owner', { viewerSocketId, candidate }); };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('watch_offer', { viewerSocketId, offer });
+      };
+      sendOffer();
     });
     socket.on('watch_answer', async ({ answer }) => {
       if (watchPeerRef.current) await watchPeerRef.current.setRemoteDescription(new RTCSessionDescription(answer));
