@@ -112,6 +112,8 @@ export default function RoomPage() {
   );
   // Track remote video orientation to counter-rotate if needed
   const [remoteIsLandscape, setRemoteIsLandscape] = useState(false);
+  // Tap-to-expand self PiP
+  const [pipExpanded, setPipExpanded] = useState(false);
   // Manual rotation offsets (multiples of 90°) — user can adjust each independently
   const [remoteRotation, setRemoteRotation] = useState(0);
   const [localRotation,  setLocalRotation]  = useState(0);
@@ -490,27 +492,42 @@ export default function RoomPage() {
         {t.opponent}
       </div>
 
-      {/* ── Self PiP — bottom-right above controls bar ── */}
-      {/* cssLandscapeActive: container right=phys.bottom(safeBottom), bottom=phys.left(no safe area) */}
-      <div className="absolute z-20"
-        style={{
-          bottom: cssLandscapeActive
-            ? 'calc(68px + 8px)'
-            : `calc(68px + max(8px, ${safeBottom}))`,
+      {/* ── Self PiP — tap to expand/collapse ── */}
+      <div
+        onClick={() => setPipExpanded(p => !p)}
+        className="absolute z-20 cursor-pointer"
+        style={pipExpanded ? {
+          // Expanded: large overlay bottom-center
+          bottom: cssLandscapeActive ? 'calc(68px + 8px)' : `calc(68px + max(8px, ${safeBottom}))`,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 'min(320px, 80vw)',
+          aspectRatio: '4/3',
+          transition: 'all 0.25s ease',
+          zIndex: 25,
+        } : {
+          // Normal: small corner
+          bottom: cssLandscapeActive ? 'calc(68px + 8px)' : `calc(68px + max(8px, ${safeBottom}))`,
           right: `max(8px, ${cssLandscapeActive ? safeBottom : safeRight})`,
           width: 'clamp(80px, 24vw, 150px)',
           aspectRatio: '4/3',
+          transition: 'all 0.25s ease',
         }}>
-        <div className="relative rounded-xl overflow-hidden shadow-2xl border border-white/20 w-full h-full">
+        <div className="relative rounded-xl overflow-hidden shadow-2xl border w-full h-full"
+          style={{ borderColor: pipExpanded ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.2)' }}>
           <video ref={localVideoRef} autoPlay playsInline muted
             className="w-full h-full object-cover"
             style={{ transform: `rotate(${(cssLandscapeActive ? -90 : 0) + localRotation}deg)${facingMode === 'user' ? ' scaleX(-1)' : ''}` }} />
           {!cameraOn && (
             <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
-              <VideoOff size={14} className="text-slate-400" />
+              <VideoOff size={pipExpanded ? 22 : 14} className="text-slate-400" />
             </div>
           )}
           <div className="absolute bottom-1 left-1.5 text-[9px] text-slate-300 bg-black/60 px-1 rounded">{t.you}</div>
+          {/* Expand/collapse indicator */}
+          <div className="absolute top-1 right-1 bg-black/50 rounded-md px-1 py-0.5 text-[9px] text-white/60">
+            {pipExpanded ? '✕' : '⤢'}
+          </div>
         </div>
       </div>
 
