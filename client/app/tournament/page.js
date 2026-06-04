@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
-import { Trophy, Users, ChevronRight, RefreshCw } from 'lucide-react';
+import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
 function TournamentCard({ t, lang, onJoin, joining }) {
   const isFull  = t.playerCount >= t.maxPlayers;
