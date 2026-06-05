@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
+import { api } from '../../../lib/api';
+import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel } from 'lucide-react';
 
 function useCountdown(targetDate) {
   const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
@@ -19,8 +21,6 @@ function useCountdown(targetDate) {
   if (h > 0) return `${h}ชม. ${m}น.`;
   return `${m}:${String(s).padStart(2,'0')} น.`;
 }
-import { api } from '../../../lib/api';
-import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel } from 'lucide-react';
 
 // ── Leaderboard ───────────────────────────────────────────────────────
 function Leaderboard({ standings, myId, lang }) {
@@ -189,10 +189,14 @@ export default function TournamentWaitingRoom() {
       setStatus('bye');
     };
 
+    let toastTimer = null;
+    const alertTimers = [];
+
     const onError = ({ message }) => {
       if (!mounted) return;
       setToast(message);
-      setTimeout(() => setToast(''), 5000);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => setToast(''), 5000);
     };
 
     let onAdminAlert = null;
@@ -200,7 +204,8 @@ export default function TournamentWaitingRoom() {
       onAdminAlert = (data) => {
         const alertId = Date.now() + Math.random();
         setAlerts(p => [{ id: alertId, ...data }, ...p.slice(0, 9)]);
-        setTimeout(() => setAlerts(p => p.filter(a => a.id !== alertId)), 30000);
+        const at = setTimeout(() => setAlerts(p => p.filter(a => a.id !== alertId)), 30000);
+        alertTimers.push(at);
       };
       socket.on('admin_match_alert', onAdminAlert);
     }
@@ -219,6 +224,8 @@ export default function TournamentWaitingRoom() {
 
     return () => {
       mounted = false;
+      clearTimeout(toastTimer);
+      alertTimers.forEach(clearTimeout);
       socket.off('tournament_joined_ok',    onJoinedOk);
       socket.off('tournament_player_update', onPlayerUpdate);
       socket.off('round_started',           onRoundStarted);

@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import { api } from '../../lib/api';
+import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
 function useCountdown(targetDate) {
   const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
@@ -19,10 +21,9 @@ function useCountdown(targetDate) {
   if (h > 0) return `${h}ชม. ${m}น.`;
   return `${m}:${String(s).padStart(2,'0')} น.`;
 }
-import { api } from '../../lib/api';
-import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
 function TournamentCard({ t, lang, onJoin, joining }) {
+  const countdown = useCountdown(t.scheduledAt);
   const isFull  = t.playerCount >= t.maxPlayers;
   const canJoin = t.status === 'waiting' && !isFull;
   const isActive = t.status === 'active';
@@ -61,7 +62,7 @@ function TournamentCard({ t, lang, onJoin, joining }) {
           )}
           {t.scheduledAt && (
             <span className="text-xs text-slate-500">
-              ⏰ {new Date(t.scheduledAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
+              ⏰ {countdown !== null ? `เหลือ ${countdown}` : new Date(t.scheduledAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.'}
             </span>
           )}
         </div>
@@ -95,6 +96,11 @@ function TournamentCard({ t, lang, onJoin, joining }) {
           style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
           {lang === 'th' ? 'เข้าดู' : 'View'}<ChevronRight size={14} />
         </button>
+      )}
+      {t.status !== 'waiting' && !t.isJoined && (
+        <span className="text-xs text-slate-500 px-4 py-2 flex-shrink-0">
+          {lang === 'th' ? 'ไม่สามารถเข้าร่วม' : 'In progress'}
+        </span>
       )}
     </div>
   );

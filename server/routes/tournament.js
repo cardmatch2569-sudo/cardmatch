@@ -105,6 +105,7 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
     const io = req.app.get('io');
     io.emit('tournament_closed', { tournamentId: req.params.id });
     ts.delete(req.params.id);
+
     res.json({ message: 'ปิด Tournament แล้ว' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

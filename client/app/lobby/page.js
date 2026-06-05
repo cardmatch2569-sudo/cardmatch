@@ -104,11 +104,28 @@ export default function LobbyPage() {
     const onTournamentLockError = ({ message }) => {
       showToast(message, 'error');
     };
-    socket.on('tournament_closed', onTournamentClosed);
-    socket.on('tournament_lock_error', onTournamentLockError);
+    const refreshLock = () => {
+      api.get('/api/tournament').then(({ tournaments: list }) => {
+        const locked = (list || []).find(t => {
+          if (!t.isJoined || t.status === 'ended') return false;
+          if (t.scheduledAt) return Date.now() >= new Date(t.scheduledAt).getTime();
+          return t.status !== 'waiting';
+        });
+        setLockedTournament(locked || null);
+      }).catch(() => {});
+    };
+    const onVisibilityChange = () => { if (!document.hidden) refreshLock(); };
+    socket.on('tournament_closed',        onTournamentClosed);
+    socket.on('tournament_lock_error',    onTournamentLockError);
+    socket.on('player_tournament_locked', refreshLock);
+    socket.on('round_started',            refreshLock);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
-      socket.off('tournament_closed', onTournamentClosed);
-      socket.off('tournament_lock_error', onTournamentLockError);
+      socket.off('tournament_closed',        onTournamentClosed);
+      socket.off('tournament_lock_error',    onTournamentLockError);
+      socket.off('player_tournament_locked', refreshLock);
+      socket.off('round_started',            refreshLock);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getSocket]);
@@ -601,7 +618,7 @@ export default function LobbyPage() {
               </div>
               <button
                 onClick={handleChallengeById}
-                disabled={pidInput.length !== 6 || pidLoading || !selectedGame || !!lockedTournament}
+                disabled={pidInput.length !== 6 || pidLoading || !selectedGame || !!lockedTournament || inQueue}
                 className="btn-primary px-4 py-2 rounded-xl text-sm flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
                 {pidLoading
                   ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

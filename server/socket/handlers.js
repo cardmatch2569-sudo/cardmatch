@@ -108,6 +108,9 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
     t.points.set(winnerId, (t.points.get(winnerId) || 0) + 3);
     t.activeMatchCount = Math.max(0, (t.activeMatchCount || 1) - 1);
   }
+  // Atomically decide if THIS invocation triggers round-end (prevents double-fire when two matches finish simultaneously)
+  const triggerRoundEnd = t ? (t.activeMatchCount === 0 && !t._roundEndFired) : false;
+  if (triggerRoundEnd) t._roundEndFired = true;
 
   // Build standings to include in result
   const standings = t ? buildStandings(t) : [];
@@ -127,8 +130,9 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
     await pool.query('UPDATE TournamentPlayers SET losses=losses+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, loserId]).catch(() => {});
   } catch (e) { console.error('[finalizeMatch]', e.message); }
 
-  // Check if round is complete
-  if (t && t.activeMatchCount === 0) {
+  // Check if round is complete — only the invocation that set triggerRoundEnd=true enters here
+  if (t && triggerRoundEnd) {
+    t._roundEndFired = false; // reset for next round
     const info = getTournamentPublic(t);
     if (t.currentRound >= t.totalRounds) {
       // All rounds done → tournament complete
@@ -416,6 +420,10 @@ const setupSocketHandlers = (io) => {
         scheduledAt:      scheduledAt ? new Date(scheduledAt) : null,
         scheduledEnd:     scheduledEnd ? new Date(scheduledEnd) : null,
       };
+      if (tournament.scheduledAt && tournament.scheduledEnd &&
+          tournament.scheduledEnd <= tournament.scheduledAt) {
+        return socket.emit('tournament_error', { message: 'เวลาจบต้องมาหลังเวลาเริ่ม' });
+      }
       tournaments.set(id, tournament);
       try {
         await getPool().query(
@@ -447,6 +455,7 @@ const setupSocketHandlers = (io) => {
 
       t.currentRound++;
       t.status = 'active';
+      t._roundEndFired = false;
       pairs.forEach(([p1, p2]) => t.playedPairs.add([p1, p2].sort().join('_')));
       t.activeMatchCount = pairs.length;
       const createdMatches = [];
@@ -470,6 +479,10 @@ const setupSocketHandlers = (io) => {
           );
         } catch (e) { console.error('[start_round] TM insert:', e.message); }
 
+        // Remove paired players from matchmaking queues to prevent double match_found
+        matchQueues.forEach((queue, gtId) => {
+          matchQueues.set(gtId, queue.filter(p => p.userId !== p1Id && p.userId !== p2Id));
+        });
         if (p1Info) io.to(p1Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p2Id, username: p2Info?.username || '?', avatar: p2Info?.avatar || '' }, isTournament: true, tournamentId, matchId, roundNumber: t.currentRound });
         if (p2Info) io.to(p2Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p1Id, username: p1Info?.username || '?', avatar: p1Info?.avatar || '' }, isTournament: true, tournamentId, matchId, roundNumber: t.currentRound });
 
@@ -491,7 +504,6 @@ const setupSocketHandlers = (io) => {
       } catch {}
 
       const roundInfo = { tournamentId, roundNumber: t.currentRound, totalRounds: t.totalRounds, matches: createdMatches };
-      io.to(`tournament:${tournamentId}`).emit('round_started', roundInfo);
       io.emit('round_started', roundInfo);
       io.emit('tournament_updated', getTournamentPublic(t));
     });
@@ -503,7 +515,6 @@ const setupSocketHandlers = (io) => {
       if (!t) return;
       t.status = 'ended';
       try { await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW() WHERE id=$1", [tournamentId]); } catch {}
-      io.to(`tournament:${tournamentId}`).emit('tournament_closed', { tournamentId });
       io.emit('tournament_closed', { tournamentId });
       tournaments.delete(tournamentId);
     });
@@ -558,6 +569,11 @@ const setupSocketHandlers = (io) => {
         }
       }
 
+      // Remove from matchmaking queue to prevent double match_found
+      matchQueues.forEach((queue, gtId) => {
+        matchQueues.set(gtId, queue.filter(p => p.userId !== userId));
+      });
+
       t.players.add(userId);
       socket.join(`tournament:${tournamentId}`);
 
@@ -577,6 +593,7 @@ const setupSocketHandlers = (io) => {
       io.emit('tournament_player_count', { tournamentId, playerCount: t.players.size });
       const standings = buildStandings(t);
       socket.emit('tournament_joined_ok', { tournamentId, playersInfo, tournament: getTournamentPublic(t), standings });
+      socket.emit('player_tournament_locked', { tournamentId });
     });
 
     socket.on('leave_tournament', async ({ tournamentId }) => {
@@ -755,7 +772,6 @@ const setupSocketHandlers = (io) => {
       if (Date.now() < new Date(t.scheduledEnd).getTime()) continue;
       t.status = 'ended';
       try { await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW() WHERE id=$1", [id]); } catch {}
-      io.to(`tournament:${id}`).emit('tournament_closed', { tournamentId: id });
       io.emit('tournament_closed', { tournamentId: id });
       tournaments.delete(id);
       console.log(`[Tournament] Auto-closed ${t.name} (scheduledEnd passed)`);

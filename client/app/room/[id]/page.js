@@ -111,8 +111,9 @@ export default function RoomPage() {
   const remoteVideoRef = useRef(null);
   const peerRef        = useRef(null);
   const localStreamRef = useRef(null);
-  const leftRef        = useRef(false);
-  const chatOpenRef    = useRef(false);
+  const leftRef              = useRef(false);
+  const tournamentRedirectRef = useRef(false);
+  const chatOpenRef          = useRef(false);
   const adminPeerRef   = useRef(null); // WebRTC connection to admin spectate
 
   const [messages,      setMessages]      = useState([]);
@@ -408,17 +409,26 @@ export default function RoomPage() {
       socket.off('admin_called', onAdminCalled);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
-      // Clear tournament sessionStorage
-      try {
-        sessionStorage.removeItem('cg_is_tournament');
-        sessionStorage.removeItem('cg_tournament_id');
-        sessionStorage.removeItem('cg_tournament_match_id');
-      } catch {}
 
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
-      if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
+      localStreamRef.current = null;
+      if (peerRef.current) {
+        peerRef.current.onicecandidate = null;
+        peerRef.current.ontrack = null;
+        peerRef.current.onconnectionstatechange = null;
+        peerRef.current.close();
+        peerRef.current = null;
+      }
+      // Only clear tournament sessionStorage if NOT redirecting to tournament room
+      try {
+        if (!tournamentRedirectRef.current) {
+          sessionStorage.removeItem('cg_is_tournament');
+          sessionStorage.removeItem('cg_tournament_id');
+        }
+        sessionStorage.removeItem('cg_tournament_match_id');
+      } catch {}
       if (!leftRef.current) socket.emit('leave_room', { roomId });
     };
   }, [loading, user, roomId, router, getSocket, startMedia, createPeer]);
@@ -430,7 +440,13 @@ export default function RoomPage() {
     getSocket()?.emit('leave_room', { roomId });
     localStreamRef.current?.getTracks().forEach(tk => tk.stop());
     localStreamRef.current = null;
-    if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
+    if (peerRef.current) {
+      peerRef.current.onicecandidate = null;
+      peerRef.current.ontrack = null;
+      peerRef.current.onconnectionstatechange = null;
+      peerRef.current.close();
+      peerRef.current = null;
+    }
   }, [getSocket, roomId]);
 
   const handleLeave = () => setEndModal('leave');
@@ -488,18 +504,23 @@ export default function RoomPage() {
   };
   const handleCallAdmin = () => getSocket()?.emit('call_admin', { roomId });
   const goToTournament = useCallback(() => {
+    tournamentRedirectRef.current = true;
     leftRef.current = true;
     setForcedLandscape(false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     getSocket()?.emit('leave_room', { roomId });
     localStreamRef.current?.getTracks().forEach(tk => tk.stop());
-    peerRef.current?.close();
-    // Clear tournament match session but keep tournament id
-    try {
-      sessionStorage.removeItem('cg_tournament_match_id');
-      // Keep cg_is_tournament and cg_tournament_id for re-join
-    } catch {}
-    const tid = sessionStorage.getItem('cg_tournament_id') || tournamentId;
+    localStreamRef.current = null;
+    if (peerRef.current) {
+      peerRef.current.onicecandidate = null;
+      peerRef.current.ontrack = null;
+      peerRef.current.onconnectionstatechange = null;
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    try { sessionStorage.removeItem('cg_tournament_match_id'); } catch {}
+    const rawTid = sessionStorage.getItem('cg_tournament_id') || tournamentId;
+    const tid = (rawTid && rawTid !== 'null' && rawTid !== 'undefined') ? rawTid : null;
     router.push(tid ? `/tournament/${tid}` : '/tournament');
   }, [getSocket, roomId, tournamentId, router]);
 
@@ -929,6 +950,13 @@ export default function RoomPage() {
                   🏟 {lang === 'th' ? 'กลับห้องทัวร์นาเมนต์' : 'Back to Tournament'}
                 </button>
               </>
+            )}
+
+            {/* Fallback: done phase but result missing (prevents locked blank overlay) */}
+            {tourneyPhase === 'done' && !matchResult && (
+              <button onClick={goToTournament} className="btn-primary w-full py-3 rounded-xl text-sm">
+                🏟 {lang === 'th' ? 'กลับห้องทัวร์นาเมนต์' : 'Back to Tournament'}
+              </button>
             )}
           </div>
         </div>

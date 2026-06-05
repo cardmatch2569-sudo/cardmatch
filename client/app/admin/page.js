@@ -259,6 +259,15 @@ export default function AdminPage() {
       setTourneyError(lang === 'th' ? 'กรุณาเลือกเกม' : 'Please select a game');
       return;
     }
+    if (tourneyForm.scheduledAt && new Date(tourneyForm.scheduledAt) <= new Date()) {
+      setTourneyError(lang === 'th' ? 'เวลาเริ่มต้องอยู่ในอนาคต' : 'Start time must be in the future');
+      return;
+    }
+    if (tourneyForm.scheduledAt && tourneyForm.scheduledEnd &&
+        new Date(tourneyForm.scheduledEnd) <= new Date(tourneyForm.scheduledAt)) {
+      setTourneyError(lang === 'th' ? 'เวลาจบต้องมาหลังเวลาเริ่ม' : 'End time must be after start time');
+      return;
+    }
     setTourneyCreating(true);
     const socket = getSocket();
     if (!socket) {
@@ -266,13 +275,14 @@ export default function AdminPage() {
       setTourneyCreating(false);
       return;
     }
+    const toUTC = (s) => s ? new Date(s).toISOString() : null;
     socket.emit('create_tournament', {
       name: tourneyForm.name.trim(),
       gameTypeId: tourneyForm.gameTypeId,
       maxPlayers: tourneyForm.maxPlayers,
       totalRounds: tourneyForm.totalRounds,
-      scheduledAt:  tourneyForm.scheduledAt  || null,
-      scheduledEnd: tourneyForm.scheduledEnd || null,
+      scheduledAt:  toUTC(tourneyForm.scheduledAt),
+      scheduledEnd: toUTC(tourneyForm.scheduledEnd),
     });
     const onOk = () => {
       socket.off('tournament_error', onFail);
