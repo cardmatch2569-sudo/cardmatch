@@ -118,36 +118,41 @@ connectDB().then(async () => {
     try { await getPool().query(`DELETE FROM GameTypes WHERE name='Thai Card Battle'`); } catch {}
   } catch (e) { console.warn('Auto-seed warning:', e.message); }
 
-  // BUG-01: Restore active/waiting tournaments from DB into memory
+  // BUG-01: Restore active/waiting tournaments (and tourneyMatches) from DB
   await restoreTournamentsFromDB().catch(() => {});
-}).catch(() => {});
+}).then(() => {
+  // BUG-01 fix 2: socket handlers + server.listen only AFTER restore completes
+  // — prevents early connections from seeing an empty tournament list
+  app.use(cors(corsOptions));
+  app.use(express.json());
 
-app.use(cors(corsOptions));
-app.use(express.json());
+  app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+  app.use('/api/auth',  authRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/games', gameRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/tournament', tournamentRoutes);
 
-app.get('/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-app.use('/api/auth',  authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/games', gameRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/tournament', tournamentRoutes);
+  setupSocketHandlers(io);
 
-setupSocketHandlers(io);
+  const PORT = parseInt(process.env.PORT || '5000', 10);
+  const HOST = '0.0.0.0';
 
-const PORT = parseInt(process.env.PORT || '5000', 10);
-const HOST = '0.0.0.0';
-
-server.listen(PORT, HOST, () => {
-  console.log(`\n🚀 Server running on port ${PORT}`);
-  if (process.env.NODE_ENV !== 'production') {
-    const nets = os.networkInterfaces();
-    console.log(`   Local  : http://localhost:${PORT}`);
-    for (const n of Object.keys(nets)) {
-      for (const net of nets[n]) {
-        if (net.family === 'IPv4' && !net.internal)
-          console.log(`   Network: http://${net.address}:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    console.log(`\n🚀 Server running on port ${PORT}`);
+    if (process.env.NODE_ENV !== 'production') {
+      const nets = os.networkInterfaces();
+      console.log(`   Local  : http://localhost:${PORT}`);
+      for (const n of Object.keys(nets)) {
+        for (const net of nets[n]) {
+          if (net.family === 'IPv4' && !net.internal)
+            console.log(`   Network: http://${net.address}:${PORT}`);
+        }
       }
     }
-  }
-  console.log('');
+    console.log('');
+  });
+}).catch((err) => {
+  console.error('Startup failed:', err.message);
+  process.exit(1);
 });

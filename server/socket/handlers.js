@@ -843,7 +843,7 @@ const restoreTournamentsFromDB = async () => {
       const playerNames = new Map(playerRows.map(p => [p.user_id, p.username]));
 
       const { rows: matchRows } = await pool.query(
-        'SELECT player1_id, player2_id, status FROM TournamentMatches WHERE tournament_id=$1',
+        'SELECT id, room_id, player1_id, player2_id, status FROM TournamentMatches WHERE tournament_id=$1',
         [row.id]
       );
 
@@ -851,10 +851,11 @@ const restoreTournamentsFromDB = async () => {
         matchRows.map(m => [m.player1_id, m.player2_id].sort().join('_'))
       );
 
-      const playingMatches = matchRows.filter(m => m.status === 'playing');
-      const activeMatchCount = playingMatches.length;
+      const playingMatches      = matchRows.filter(m => m.status === 'playing');
+      const adminDecisionMatches = matchRows.filter(m => m.status === 'admin_decision');
+      const activeMatchCount    = playingMatches.length + adminDecisionMatches.length;
 
-      // If active but all matches finished (no playing left), correct to round_complete
+      // If active but all matches finished (no pending left), correct to round_complete
       let status = row.status;
       if (status === 'active' && activeMatchCount === 0) status = 'round_complete';
 
@@ -877,13 +878,32 @@ const restoreTournamentsFromDB = async () => {
         _roundEndFired:   false,
       });
 
-      // Matches that were in-progress when server died need admin decision
+      // Matches that were playing when server died → move to admin_decision in DB
       if (playingMatches.length > 0) {
         await pool.query(
           `UPDATE TournamentMatches SET status='admin_decision' WHERE tournament_id=$1 AND status='playing'`,
           [row.id]
         ).catch(() => {});
         console.log(`[Tournament] ${row.name}: ${playingMatches.length} in-progress match(es) → admin_decision`);
+      }
+
+      // BUG-01 fix 1: Restore tourneyMatches so admin_decide_match works after restart
+      // Covers both freshly-moved (was playing) and previously-pending admin_decision matches
+      const matchesToRestore = [...playingMatches, ...adminDecisionMatches];
+      for (const m of matchesToRestore) {
+        if (!m.room_id) continue;
+        tourneyMatches.set(m.room_id, {
+          matchId:            m.id,
+          tournamentId:       row.id,
+          players:            [m.player1_id, m.player2_id],
+          results:            new Map(),
+          phase:              'admin_decision',
+          timer:              null,
+          adminDecisionTimer: null,
+        });
+      }
+      if (matchesToRestore.length > 0) {
+        console.log(`[Tournament] ${row.name}: restored ${matchesToRestore.length} match(es) into tourneyMatches`);
       }
 
       console.log(`[Tournament] Restored: "${row.name}" (${status}, ${players.size} players, round ${row.current_round || 0}/${row.total_rounds || 3})`);
