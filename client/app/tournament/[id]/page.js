@@ -90,6 +90,11 @@ export default function TournamentWaitingRoom() {
 
       if (t.status === 'ended') { setStatus('tournament_complete'); return; }
 
+      // Set initial status from API immediately (don't wait for socket)
+      if      (t.status === 'active')         setStatus('round_in_progress');
+      else if (t.status === 'round_complete') setStatus('round_complete');
+      else                                    setStatus('waiting');
+
       if (user.isAdmin) {
         socket.emit('admin_join_tournament_watch', { tournamentId });
       } else {
