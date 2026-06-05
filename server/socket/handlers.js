@@ -402,7 +402,7 @@ const setupSocketHandlers = (io) => {
 
     // start_round: starts first round OR next round (admin only, all matches must be done first)
     socket.on('start_round', async ({ tournamentId }) => {
-      if (!user.isAdmin) return;
+      if (!user.isAdmin) return socket.emit('tournament_error', { message: 'ไม่มีสิทธิ์' });
       const t = tournaments.get(tournamentId);
       if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament' });
       if (!['waiting', 'round_complete'].includes(t.status))
@@ -410,15 +410,16 @@ const setupSocketHandlers = (io) => {
       if (t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
       if (t.currentRound >= t.totalRounds) return socket.emit('tournament_error', { message: 'ครบทุกรอบแล้ว' });
 
+      const { pairs, bye } = pairPlayersNoRepeat([...t.players], t.playedPairs);
+
+      let gameType = null;
+      try { gameType = await GameType.findById(t.gameTypeId); } catch (e) { console.error('[start_round] GameType:', e.message); }
+      const gameInfo  = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+
       t.currentRound++;
       t.status = 'active';
-
-      const { pairs, bye } = pairPlayersNoRepeat([...t.players], t.playedPairs);
       pairs.forEach(([p1, p2]) => t.playedPairs.add([p1, p2].sort().join('_')));
       t.activeMatchCount = pairs.length;
-
-      const gameType  = await GameType.findById(t.gameTypeId);
-      const gameInfo  = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
       const createdMatches = [];
 
       for (const [p1Id, p2Id] of pairs) {

@@ -45,7 +45,7 @@ function Leaderboard({ standings, myId, lang }) {
 export default function TournamentWaitingRoom() {
   const { id: tournamentId } = useParams();
   const { user, loading: authLoading, lang } = useAuth();
-  const { getSocket } = useSocket();
+  const { getSocket, connected } = useSocket();
   const router = useRouter();
 
   const [tournament,  setTournament]  = useState(null);
@@ -59,7 +59,9 @@ export default function TournamentWaitingRoom() {
   const leftRef = useRef(false);
   const [alerts,      setAlerts]      = useState([]);
   const [decideMatch, setDecideMatch] = useState(null);
-  const langRef = useRef(lang);
+  const [toast,       setToast]       = useState('');
+  const langRef     = useRef(lang);
+  const hasJoinedRef = useRef(false);
   langRef.current = lang;
 
   const load = useCallback(async () => {
@@ -102,6 +104,7 @@ export default function TournamentWaitingRoom() {
       } else {
         socket.emit('join_tournament', { tournamentId });
       }
+      hasJoinedRef.current = true;
     };
 
     // ── Socket listeners ────────────────────────────────────────────
@@ -172,7 +175,8 @@ export default function TournamentWaitingRoom() {
 
     const onError = ({ message }) => {
       if (!mounted) return;
-      setErrorMsg(message);
+      setToast(message);
+      setTimeout(() => setToast(''), 5000);
     };
 
     let onAdminAlert = null;
@@ -216,6 +220,18 @@ export default function TournamentWaitingRoom() {
       }
     };
   }, [authLoading, user, tournamentId, router, getSocket, load]);
+
+  // Re-join tournament room when socket reconnects (handles mobile screen-sleep disconnect)
+  useEffect(() => {
+    if (!connected || !hasJoinedRef.current || authLoading || !user) return;
+    const socket = getSocket();
+    if (!socket) return;
+    if (user.isAdmin) {
+      socket.emit('admin_join_tournament_watch', { tournamentId });
+    } else {
+      socket.emit('join_tournament', { tournamentId });
+    }
+  }, [connected, tournamentId, user, authLoading, getSocket]);
 
   const handleLeave = () => {
     if (user?.isAdmin) { router.push('/tournament'); return; }
@@ -284,6 +300,14 @@ export default function TournamentWaitingRoom() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
+
+      {/* ── Toast notification ──────────────────────────────────── */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+          style={{ background: 'rgba(239,68,68,0.9)', border: '1px solid rgba(239,68,68,0.6)', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(239,68,68,0.4)' }}>
+          ⚠️ {toast}
+        </div>
+      )}
 
       {/* ── Admin Decide Match Modal ─────────────────────────────── */}
       {decideMatch && (
