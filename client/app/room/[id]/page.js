@@ -104,6 +104,8 @@ export default function RoomPage() {
       : ''
   );
   const t = translations[lang];
+  const langRef = useRef(lang);
+  langRef.current = lang;
 
   const localVideoRef  = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -224,7 +226,7 @@ export default function RoomPage() {
   const startMedia = useCallback(async () => {
     const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     if (!isSecure || !navigator.mediaDevices?.getUserMedia) {
-      setMediaError(lang === 'th'
+      setMediaError(langRef.current === 'th'
         ? `กล้องต้องการการเชื่อมต่อที่ปลอดภัย\nกรุณาเปิดผ่าน http://localhost:3000`
         : `Camera requires a secure connection\nOpen via http://localhost:3000`);
       return null;
@@ -240,14 +242,14 @@ export default function RoomPage() {
       return stream;
     } catch (err) {
       const msg = err.name === 'NotAllowedError'
-        ? (lang === 'th' ? 'กรุณาอนุญาตการเข้าถึงกล้องและไมค์' : 'Please allow camera & mic access')
+        ? (langRef.current === 'th' ? 'กรุณาอนุญาตการเข้าถึงกล้องและไมค์' : 'Please allow camera & mic access')
         : err.name === 'NotFoundError'
-          ? (lang === 'th' ? 'ไม่พบกล้องหรือไมค์' : 'No camera or mic found')
-          : (lang === 'th' ? `เปิดกล้องไม่ได้: ${err.message}` : `Camera error: ${err.message}`);
+          ? (langRef.current === 'th' ? 'ไม่พบกล้องหรือไมค์' : 'No camera or mic found')
+          : (langRef.current === 'th' ? `เปิดกล้องไม่ได้: ${err.message}` : `Camera error: ${err.message}`);
       setMediaError(msg);
       return null;
     }
-  }, [lang]);
+  }, []);
 
   const createPeer = useCallback((initiator, stream) => {
     const socket = getSocket();
@@ -334,9 +336,9 @@ export default function RoomPage() {
       setTimeoutAt(ta);
     };
     const onOpponentDeclared = ({ result }) => setOpponentResult(result);
-    const onMatchResultFinal = ({ winnerId, loserId, method }) => {
+    const onMatchResultFinal = ({ winnerId, loserId, method, standings }) => {
       setTourneyPhase('done');
-      setMatchResult({ winnerId, loserId, method });
+      setMatchResult({ winnerId, loserId, method, standings });
     };
     const onMatchConflict   = () => setTourneyPhase('admin_decision');
     const onMatchNeedsAdmin = () => setTourneyPhase('admin_decision');
@@ -383,7 +385,8 @@ export default function RoomPage() {
     socket.on('admin_peer_answer',    onAdminPeerAnswer);
     socket.on('admin_peer_ice',       onAdminPeerIce);
     socket.on('admin_left',           onAdminLeft);
-    socket.on('admin_called',         ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); });
+    const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
+    socket.on('admin_called', onAdminCalled);
 
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
     socket.on('ice_candidate', onIce); socket.on('message_received', onMessage); socket.on('partner_disconnected', onPartnerLeft);
@@ -402,7 +405,7 @@ export default function RoomPage() {
       socket.off('admin_peer_answer',    onAdminPeerAnswer);
       socket.off('admin_peer_ice',       onAdminPeerIce);
       socket.off('admin_left',           onAdminLeft);
-      socket.off('admin_called');
+      socket.off('admin_called', onAdminCalled);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
       // Clear tournament sessionStorage
@@ -426,7 +429,8 @@ export default function RoomPage() {
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     getSocket()?.emit('leave_room', { roomId });
     localStreamRef.current?.getTracks().forEach(tk => tk.stop());
-    peerRef.current?.close();
+    localStreamRef.current = null;
+    if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
   }, [getSocket, roomId]);
 
   const handleLeave = () => setEndModal('leave');

@@ -31,7 +31,7 @@ function Leaderboard({ standings, myId, lang }) {
                 {p.username[0]?.toUpperCase() || '?'}
               </div>
               <span className={`text-sm flex-1 truncate ${isMe ? 'text-purple-300 font-semibold' : 'text-white'}`}>
-                {p.username} {isMe && <span className="text-xs text-purple-500">(คุณ)</span>}
+                {p.username} {isMe && <span className="text-xs text-purple-500">{lang === 'th' ? '(คุณ)' : '(You)'}</span>}
               </span>
               <span className="text-sm font-bold text-yellow-400 flex-shrink-0">{p.points} <span className="text-xs text-slate-500">pt</span></span>
             </div>
@@ -59,6 +59,8 @@ export default function TournamentWaitingRoom() {
   const leftRef = useRef(false);
   const [alerts,      setAlerts]      = useState([]);
   const [decideMatch, setDecideMatch] = useState(null);
+  const langRef = useRef(lang);
+  langRef.current = lang;
 
   const load = useCallback(async () => {
     try {
@@ -69,11 +71,11 @@ export default function TournamentWaitingRoom() {
       if (t.playersInfo) setStandings([...t.playersInfo].sort((a, b) => b.points - a.points));
       return t;
     } catch {
-      setErrorMsg(lang === 'th' ? 'ไม่พบ Tournament นี้' : 'Tournament not found');
+      setErrorMsg(langRef.current === 'th' ? 'ไม่พบ Tournament นี้' : 'Tournament not found');
       setStatus('error');
       return null;
     }
-  }, [tournamentId, lang]);
+  }, [tournamentId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -145,7 +147,7 @@ export default function TournamentWaitingRoom() {
     const onClosed = ({ tournamentId: tid }) => {
       if (!mounted || tid !== tournamentId) return;
       setStatus('error');
-      setErrorMsg(lang === 'th' ? 'Admin ปิด Tournament แล้ว' : 'Tournament was closed');
+      setErrorMsg(langRef.current === 'th' ? 'Admin ปิด Tournament แล้ว' : 'Tournament was closed');
     };
 
     const onMatchFound = ({ roomId, isTournament, tournamentId: tid, matchId, gameType, roundNumber }) => {
@@ -213,7 +215,7 @@ export default function TournamentWaitingRoom() {
         socket.emit('leave_tournament', { tournamentId });
       }
     };
-  }, [authLoading, user, tournamentId, router, getSocket, load, lang]);
+  }, [authLoading, user, tournamentId, router, getSocket, load]);
 
   const handleLeave = () => {
     if (user?.isAdmin) { router.push('/tournament'); return; }
@@ -450,10 +452,10 @@ export default function TournamentWaitingRoom() {
             {Array.from({ length: totalRounds }).map((_, i) => (
               <div key={i} className="flex-1 h-2 rounded-full transition-colors"
                 style={{
-                  background: i < currentRound
-                    ? 'rgba(74,222,128,0.7)'
-                    : i === currentRound - 1 && status === 'round_in_progress'
-                      ? 'rgba(251,191,36,0.7)'
+                  background: (i === currentRound - 1 && status === 'round_in_progress')
+                    ? 'rgba(251,191,36,0.7)'
+                    : i < currentRound
+                      ? 'rgba(74,222,128,0.7)'
                       : 'rgba(255,255,255,0.08)',
                 }} />
             ))}

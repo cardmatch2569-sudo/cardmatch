@@ -1055,10 +1055,12 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-white truncate">{t.name}</h4>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs font-semibold ${t.status === 'active' ? 'text-yellow-400' : 'text-green-400'}`}>
+                          <span className={`text-xs font-semibold ${t.status === 'active' ? 'text-yellow-400' : t.status === 'round_complete' ? 'text-purple-400' : 'text-green-400'}`}>
                             {t.status === 'active'
-                              ? (lang === 'th' ? '⚔️ กำลังแข่ง' : '⚔️ Active')
-                              : (lang === 'th' ? '✅ รับสมัคร' : '✅ Waiting')}
+                              ? (lang === 'th' ? '⚔️ กำลังแข่ง' : '⚔️ In Progress')
+                              : t.status === 'round_complete'
+                                ? (lang === 'th' ? '🔄 รอรอบถัดไป' : '🔄 Between Rounds')
+                                : (lang === 'th' ? '✅ รับสมัคร' : '✅ Open')}
                           </span>
                           <span className="text-xs text-slate-600">
                             <Users size={10} className="inline mr-0.5" />

@@ -64,6 +64,14 @@ function TournamentCard({ t, lang, onJoin, joining }) {
                 : <>{lang === 'th' ? 'เข้าร่วม' : 'Join'}<ChevronRight size={14} /></>}
         </button>
       )}
+      {t.status !== 'waiting' && t.isJoined && (
+        <button
+          onClick={() => onJoin(t)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold flex-shrink-0 transition active:scale-95"
+          style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+          {lang === 'th' ? 'เข้าดู' : 'View'}<ChevronRight size={14} />
+        </button>
+      )}
     </div>
   );
 }
@@ -105,13 +113,13 @@ export default function TournamentListPage() {
     socket.on('tournament_created',      onCreated);
     socket.on('tournament_closed',       onClosed);
     socket.on('tournament_player_count', onCount);
-    socket.on('tournament_started',      onStarted);
+    socket.on('round_started',           onStarted);
 
     return () => {
       socket.off('tournament_created',      onCreated);
       socket.off('tournament_closed',       onClosed);
       socket.off('tournament_player_count', onCount);
-      socket.off('tournament_started',      onStarted);
+      socket.off('round_started',           onStarted);
     };
   }, [getSocket]);
 
