@@ -122,4 +122,26 @@ router.delete('/me', protect, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// ── MATCH HISTORY ──────────────────────────────────────────────────
+router.get('/me/history', protect, async (req, res) => {
+  try {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `SELECT r.room_id, r.created_at, r.ended_at,
+              g.name AS game_name, g.name_th AS game_name_th, g.color AS game_color,
+              u.username AS opponent_username, u.avatar AS opponent_avatar
+       FROM RoomPlayers rp1
+       JOIN Rooms r ON rp1.room_id = r.room_id
+       LEFT JOIN RoomPlayers rp2 ON rp2.room_id = r.room_id AND rp2.user_id != $1
+       LEFT JOIN Users u ON u.id = rp2.user_id
+       LEFT JOIN GameTypes g ON r.game_type_id = g.id
+       WHERE rp1.user_id = $1 AND r.status = 'ended'
+       ORDER BY r.ended_at DESC NULLS LAST
+       LIMIT 20`,
+      [req.user._id]
+    );
+    res.json({ matches: rows });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 module.exports = router;

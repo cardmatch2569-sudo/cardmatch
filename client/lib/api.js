@@ -28,16 +28,20 @@ const request = async (method, path, body) => {
     // Guard: server may return HTML on 404/500 — don't try to JSON-parse it
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) {
-      if (!res.ok) throw new Error(`Server error ${res.status} — check server connection`);
+      if (!res.ok) throw new Error(
+        res.status >= 500
+          ? 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง'
+          : 'เกิดข้อผิดพลาด กรุณาลองใหม่'
+      );
       return {};
     }
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Request failed');
+    if (!res.ok) throw new Error(data.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
     return data;
   } catch (err) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') throw new Error('Request timed out. Check your connection.');
+    if (err.name === 'AbortError') throw new Error('หมดเวลาเชื่อมต่อ กรุณาตรวจสอบอินเทอร์เน็ต');
     throw err;
   }
 };

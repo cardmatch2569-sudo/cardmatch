@@ -5,7 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart } from 'lucide-react';
+import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart, Sun, Moon } from 'lucide-react';
 
 export default function Navbar() {
   const { user, lang, loading, isAdminMode, viewMode, toggleViewMode, logout, toggleLang } = useAuth();
@@ -15,12 +15,24 @@ export default function Navbar() {
   const t = translations[lang];
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isLight, setIsLight] = useState(false);
 
   useEffect(() => {
     const onResize = () => { if (window.innerWidth >= 768) setMobileOpen(false); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    setIsLight(document.documentElement.classList.contains('light'));
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !isLight;
+    document.documentElement.classList.toggle('light', next);
+    try { localStorage.setItem('cg_theme', next ? 'light' : 'dark'); } catch {}
+    setIsLight(next);
+  };
 
   // Room page has its own full-screen UI — hide Navbar completely
   if (pathname?.startsWith('/room/')) return null;
@@ -31,7 +43,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '/lobby',      label: t.lobby,                            icon: <Swords size={15} />,  always: true },
-    { href: '/tournament', label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament', icon: <span className="text-sm">🏆</span>, always: true },
+    { href: '/tournament', label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament', icon: <span className="text-sm">🏆</span>, always: true, tourney: true },
     { href: '/setup',      label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, always: true },
     ...(isAdminMode ? [{ href: '/admin', label: t.admin, icon: <Shield size={15} />, admin: true }] : []),
   ];
@@ -61,16 +73,20 @@ export default function Navbar() {
           {/* Desktop center nav */}
           {user && (
             <div className="hidden md:flex items-center gap-1 flex-1 justify-center">
-              {navLinks.map(({ href, label, icon, admin }) => (
+              {navLinks.map(({ href, label, icon, admin, tourney }) => (
                 <Link key={href} href={href}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                     ${isActive(href)
                       ? admin
                         ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-600/20'
-                        : 'bg-purple-600/20 text-purple-300 border border-purple-600/20'
+                        : tourney
+                          ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30'
+                          : 'bg-purple-600/20 text-purple-300 border border-purple-600/20'
                       : admin
                         ? 'text-yellow-500 hover:text-yellow-300 hover:bg-yellow-500/5'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                        : tourney
+                          ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8 border border-yellow-500/20'
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                   {icon}{label}
                 </Link>
               ))}
@@ -118,6 +134,13 @@ export default function Navbar() {
               <Heart size={12} fill="currentColor" />
               {t.donate}
             </Link>
+
+            {/* Theme toggle (UX-5) */}
+            <button onClick={toggleTheme}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-white transition px-2 py-1.5 rounded-lg hover:bg-white/5"
+              title={isLight ? (lang === 'th' ? 'เปลี่ยนเป็น Dark' : 'Switch to Dark') : (lang === 'th' ? 'เปลี่ยนเป็น Light' : 'Switch to Light')}>
+              {isLight ? <Moon size={13} /> : <Sun size={13} />}
+            </button>
 
             {/* Language toggle */}
             <button onClick={toggleLang}
@@ -206,13 +229,13 @@ export default function Navbar() {
             {/* Nav links */}
             {user && (
               <div className="px-3 py-2 space-y-1">
-                {navLinks.map(({ href, label, icon, admin }) => (
+                {navLinks.map(({ href, label, icon, admin, tourney }) => (
                   <Link key={href} href={href} onClick={close}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
                       ${isActive(href)
-                        ? admin ? 'bg-yellow-600/15 text-yellow-300' : 'bg-purple-600/15 text-purple-300'
-                        : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
-                    <span className={admin ? 'text-yellow-400' : 'text-purple-400'}>{icon}</span>
+                        ? admin ? 'bg-yellow-600/15 text-yellow-300' : tourney ? 'bg-yellow-500/12 text-yellow-300' : 'bg-purple-600/15 text-purple-300'
+                        : tourney ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                    <span className={admin ? 'text-yellow-400' : tourney ? 'text-yellow-400' : 'text-purple-400'}>{icon}</span>
                     {label}
                     {isActive(href) && <div className="ml-auto w-2 h-2 rounded-full bg-current opacity-60" />}
                   </Link>

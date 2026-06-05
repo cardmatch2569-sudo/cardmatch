@@ -355,6 +355,27 @@ export default function LobbyPage() {
         </div>
       )}
 
+      {/* ── Tournament discovery banner (UX-4) ─────────────────── */}
+      {!lockedTournament && (
+        <Link href="/tournament" className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl transition"
+          style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)' }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-xl flex-shrink-0">🏆</span>
+            <div className="min-w-0">
+              <p className="text-yellow-400 font-semibold text-sm">
+                {lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament'}
+              </p>
+              <p className="text-slate-500 text-xs truncate">
+                {lang === 'th' ? 'แข่งแบบมีรอบ รวบรวมคะแนน ดูคะแนนสะสม' : 'Multi-round, leaderboard, admin-managed brackets'}
+              </p>
+            </div>
+          </div>
+          <span className="text-yellow-500 text-xs font-semibold flex-shrink-0">
+            {lang === 'th' ? 'ดูเลย →' : 'View →'}
+          </span>
+        </Link>
+      )}
+
       {/* ── Tournament lock banner ─────────────────────────────── */}
       {lockedTournament && (
         <div className="mb-4 px-4 py-3 rounded-xl flex items-center justify-between gap-3"

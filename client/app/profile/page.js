@@ -4,13 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check, Trash2, Lock, Eye, EyeOff } from 'lucide-react';
+import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check, Trash2, Lock, Eye, EyeOff, Swords } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, loading, lang, setUser } = useAuth();
   const router = useRouter();
   const t = translations[lang];
   const [games, setGames]             = useState([]);
+  const [matchHistory, setMatchHistory] = useState([]);
   const [copied, setCopied]           = useState(false);
   const [refreshing, setRefreshing]   = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -86,6 +87,7 @@ export default function ProfilePage() {
     if (!loading && !user) { router.push('/login'); return; }
     if (user) {
       api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
+      api.get('/api/users/me/history').then(({ matches }) => setMatchHistory(matches || [])).catch(() => {});
       if (!user.playerId) refreshUser();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,6 +234,46 @@ export default function ProfilePage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── Match History ───────────────────────────────────────── */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Swords size={15} className="text-purple-400" />
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">
+            {lang === 'th' ? 'ประวัติการแข่ง' : 'Match History'}
+          </h2>
+        </div>
+        {matchHistory.length === 0 ? (
+          <p className="text-slate-600 text-sm text-center py-4">
+            {lang === 'th' ? 'ยังไม่มีประวัติการแข่ง' : 'No matches yet'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {matchHistory.map((m) => {
+              const date = m.ended_at ? new Date(m.ended_at) : new Date(m.created_at);
+              const dateStr = date.toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short' });
+              return (
+                <div key={m.room_id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] hover:border-[var(--border-2)] transition"
+                  style={{ background: 'var(--bg-2)' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base"
+                    style={{ background: m.game_color ? `${m.game_color}18` : 'rgba(124,58,237,0.12)', border: `1px solid ${m.game_color || '#7c3aed'}25` }}>
+                    🃏
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white truncate">
+                      {lang === 'th' ? (m.game_name_th || m.game_name || '?') : (m.game_name || '?')}
+                    </div>
+                    <div className="text-xs text-slate-500 truncate">
+                      {lang === 'th' ? 'vs ' : 'vs '}{m.opponent_username || '—'}
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-600 flex-shrink-0">{dateStr}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Change Password ─────────────────────────────────────── */}
