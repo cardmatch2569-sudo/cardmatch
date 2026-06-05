@@ -155,9 +155,12 @@ export default function RoomPage() {
   const [adminCalledMsg, setAdminCalledMsg] = useState('');
 
   // Detect tournament match from sessionStorage
+  const [tournamentId, setTournamentId] = useState('');
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setIsTournament(sessionStorage.getItem('cg_is_tournament') === '1');
+      const isTn = sessionStorage.getItem('cg_is_tournament') === '1';
+      setIsTournament(isTn);
+      if (isTn) setTournamentId(sessionStorage.getItem('cg_tournament_id') || '');
     }
   }, []);
 
@@ -480,6 +483,21 @@ export default function RoomPage() {
     getSocket()?.emit('declare_result', { roomId, result });
   };
   const handleCallAdmin = () => getSocket()?.emit('call_admin', { roomId });
+  const goToTournament = useCallback(() => {
+    leftRef.current = true;
+    setForcedLandscape(false);
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    getSocket()?.emit('leave_room', { roomId });
+    localStreamRef.current?.getTracks().forEach(tk => tk.stop());
+    peerRef.current?.close();
+    // Clear tournament match session but keep tournament id
+    try {
+      sessionStorage.removeItem('cg_tournament_match_id');
+      // Keep cg_is_tournament and cg_tournament_id for re-join
+    } catch {}
+    const tid = sessionStorage.getItem('cg_tournament_id') || tournamentId;
+    router.push(tid ? `/tournament/${tid}` : '/tournament');
+  }, [getSocket, roomId, tournamentId, router]);
 
   if (loading || !user) return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50">
@@ -881,27 +899,31 @@ export default function RoomPage() {
                 </div>
                 <h2 className={`font-bold text-xl mb-2 ${matchResult.winnerId === user._id ? 'text-green-400' : 'text-red-400'}`}>
                   {matchResult.winnerId === user._id
-                    ? (lang === 'th' ? 'คุณชนะ!' : 'You Won!')
+                    ? (lang === 'th' ? 'คุณชนะ! +3 แต้ม' : 'You Won! +3 pts')
                     : (lang === 'th' ? 'คุณแพ้' : 'You Lost')}
                 </h2>
                 {matchResult.method === 'admin_decision' && (
-                  <p className="text-xs text-slate-600 mb-1">{lang === 'th' ? 'ผลตัดสินโดย Admin' : 'Decided by Admin'}</p>
+                  <p className="text-xs text-slate-600 mb-2">{lang === 'th' ? 'ผลตัดสินโดย Admin' : 'Decided by Admin'}</p>
                 )}
                 {matchResult.method === 'timeout_one_sided' && (
-                  <p className="text-xs text-slate-600 mb-1">{lang === 'th' ? 'ผลโดยอัตโนมัติ (หมดเวลา)' : 'Auto result (timeout)'}</p>
+                  <p className="text-xs text-slate-600 mb-2">{lang === 'th' ? 'ผลโดยอัตโนมัติ (หมดเวลา)' : 'Auto result (timeout)'}</p>
                 )}
-                <div className="flex gap-3 mt-5">
-                  <button onClick={findNextPlayer}
-                    className="btn-primary flex-1 py-3 rounded-xl text-sm gap-1.5">
-                    <Shuffle size={14} />
-                    {lang === 'th' ? 'หาผู้เล่นคนต่อไป' : 'Find Next'}
-                  </button>
-                  <button onClick={goToLobby}
-                    className="btn-ghost flex-1 py-3 rounded-xl text-sm gap-1.5 flex items-center justify-center">
-                    <Home size={14} />
-                    {lang === 'th' ? 'Lobby' : 'Lobby'}
-                  </button>
-                </div>
+                {matchResult.standings?.length > 0 && (
+                  <div className="w-full mt-2 mb-3 space-y-1">
+                    {matchResult.standings.slice(0, 3).map((s, i) => (
+                      <div key={s.userId} className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg"
+                        style={{ background: s.userId === user._id ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.04)' }}>
+                        <span className="text-slate-500 w-4">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</span>
+                        <span className={`flex-1 ${s.userId === user._id ? 'text-purple-300 font-semibold' : 'text-slate-300'}`}>{s.username}</span>
+                        <span className="text-yellow-400 font-bold">{s.points} pt</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={goToTournament}
+                  className="btn-primary w-full py-3 rounded-xl text-sm mt-2">
+                  🏟 {lang === 'th' ? 'กลับห้องทัวร์นาเมนต์' : 'Back to Tournament'}
+                </button>
               </>
             )}
           </div>

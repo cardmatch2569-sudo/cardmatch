@@ -13,9 +13,28 @@ const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
 
 // Tournament in-memory state
-const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, maxPlayers, createdBy, players: Set<userId> }
-const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map<userId,'win'|'lose'>, phase, timer }
+const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, maxPlayers, totalRounds, currentRound, activeMatchCount, playedPairs: Set, points: Map, createdBy, players: Set<userId> }
+const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map, phase, timer }
 const adminWatching  = new Map();    // roomId → { adminUserId, adminSocketId }
+
+// ── Pairing: random, no-repeat (greedy with fallback) ─────────────────
+const pairPlayersNoRepeat = (playerIds, playedPairs) => {
+  const arr = [...playerIds];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  const pairs = [];
+  const unpaired = [...arr];
+  while (unpaired.length >= 2) {
+    const p1 = unpaired.shift();
+    let bestIdx = unpaired.findIndex(p2 => !playedPairs.has([p1, p2].sort().join('_')));
+    if (bestIdx === -1) bestIdx = 0; // forced repeat fallback
+    const p2 = unpaired.splice(bestIdx, 1)[0];
+    pairs.push([p1, p2]);
+  }
+  return { pairs, bye: unpaired[0] || null };
+};
 
 // Basic content filter
 const BLOCKED_PATTERNS = [
@@ -45,12 +64,15 @@ const MAX_CONCURRENT_USERS = 1000;
 // ── Tournament helpers ─────────────────────────────────────────────
 
 const getTournamentPublic = (t) => ({
-  id: t.id,
-  name: t.name,
-  gameTypeId: t.gameTypeId,
-  status: t.status,
-  maxPlayers: t.maxPlayers,
-  playerCount: t.players.size,
+  id:               t.id,
+  name:             t.name,
+  gameTypeId:       t.gameTypeId,
+  status:           t.status,
+  maxPlayers:       t.maxPlayers,
+  totalRounds:      t.totalRounds,
+  currentRound:     t.currentRound,
+  activeMatchCount: t.activeMatchCount,
+  playerCount:      t.players.size,
 });
 
 const notifyAdmins = (io, type, data) => {
@@ -68,7 +90,17 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
   const loserId = match.players.find(p => p !== winnerId);
   if (!loserId) return;
 
-  io.to(roomId).emit('match_result_final', { winnerId, loserId, method });
+  // Update tournament points (+3 for winner)
+  const t = tournaments.get(match.tournamentId);
+  if (t) {
+    t.points.set(winnerId, (t.points.get(winnerId) || 0) + 3);
+    t.activeMatchCount = Math.max(0, (t.activeMatchCount || 1) - 1);
+  }
+
+  // Build standings to include in result
+  const standings = t ? buildStandings(t) : [];
+
+  io.to(roomId).emit('match_result_final', { winnerId, loserId, method, standings, tournamentId: match.tournamentId });
 
   try {
     const pool = getPool();
@@ -78,7 +110,47 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
     );
     await pool.query('UPDATE Users SET wins=wins+1, total_games=total_games+1 WHERE id=$1', [winnerId]);
     await pool.query('UPDATE Users SET losses=losses+1, total_games=total_games+1 WHERE id=$1', [loserId]);
+    // Update tournament player points
+    await pool.query('UPDATE TournamentPlayers SET points=points+3, wins=wins+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, winnerId]).catch(() => {});
+    await pool.query('UPDATE TournamentPlayers SET losses=losses+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, loserId]).catch(() => {});
   } catch (e) { console.error('[finalizeMatch]', e.message); }
+
+  // Check if round is complete
+  if (t && t.activeMatchCount === 0) {
+    const info = getTournamentPublic(t);
+    if (t.currentRound >= t.totalRounds) {
+      // All rounds done → tournament complete
+      t.status = 'ended';
+      io.to(`tournament:${t.id}`).emit('tournament_complete', { tournamentId: t.id, standings });
+      io.emit('tournament_updated', info);
+      try { await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW() WHERE id=$1", [t.id]); } catch {}
+    } else {
+      // Round complete, more rounds remain
+      t.status = 'round_complete';
+      io.to(`tournament:${t.id}`).emit('round_complete', {
+        tournamentId: t.id,
+        roundNumber:  t.currentRound,
+        totalRounds:  t.totalRounds,
+        standings,
+      });
+      io.emit('tournament_updated', info);
+      notifyAdmins(io, 'round_complete', {
+        tournamentId: t.id,
+        roundNumber:  t.currentRound,
+        totalRounds:  t.totalRounds,
+      });
+    }
+  }
+};
+
+const buildStandings = (t) => {
+  return [...t.players]
+    .map(id => ({
+      userId:   id,
+      username: onlineUsers.get(id)?.username || '?',
+      points:   t.points.get(id) || 0,
+    }))
+    .sort((a, b) => b.points - a.points);
 };
 
 const handleMatchTimeout = (io, roomId) => {
@@ -96,7 +168,7 @@ const handleMatchTimeout = (io, roomId) => {
   } else {
     const [[declarerId, result]] = [...match.results.entries()];
     const winnerId = result === 'win' ? declarerId : match.players.find(p => p !== declarerId);
-    finalizeMatch(io, roomId, match, winnerId, 'timeout_one_sided');
+    finalizeMatch(io, roomId, match, winnerId, 'timeout_one_sided').catch(() => {});
   }
 };
 
@@ -299,89 +371,101 @@ const setupSocketHandlers = (io) => {
     });
 
     // ── TOURNAMENT MANAGEMENT (Admin) ─────────────────────────────
-    socket.on('create_tournament', async ({ name, gameTypeId, maxPlayers }) => {
+    socket.on('create_tournament', async ({ name, gameTypeId, maxPlayers, totalRounds }) => {
       if (!user.isAdmin) return;
       if (!name?.trim() || !gameTypeId) return socket.emit('tournament_error', { message: 'กรุณากรอกข้อมูลให้ครบ' });
       const id = uuidv4();
       const tournament = {
         id,
-        name: name.trim().slice(0, 100),
+        name:             name.trim().slice(0, 100),
         gameTypeId,
-        status: 'waiting',
-        maxPlayers: Math.min(Math.max(parseInt(maxPlayers) || 16, 2), 64),
-        createdBy: userId,
-        players: new Set(),
+        status:           'waiting',
+        maxPlayers:       Math.min(Math.max(parseInt(maxPlayers) || 8, 2), 64),
+        totalRounds:      Math.min(Math.max(parseInt(totalRounds) || 3, 1), 10),
+        currentRound:     0,
+        activeMatchCount: 0,
+        playedPairs:      new Set(),
+        points:           new Map(),
+        createdBy:        userId,
+        players:          new Set(),
       };
       tournaments.set(id, tournament);
       try {
         await getPool().query(
-          `INSERT INTO Tournaments (id, name, game_type_id, status, max_players, created_by) VALUES ($1,$2,$3,'waiting',$4,$5)`,
-          [id, tournament.name, gameTypeId, tournament.maxPlayers, userId]
+          `INSERT INTO Tournaments (id, name, game_type_id, status, max_players, total_rounds, created_by) VALUES ($1,$2,$3,'waiting',$4,$5,$6)`,
+          [id, tournament.name, gameTypeId, tournament.maxPlayers, tournament.totalRounds, userId]
         );
       } catch (e) { console.error('[create_tournament]', e.message); }
       io.emit('tournament_created', getTournamentPublic(tournament));
       socket.emit('tournament_created_ok', { id });
     });
 
-    socket.on('start_tournament', async ({ tournamentId }) => {
+    // start_round: starts first round OR next round (admin only, all matches must be done first)
+    socket.on('start_round', async ({ tournamentId }) => {
       if (!user.isAdmin) return;
       const t = tournaments.get(tournamentId);
-      if (!t || t.status !== 'waiting') return socket.emit('tournament_error', { message: 'ไม่พบหรือเริ่มไปแล้ว' });
+      if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament' });
+      if (!['waiting', 'round_complete'].includes(t.status))
+        return socket.emit('tournament_error', { message: 'มีแมตช์ที่ยังไม่จบ หรือ Tournament สิ้นสุดแล้ว' });
       if (t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
+      if (t.currentRound >= t.totalRounds) return socket.emit('tournament_error', { message: 'ครบทุกรอบแล้ว' });
 
+      t.currentRound++;
       t.status = 'active';
-      const players = [...t.players];
-      for (let i = players.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [players[i], players[j]] = [players[j], players[i]];
-      }
 
-      const gameType      = await GameType.findById(t.gameTypeId);
-      const gameInfo      = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+      const { pairs, bye } = pairPlayersNoRepeat([...t.players], t.playedPairs);
+      pairs.forEach(([p1, p2]) => t.playedPairs.add([p1, p2].sort().join('_')));
+      t.activeMatchCount = pairs.length;
+
+      const gameType  = await GameType.findById(t.gameTypeId);
+      const gameInfo  = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
       const createdMatches = [];
 
-      for (let i = 0; i < players.length - 1; i += 2) {
-        const p1Id = players[i], p2Id = players[i + 1];
+      for (const [p1Id, p2Id] of pairs) {
         const roomId  = uuidv4();
         const matchId = uuidv4();
         const p1Info  = onlineUsers.get(p1Id);
         const p2Info  = onlineUsers.get(p2Id);
 
         try { await Room.create({ roomId, gameTypeId: t.gameTypeId, players: [p1Id, p2Id] }); }
-        catch (e) { console.error('[start_tournament] Room.create:', e.message); continue; }
+        catch (e) { console.error('[start_round] Room.create:', e.message); t.activeMatchCount--; continue; }
 
         activeRooms.set(roomId, { players: [p1Id, p2Id], isTournament: true });
-        tourneyMatches.set(roomId, {
-          matchId, tournamentId, players: [p1Id, p2Id],
-          results: new Map(), phase: 'playing', timer: null,
-        });
+        tourneyMatches.set(roomId, { matchId, tournamentId, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null });
 
         try {
           await getPool().query(
-            `INSERT INTO TournamentMatches (id, tournament_id, room_id, player1_id, player2_id, status) VALUES ($1,$2,$3,$4,$5,'playing')`,
-            [matchId, tournamentId, roomId, p1Id, p2Id]
+            `INSERT INTO TournamentMatches (id, tournament_id, room_id, player1_id, player2_id, status, round) VALUES ($1,$2,$3,$4,$5,'playing',$6)`,
+            [matchId, tournamentId, roomId, p1Id, p2Id, t.currentRound]
           );
-        } catch (e) { console.error('[start_tournament] TM insert:', e.message); }
+        } catch (e) { console.error('[start_round] TM insert:', e.message); }
 
-        if (p1Info) io.to(p1Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p2Id, username: p2Info?.username || '?', avatar: p2Info?.avatar || '' }, isTournament: true, tournamentId, matchId });
-        if (p2Info) io.to(p2Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p1Id, username: p1Info?.username || '?', avatar: p1Info?.avatar || '' }, isTournament: true, tournamentId, matchId });
+        if (p1Info) io.to(p1Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p2Id, username: p2Info?.username || '?', avatar: p2Info?.avatar || '' }, isTournament: true, tournamentId, matchId, roundNumber: t.currentRound });
+        if (p2Info) io.to(p2Info.socketId).emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: p1Id, username: p1Info?.username || '?', avatar: p1Info?.avatar || '' }, isTournament: true, tournamentId, matchId, roundNumber: t.currentRound });
 
         createdMatches.push({ matchId, roomId, player1Id: p1Id, player2Id: p2Id });
       }
 
-      if (players.length % 2 === 1) {
-        const byeId   = players[players.length - 1];
-        const byeInfo = onlineUsers.get(byeId);
-        if (byeInfo) io.to(byeInfo.socketId).emit('tournament_bye', { message: 'คุณได้รับ BYE รอบนี้' });
+      if (bye) {
+        const byeInfo = onlineUsers.get(bye);
+        if (byeInfo) io.to(byeInfo.socketId).emit('tournament_bye', { message: `คุณได้รับ BYE รอบที่ ${t.currentRound}`, roundNumber: t.currentRound });
+        // Check if round instantly complete (all byes — edge case)
+        if (t.activeMatchCount === 0) t.status = 'round_complete';
       }
 
-      try { await getPool().query("UPDATE Tournaments SET status='active', started_at=NOW() WHERE id=$1", [tournamentId]); } catch {}
+      try {
+        await getPool().query(
+          "UPDATE Tournaments SET status='active', current_round=$1, started_at=COALESCE(started_at,NOW()) WHERE id=$2",
+          [t.currentRound, tournamentId]
+        );
+      } catch {}
 
-      // Broadcast to room members AND globally (covers reconnected players not in the socket room)
-      io.to(`tournament:${tournamentId}`).emit('tournament_started', { tournamentId, matches: createdMatches });
-      io.emit('tournament_started', { tournamentId, matches: createdMatches });
+      const roundInfo = { tournamentId, roundNumber: t.currentRound, totalRounds: t.totalRounds, matches: createdMatches };
+      io.to(`tournament:${tournamentId}`).emit('round_started', roundInfo);
+      io.emit('round_started', roundInfo);
       io.emit('tournament_updated', getTournamentPublic(t));
     });
+
 
     socket.on('close_tournament', async ({ tournamentId }) => {
       if (!user.isAdmin) return;
@@ -398,8 +482,14 @@ const setupSocketHandlers = (io) => {
     socket.on('join_tournament', async ({ tournamentId }) => {
       const t = tournaments.get(tournamentId);
       if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament นี้' });
-      if (t.status !== 'waiting') return socket.emit('tournament_error', { message: 'Tournament นี้เริ่มไปแล้ว' });
-      if (t.players.size >= t.maxPlayers) return socket.emit('tournament_error', { message: 'ห้องเต็มแล้ว' });
+      if (t.status === 'ended') return socket.emit('tournament_error', { message: 'Tournament นี้จบแล้ว' });
+
+      const alreadyIn = t.players.has(userId);
+      // New players can only join during 'waiting' phase and if not full
+      if (!alreadyIn) {
+        if (t.status !== 'waiting') return socket.emit('tournament_error', { message: 'Tournament เริ่มไปแล้ว ไม่รับสมัครเพิ่ม' });
+        if (t.players.size >= t.maxPlayers) return socket.emit('tournament_error', { message: 'ห้องเต็มแล้ว' });
+      }
 
       t.players.add(userId);
       socket.join(`tournament:${tournamentId}`);
@@ -418,7 +508,8 @@ const setupSocketHandlers = (io) => {
 
       io.to(`tournament:${tournamentId}`).emit('tournament_player_update', { tournamentId, playersInfo, playerCount: t.players.size });
       io.emit('tournament_player_count', { tournamentId, playerCount: t.players.size });
-      socket.emit('tournament_joined_ok', { tournamentId, playersInfo, tournament: getTournamentPublic(t) });
+      const standings = buildStandings(t);
+      socket.emit('tournament_joined_ok', { tournamentId, playersInfo, tournament: getTournamentPublic(t), standings });
     });
 
     socket.on('leave_tournament', async ({ tournamentId }) => {

@@ -128,6 +128,12 @@ const initTables = async () => {
         ended_at      TIMESTAMP
       )
     `);
+    // Add multi-round columns (safe on re-deploy)
+    await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS total_rounds INTEGER DEFAULT 3`).catch(() => {});
+    await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS current_round INTEGER DEFAULT 0`).catch(() => {});
+    await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 0`).catch(() => {});
+    await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0`).catch(() => {});
+    await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0`).catch(() => {});
     console.log('[DB] Tournament tables ready');
   } catch (e) {
     console.error('[DB] Tournament tables warning:', e.message);

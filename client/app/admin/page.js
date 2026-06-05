@@ -12,7 +12,7 @@ import {
 
 const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
 const EMPTY_GAME = { name: '', nameTh: '', description: '', descriptionTh: '', imageUrl: '', color: '#7c3aed', isActive: true };
-const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 8 };
+const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 8, totalRounds: 3 };
 
 export default function AdminPage() {
   const { user, loading: authLoading, lang, isAdminMode, toggleViewMode } = useAuth();
@@ -111,8 +111,12 @@ export default function AdminPage() {
     const onClosed  = ({ tournamentId }) => setTournaments(p => p.filter(x => x.id !== tournamentId));
     const onCount   = ({ tournamentId, playerCount }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, playerCount } : x));
-    const onStarted = ({ tournamentId }) =>
-      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'active' } : x));
+    const onRoundStarted = ({ tournamentId, roundNumber, totalRounds }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'active', currentRound: roundNumber, totalRounds } : x));
+    const onRoundComplete = ({ tournamentId, roundNumber }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'round_complete', currentRound: roundNumber, activeMatchCount: 0 } : x));
+    const onTournamentComplete = ({ tournamentId }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'ended' } : x));
 
     // Admin spectate WebRTC
     const onSpectateOffer = ({ from, fromUsername, offer, roomId }) => {
@@ -153,7 +157,9 @@ export default function AdminPage() {
     socket.on('tournament_created',  onCreated);
     socket.on('tournament_closed',   onClosed);
     socket.on('tournament_player_count', onCount);
-    socket.on('tournament_started',  onStarted);
+    socket.on('round_started',       onRoundStarted);
+    socket.on('round_complete',      onRoundComplete);
+    socket.on('tournament_complete', onTournamentComplete);
     socket.on('admin_peer_offer',    onSpectateOffer);
     socket.on('admin_peer_ice',      onSpectateIce);
     socket.on('spectate_ended',      onSpectateEnded);
@@ -163,7 +169,9 @@ export default function AdminPage() {
       socket.off('tournament_created',  onCreated);
       socket.off('tournament_closed',   onClosed);
       socket.off('tournament_player_count', onCount);
-      socket.off('tournament_started',  onStarted);
+      socket.off('round_started',       onRoundStarted);
+      socket.off('round_complete',      onRoundComplete);
+      socket.off('tournament_complete', onTournamentComplete);
       socket.off('admin_peer_offer',    onSpectateOffer);
       socket.off('admin_peer_ice',      onSpectateIce);
       socket.off('spectate_ended',      onSpectateEnded);
@@ -258,7 +266,7 @@ export default function AdminPage() {
       setTourneyCreating(false);
       return;
     }
-    socket.emit('create_tournament', { name: tourneyForm.name.trim(), gameTypeId: tourneyForm.gameTypeId, maxPlayers: tourneyForm.maxPlayers });
+    socket.emit('create_tournament', { name: tourneyForm.name.trim(), gameTypeId: tourneyForm.gameTypeId, maxPlayers: tourneyForm.maxPlayers, totalRounds: tourneyForm.totalRounds });
     const onOk = () => {
       socket.off('tournament_error', onFail);
       setTourneyForm(EMPTY_TOURNEY);
@@ -281,8 +289,8 @@ export default function AdminPage() {
     }, 8000);
   };
 
-  const handleStartTourney = (tournamentId) => {
-    getSocket()?.emit('start_tournament', { tournamentId });
+  const handleStartRound = (tournamentId) => {
+    getSocket()?.emit('start_round', { tournamentId });
   };
 
   const handleCloseTourney = (tournamentId) => {
@@ -987,7 +995,7 @@ export default function AdminPage() {
                   ▾
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'ผู้เล่นสูงสุด' : 'Max players'}</label>
                 {[8, 16, 32].map(n => (
                   <button key={n} onClick={() => setTourneyForm(f => ({ ...f, maxPlayers: n }))}
@@ -996,6 +1004,18 @@ export default function AdminPage() {
                       ? { background: 'rgba(124,58,237,0.3)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.5)' }
                       : { background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
                     {n}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'จำนวนรอบ' : 'Rounds'}</label>
+                {[3, 5, 7].map(n => (
+                  <button key={n} onClick={() => setTourneyForm(f => ({ ...f, totalRounds: n }))}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold transition"
+                    style={tourneyForm.totalRounds === n
+                      ? { background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.5)' }
+                      : { background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    {n} {lang === 'th' ? 'รอบ' : 'rds'}
                   </button>
                 ))}
               </div>
@@ -1047,13 +1067,16 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
-                        {t.status === 'waiting' && (
+                        {['waiting', 'round_complete'].includes(t.status) && t.currentRound < (t.totalRounds || 3) && (
                           <button
-                            onClick={() => handleStartTourney(t.id)}
-                            disabled={(t.playerCount || 0) < 2}
+                            onClick={() => handleStartRound(t.id)}
+                            disabled={(t.playerCount || 0) < 2 || (t.activeMatchCount || 0) > 0}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40"
                             style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
-                            <Play size={11} /> {lang === 'th' ? 'เริ่ม' : 'Start'}
+                            <Play size={11} />
+                            {lang === 'th'
+                              ? `เริ่มรอบ ${(t.currentRound || 0) + 1}/${t.totalRounds || 3}`
+                              : `Round ${(t.currentRound || 0) + 1}/${t.totalRounds || 3}`}
                           </button>
                         )}
                         <button

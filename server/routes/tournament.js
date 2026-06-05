@@ -62,20 +62,28 @@ router.get('/:id', protect, async (req, res) => {
     const online = getOnlineUsers();
     const playersInfo = [...t.players].map(id => {
       const info = online.get(id);
-      return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
-    });
+      return {
+        userId:   id,
+        username: info?.username || '?',
+        avatar:   info?.avatar  || '',
+        points:   (t.points && t.points.get(id)) || 0,
+      };
+    }).sort((a, b) => b.points - a.points);
 
     res.json({
       tournament: {
-        id:          t.id,
-        name:        t.name,
-        gameTypeId:  t.gameTypeId,
-        status:      t.status,
-        maxPlayers:  t.maxPlayers,
-        playerCount: t.players.size,
-        isJoined:    t.players.has(req.user._id),
+        id:               t.id,
+        name:             t.name,
+        gameTypeId:       t.gameTypeId,
+        status:           t.status,
+        maxPlayers:       t.maxPlayers,
+        totalRounds:      t.totalRounds,
+        currentRound:     t.currentRound,
+        activeMatchCount: t.activeMatchCount,
+        playerCount:      t.players.size,
+        isJoined:         t.players.has(req.user._id),
         playersInfo,
-        matches:     matchesOut,
+        matches:          matchesOut,
       },
     });
   } catch (err) { res.status(500).json({ message: err.message }); }
