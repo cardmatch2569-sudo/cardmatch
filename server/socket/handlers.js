@@ -95,8 +95,11 @@ const notifyAdmins = (io, type, data) => {
   }
 };
 
+const ADMIN_DECISION_TIMEOUT_MS = 10 * 60 * 1000; // BUG-06: 10 min auto-resolve if no admin decides
+
 const finalizeMatch = async (io, roomId, match, winnerId, method) => {
   clearTimeout(match.timer);
+  clearTimeout(match.adminDecisionTimer); // BUG-06
   match.phase = 'done';
   match.winnerId = winnerId;
   const loserId = match.players.find(p => p !== winnerId);
@@ -163,7 +166,7 @@ const buildStandings = (t) => {
   return [...t.players]
     .map(id => ({
       userId:   id,
-      username: onlineUsers.get(id)?.username || '?',
+      username: onlineUsers.get(id)?.username || t.playerNames?.get(id) || '?', // BUG-07
       points:   t.points.get(id) || 0,
     }))
     .sort((a, b) => b.points - a.points);
@@ -181,6 +184,12 @@ const handleMatchTimeout = (io, roomId) => {
       players: match.players,
       playerNames: match.players.map(id => onlineUsers.get(id)?.username || '?'),
     });
+    // BUG-06: auto-resolve after 10 min if no admin acts
+    match.adminDecisionTimer = setTimeout(() => {
+      if (match.phase !== 'admin_decision') return;
+      const winnerId = match.players[Math.floor(Math.random() * match.players.length)];
+      finalizeMatch(io, roomId, match, winnerId, 'auto_timeout').catch(() => {});
+    }, ADMIN_DECISION_TIMEOUT_MS);
   } else {
     const [[declarerId, result]] = [...match.results.entries()];
     const winnerId = result === 'win' ? declarerId : match.players.find(p => p !== declarerId);
@@ -371,7 +380,7 @@ const setupSocketHandlers = (io) => {
 
     // ── WEBRTC SIGNALING ──────────────────────────────────────────
     const inRoom = (roomId) => activeRooms.get(roomId)?.players.includes(userId);
-    socket.on('join_room',     ({ roomId }) => { socket.join(roomId); socket.to(roomId).emit('peer_joined',    { userId }); });
+    socket.on('join_room',     ({ roomId }) => { if (!inRoom(roomId)) return; socket.join(roomId); socket.to(roomId).emit('peer_joined', { userId }); });
     socket.on('offer',         ({ roomId, offer })     => { if (!inRoom(roomId)) return; socket.to(roomId).emit('offer',        { offer,     from: userId }); });
     socket.on('answer',        ({ roomId, answer })    => { if (!inRoom(roomId)) return; socket.to(roomId).emit('answer',       { answer,    from: userId }); });
     socket.on('ice_candidate', ({ roomId, candidate }) => { if (!inRoom(roomId)) return; socket.to(roomId).emit('ice_candidate',{ candidate, from: userId }); });
@@ -379,6 +388,7 @@ const setupSocketHandlers = (io) => {
     // ── CHAT ──────────────────────────────────────────────────────
     socket.on('send_message', ({ roomId, message }) => {
       if (!message?.trim()) return;
+      if (!inRoom(roomId)) return;
       if (!rateOk(rateLimits.roomMsg, userId, 800)) return;
       io.to(roomId).emit('message_received', {
         from: { _id: userId, username: user.username, avatar: user.avatar },
@@ -415,6 +425,7 @@ const setupSocketHandlers = (io) => {
         activeMatchCount: 0,
         playedPairs:      new Set(),
         points:           new Map(),
+        playerNames:      new Map(), // BUG-07: username cache so standings work when players offline
         createdBy:        userId,
         players:          new Set(),
         scheduledAt:      scheduledAt ? new Date(scheduledAt) : null,
@@ -575,6 +586,8 @@ const setupSocketHandlers = (io) => {
       });
 
       t.players.add(userId);
+      if (!t.playerNames) t.playerNames = new Map();
+      t.playerNames.set(userId, user.username); // BUG-07: cache for offline standings
       socket.join(`tournament:${tournamentId}`);
 
       try {
@@ -657,6 +670,12 @@ const setupSocketHandlers = (io) => {
             players: tm.players,
             playerNames: tm.players.map(id => onlineUsers.get(id)?.username || '?'),
           });
+          // BUG-06: auto-resolve after 10 min if no admin acts
+          tm.adminDecisionTimer = setTimeout(() => {
+            if (tm.phase !== 'admin_decision') return;
+            const winnerId = tm.players[Math.floor(Math.random() * tm.players.length)];
+            finalizeMatch(io, roomId, tm, winnerId, 'auto_timeout').catch(() => {});
+          }, ADMIN_DECISION_TIMEOUT_MS);
         }
       }
     });
@@ -675,6 +694,7 @@ const setupSocketHandlers = (io) => {
       if (!user.isAdmin) return;
       const tm = tourneyMatches.get(roomId);
       if (!tm || !tm.players.includes(winnerId)) return;
+      clearTimeout(tm.adminDecisionTimer); // BUG-06
       finalizeMatch(io, roomId, tm, winnerId, 'admin_decision');
     });
 
@@ -683,6 +703,13 @@ const setupSocketHandlers = (io) => {
       if (!user.isAdmin) return;
       const room = activeRooms.get(roomId);
       if (!room) return socket.emit('error', { message: 'ห้องนี้ไม่พบ' });
+
+      // BUG-05: Evict any other admin already watching this room
+      const existing = adminWatching.get(roomId);
+      if (existing && existing.adminSocketId !== socket.id) {
+        io.to(existing.adminSocketId).emit('spectate_ended', { roomId, reason: 'replaced' });
+        io.sockets.sockets.get(existing.adminSocketId)?.leave(roomId);
+      }
 
       adminWatching.set(roomId, { adminUserId: userId, adminSocketId: socket.id });
       socket.join(roomId);
@@ -793,4 +820,78 @@ const setAnnouncement = (io, text, author) => {
 };
 const getAnnouncement = () => currentAnnouncement;
 
-module.exports = { setupSocketHandlers, getOnlineUsers, getTournaments, getTourneyMatchesMap, setAnnouncement, getAnnouncement };
+// BUG-01: Restore non-ended tournaments from DB into memory on server restart
+const restoreTournamentsFromDB = async () => {
+  try {
+    const pool = getPool();
+    const { rows: tRows } = await pool.query(
+      `SELECT * FROM Tournaments WHERE status NOT IN ('ended') ORDER BY created_at ASC`
+    );
+    for (const row of tRows) {
+      if (tournaments.has(row.id)) continue; // already in memory
+
+      const { rows: playerRows } = await pool.query(
+        `SELECT tp.user_id, tp.points, u.username
+         FROM TournamentPlayers tp
+         JOIN Users u ON tp.user_id = u.id
+         WHERE tp.tournament_id = $1`,
+        [row.id]
+      );
+
+      const players     = new Set(playerRows.map(p => p.user_id));
+      const points      = new Map(playerRows.map(p => [p.user_id, p.points || 0]));
+      const playerNames = new Map(playerRows.map(p => [p.user_id, p.username]));
+
+      const { rows: matchRows } = await pool.query(
+        'SELECT player1_id, player2_id, status FROM TournamentMatches WHERE tournament_id=$1',
+        [row.id]
+      );
+
+      const playedPairs = new Set(
+        matchRows.map(m => [m.player1_id, m.player2_id].sort().join('_'))
+      );
+
+      const playingMatches = matchRows.filter(m => m.status === 'playing');
+      const activeMatchCount = playingMatches.length;
+
+      // If active but all matches finished (no playing left), correct to round_complete
+      let status = row.status;
+      if (status === 'active' && activeMatchCount === 0) status = 'round_complete';
+
+      tournaments.set(row.id, {
+        id:               row.id,
+        name:             row.name,
+        gameTypeId:       row.game_type_id,
+        status,
+        maxPlayers:       row.max_players,
+        totalRounds:      row.total_rounds || 3,
+        currentRound:     row.current_round || 0,
+        activeMatchCount,
+        playedPairs,
+        points,
+        playerNames,
+        createdBy:        row.created_by,
+        players,
+        scheduledAt:      row.scheduled_at  ? new Date(row.scheduled_at)  : null,
+        scheduledEnd:     row.scheduled_end ? new Date(row.scheduled_end) : null,
+        _roundEndFired:   false,
+      });
+
+      // Matches that were in-progress when server died need admin decision
+      if (playingMatches.length > 0) {
+        await pool.query(
+          `UPDATE TournamentMatches SET status='admin_decision' WHERE tournament_id=$1 AND status='playing'`,
+          [row.id]
+        ).catch(() => {});
+        console.log(`[Tournament] ${row.name}: ${playingMatches.length} in-progress match(es) → admin_decision`);
+      }
+
+      console.log(`[Tournament] Restored: "${row.name}" (${status}, ${players.size} players, round ${row.current_round || 0}/${row.total_rounds || 3})`);
+    }
+    if (tRows.length > 0) console.log(`[Tournament] Restored ${tRows.length} tournament(s) from DB`);
+  } catch (e) {
+    console.error('[Tournament] Restore failed:', e.message);
+  }
+};
+
+module.exports = { setupSocketHandlers, getOnlineUsers, getTournaments, getTourneyMatchesMap, setAnnouncement, getAnnouncement, restoreTournamentsFromDB };

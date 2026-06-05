@@ -66,7 +66,7 @@ router.get('/:id', protect, async (req, res) => {
       const info = online.get(id);
       return {
         userId:   id,
-        username: info?.username || '?',
+        username: info?.username || t.playerNames?.get(id) || '?', // BUG-07
         avatar:   info?.avatar  || '',
         points:   (t.points && t.points.get(id)) || 0,
       };

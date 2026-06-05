@@ -17,7 +17,7 @@ const userRoutes              = require('./routes/users');
 const gameRoutes              = require('./routes/games');
 const adminRoutes             = require('./routes/admin');
 const tournamentRoutes        = require('./routes/tournament');
-const { setupSocketHandlers } = require('./socket/handlers');
+const { setupSocketHandlers, restoreTournamentsFromDB } = require('./socket/handlers');
 
 const isAllowedOrigin = (origin) => {
   if (!origin) return true; // No Origin = non-browser (server/health-check), safe to allow
@@ -117,6 +117,9 @@ connectDB().then(async () => {
     // Clean up: remove 'Thai Card Battle' interim entry if it exists
     try { await getPool().query(`DELETE FROM GameTypes WHERE name='Thai Card Battle'`); } catch {}
   } catch (e) { console.warn('Auto-seed warning:', e.message); }
+
+  // BUG-01: Restore active/waiting tournaments from DB into memory
+  await restoreTournamentsFromDB().catch(() => {});
 }).catch(() => {});
 
 app.use(cors(corsOptions));

@@ -111,6 +111,11 @@ router.delete('/users/:id', protect, adminOnly, async (req, res) => {
     await pool.query('DELETE FROM EmailVerifications WHERE email=$1', [target.email]);
     await pool.query('DELETE FROM Users WHERE id=$1', [req.params.id]);
 
+    // BUG-02: Force-disconnect the deleted user's socket if online
+    const io = req.app.get('io');
+    const entry = getOnlineUsers().get(req.params.id);
+    if (entry) io.sockets.sockets.get(entry.socketId)?.disconnect(true);
+
     res.json({ message: `ลบผู้ใช้ "${target.username}" ออกจากระบบแล้ว` });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

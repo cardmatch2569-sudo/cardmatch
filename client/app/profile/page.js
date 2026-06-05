@@ -64,7 +64,10 @@ export default function ProfilePage() {
       sessionStorage.removeItem('cg_token');
       router.push('/');
     } catch (err) {
-      setDeleteError(err.message || (lang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Wrong password'));
+      const isGoogle = user.googleId && !user.password;
+      setDeleteError(err.message || (lang === 'th'
+        ? (isGoogle ? 'อีเมลไม่ถูกต้อง' : 'รหัสผ่านไม่ถูกต้อง')
+        : (isGoogle ? 'Wrong email' : 'Wrong password')));
     } finally { setDeleting(false); }
   };
 
@@ -345,13 +348,24 @@ export default function ProfilePage() {
               <label className="text-xs text-slate-400 block mb-2">
                 {lang === 'th'
                   ? user.googleId && !user.password
-                    ? '(บัญชี Google ไม่ต้องกรอกรหัสผ่าน)'
+                    ? '📧 ยืนยันด้วยอีเมลของคุณ'
                     : '🔐 ยืนยันด้วยรหัสผ่านของคุณ'
                   : user.googleId && !user.password
-                    ? '(Google account — no password required)'
+                    ? '📧 Confirm with your email address'
                     : '🔐 Confirm with your password'}
               </label>
-              {!(user.googleId && !user.password) && (
+              {user.googleId && !user.password ? (
+                <div className="relative">
+                  <input type="email"
+                    value={deletePass}
+                    onChange={e => { setDeletePass(e.target.value); setDeleteError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && deletePass && deleteAccount()}
+                    placeholder={user.email || (lang === 'th' ? 'อีเมลของคุณ' : 'Your email')}
+                    className="input-base pl-4 text-sm"
+                    autoFocus
+                  />
+                </div>
+              ) : (
                 <div className="relative">
                   <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
                   <input type={showDelPass ? 'text' : 'password'}
@@ -376,7 +390,7 @@ export default function ProfilePage() {
                 {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
               </button>
               <button onClick={deleteAccount}
-                disabled={deleting || (!(user.googleId && !user.password) && !deletePass)}
+                disabled={deleting || !deletePass}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition disabled:opacity-40"
                 style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
                 {deleting
