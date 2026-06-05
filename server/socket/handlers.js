@@ -478,6 +478,25 @@ const setupSocketHandlers = (io) => {
       tournaments.delete(tournamentId);
     });
 
+    // Admin: join tournament room as observer (no player registration)
+    socket.on('admin_join_tournament_watch', ({ tournamentId }) => {
+      if (!user.isAdmin) return;
+      const t = tournaments.get(tournamentId);
+      if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament' });
+      socket.join(`tournament:${tournamentId}`);
+      const standings = buildStandings(t);
+      const playersInfo = [...t.players].map(id => {
+        const info = onlineUsers.get(id);
+        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '', points: t.points.get(id) || 0 };
+      });
+      socket.emit('tournament_joined_ok', { tournamentId, playersInfo, tournament: getTournamentPublic(t), standings });
+    });
+
+    socket.on('admin_leave_tournament_watch', ({ tournamentId }) => {
+      if (!user.isAdmin) return;
+      socket.leave(`tournament:${tournamentId}`);
+    });
+
     // ── TOURNAMENT LOBBY (Players) ────────────────────────────────
     socket.on('join_tournament', async ({ tournamentId }) => {
       const t = tournaments.get(tournamentId);

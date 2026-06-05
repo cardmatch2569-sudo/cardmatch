@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
 import { api } from '../../../lib/api';
-import { Trophy, Users, LogOut, Clock, Loader2, Medal } from 'lucide-react';
+import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel } from 'lucide-react';
 
 // ── Leaderboard ───────────────────────────────────────────────────────
 function Leaderboard({ standings, myId, lang }) {
@@ -57,6 +57,8 @@ export default function TournamentWaitingRoom() {
   const [roundInfo,   setRoundInfo]   = useState(null); // { roundNumber, totalRounds }
   const [errorMsg,    setErrorMsg]    = useState('');
   const leftRef = useRef(false);
+  const [alerts,      setAlerts]      = useState([]);
+  const [decideMatch, setDecideMatch] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -88,8 +90,11 @@ export default function TournamentWaitingRoom() {
 
       if (t.status === 'ended') { setStatus('tournament_complete'); return; }
 
-      // Rejoin socket room (covers reconnect between rounds)
-      socket.emit('join_tournament', { tournamentId });
+      if (user.isAdmin) {
+        socket.emit('admin_join_tournament_watch', { tournamentId });
+      } else {
+        socket.emit('join_tournament', { tournamentId });
+      }
     };
 
     // ── Socket listeners ────────────────────────────────────────────
@@ -163,6 +168,16 @@ export default function TournamentWaitingRoom() {
       setErrorMsg(message);
     };
 
+    let onAdminAlert = null;
+    if (user?.isAdmin) {
+      onAdminAlert = (data) => {
+        const alertId = Date.now() + Math.random();
+        setAlerts(p => [{ id: alertId, ...data }, ...p.slice(0, 9)]);
+        setTimeout(() => setAlerts(p => p.filter(a => a.id !== alertId)), 30000);
+      };
+      socket.on('admin_match_alert', onAdminAlert);
+    }
+
     socket.on('tournament_joined_ok',    onJoinedOk);
     socket.on('tournament_player_update', onPlayerUpdate);
     socket.on('round_started',           onRoundStarted);
@@ -186,15 +201,39 @@ export default function TournamentWaitingRoom() {
       socket.off('match_found',             onMatchFound);
       socket.off('tournament_bye',          onBye);
       socket.off('tournament_error',        onError);
-      if (!leftRef.current) socket.emit('leave_tournament', { tournamentId });
+      if (onAdminAlert) socket.off('admin_match_alert', onAdminAlert);
+      if (user?.isAdmin) {
+        socket.emit('admin_leave_tournament_watch', { tournamentId });
+      } else if (!leftRef.current) {
+        socket.emit('leave_tournament', { tournamentId });
+      }
     };
   }, [authLoading, user, tournamentId, router, getSocket, load, lang]);
 
   const handleLeave = () => {
+    if (user?.isAdmin) { router.push('/tournament'); return; }
     leftRef.current = true;
     getSocket()?.emit('leave_tournament', { tournamentId });
     router.push('/tournament');
   };
+
+  const handleStartRound = () => {
+    getSocket()?.emit('start_round', { tournamentId });
+  };
+
+  const handleCloseTourney = () => {
+    if (!confirm(lang === 'th' ? 'ปิด Tournament นี้?' : 'Close this tournament?')) return;
+    getSocket()?.emit('close_tournament', { tournamentId });
+  };
+
+  const handleDecideMatch = (winnerId) => {
+    if (!decideMatch) return;
+    getSocket()?.emit('admin_decide_match', { roomId: decideMatch.roomId, winnerId });
+    setDecideMatch(null);
+    setAlerts(p => p.filter(a => a.roomId !== decideMatch.roomId));
+  };
+
+  const dismissAlert = (id) => setAlerts(p => p.filter(a => a.id !== id));
 
   if (authLoading || pageLoading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -238,6 +277,100 @@ export default function TournamentWaitingRoom() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
+
+      {/* ── Admin Decide Match Modal ─────────────────────────────── */}
+      {decideMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="card w-full max-w-sm p-6 text-center"
+            style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(251,191,36,0.3)' }}>
+            <div className="text-4xl mb-3">⚖️</div>
+            <h2 className="text-white font-bold text-lg mb-2">
+              {lang === 'th' ? 'ตัดสินผลการแข่ง' : 'Decide Match Result'}
+            </h2>
+            <p className="text-slate-500 text-sm mb-5">{lang === 'th' ? 'เลือกผู้ชนะ' : 'Select the winner'}</p>
+            <div className="flex gap-3 justify-center mb-4">
+              {decideMatch.players.map((pid, i) => (
+                <button key={pid} onClick={() => handleDecideMatch(pid)}
+                  className="flex-1 py-3 rounded-xl font-semibold text-sm transition active:scale-95"
+                  style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80' }}>
+                  🏆 {decideMatch.names[i] || `P${i + 1}`}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setDecideMatch(null)} className="btn-ghost w-full py-2 rounded-xl text-xs">
+              {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Admin Control Panel ──────────────────────────────────── */}
+      {user?.isAdmin && (
+        <div className="space-y-2 mb-4">
+          <div className="card p-4" style={{ borderColor: 'rgba(251,191,36,0.25)', background: 'rgba(251,191,36,0.03)' }}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-bold text-yellow-400 flex items-center gap-1.5">
+                <Shield size={12} /> Admin
+              </span>
+              <div className="flex gap-2 flex-wrap">
+                {['waiting', 'round_complete'].includes(status) && (t?.currentRound || 0) < (t?.totalRounds || 3) && (
+                  <button
+                    onClick={handleStartRound}
+                    disabled={players.length < 2 || (t?.activeMatchCount || 0) > 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                    <Play size={11} />
+                    {lang === 'th'
+                      ? `เริ่มรอบ ${(t?.currentRound || 0) + 1}/${t?.totalRounds || 3}`
+                      : `Round ${(t?.currentRound || 0) + 1}/${t?.totalRounds || 3}`}
+                  </button>
+                )}
+                <button
+                  onClick={handleCloseTourney}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                  style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+                  <X size={11} /> {lang === 'th' ? 'ปิด Tournament' : 'Close Tournament'}
+                </button>
+              </div>
+            </div>
+            {players.length < 2 && status === 'waiting' && (
+              <p className="text-xs text-slate-600 mt-2">
+                {lang === 'th' ? 'ต้องการผู้เล่นอย่างน้อย 2 คนเพื่อเริ่ม' : 'Need at least 2 players to start'}
+              </p>
+            )}
+          </div>
+
+          {alerts.map(a => (
+            <div key={a.id} className="card p-3 flex items-start gap-3"
+              style={{ borderColor: a.type === 'conflict' || a.type === 'timeout' ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)' }}>
+              <Bell size={14} className={a.type === 'conflict' || a.type === 'timeout' ? 'text-red-400 flex-shrink-0 mt-0.5' : 'text-yellow-400 flex-shrink-0 mt-0.5'} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white">
+                  {a.type === 'call'     && '📣 ผู้เล่นเรียก Admin'}
+                  {a.type === 'conflict' && '⚠️ ผลไม่ตรงกัน — ต้องตัดสิน'}
+                  {a.type === 'timeout'  && '⏰ หมดเวลา — ต้องตัดสิน'}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5 truncate">Room: {a.roomId?.slice(0, 12)}...</p>
+              </div>
+              <div className="flex gap-1.5 flex-shrink-0">
+                {(a.type === 'conflict' || a.type === 'timeout') && a.roomId && (
+                  <button
+                    onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || a.players?.map((_, i) => `P${i+1}`) || [] })}
+                    className="px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1"
+                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+                    <Gavel size={10} /> {lang === 'th' ? 'ตัดสิน' : 'Decide'}
+                  </button>
+                )}
+                <button onClick={() => dismissAlert(a.id)} className="text-slate-600 hover:text-slate-400 p-0.5">
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Header */}
       <div className="card p-5 mb-4"
         style={{ borderColor: status === 'round_in_progress' ? 'rgba(251,191,36,0.25)' : 'rgba(124,58,237,0.2)' }}>
