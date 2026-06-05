@@ -19,6 +19,8 @@ router.get('/', protect, async (req, res) => {
         maxPlayers:  t.maxPlayers,
         playerCount: t.players.size,
         isJoined:    t.players.has(req.user._id),
+        scheduledAt:  t.scheduledAt || null,
+        scheduledEnd: t.scheduledEnd || null,
       }));
     res.json({ tournaments: list });
   } catch (err) { res.status(500).json({ message: err.message }); }
@@ -84,6 +86,8 @@ router.get('/:id', protect, async (req, res) => {
         isJoined:         t.players.has(req.user._id),
         playersInfo,
         matches:          matchesOut,
+        scheduledAt:      t.scheduledAt || null,
+        scheduledEnd:     t.scheduledEnd || null,
       },
     });
   } catch (err) { res.status(500).json({ message: err.message }); }

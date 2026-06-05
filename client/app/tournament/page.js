@@ -3,6 +3,22 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+
+function useCountdown(targetDate) {
+  const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
+  useEffect(() => {
+    if (!targetDate) return;
+    const id = setInterval(() => setDiff(new Date(targetDate) - Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [targetDate]);
+  if (diff === null || diff <= 0) return null;
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 24) return `${Math.floor(h/24)} วัน`;
+  if (h > 0) return `${h}ชม. ${m}น.`;
+  return `${m}:${String(s).padStart(2,'0')} น.`;
+}
 import { api } from '../../lib/api';
 import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 
@@ -10,27 +26,30 @@ function TournamentCard({ t, lang, onJoin, joining }) {
   const isFull  = t.playerCount >= t.maxPlayers;
   const canJoin = t.status === 'waiting' && !isFull;
   const isActive = t.status === 'active';
+  const isRoundComplete = t.status === 'round_complete';
 
   return (
     <div className="card p-5 flex items-center gap-4 transition"
-      style={{ borderColor: isActive ? 'rgba(251,191,36,0.25)' : 'var(--border)' }}>
+      style={{ borderColor: isActive || isRoundComplete ? 'rgba(251,191,36,0.25)' : 'var(--border)' }}>
       <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
         style={{
-          background: isActive ? 'rgba(251,191,36,0.1)' : 'rgba(124,58,237,0.1)',
-          border: `1px solid ${isActive ? 'rgba(251,191,36,0.2)' : 'rgba(124,58,237,0.2)'}`,
+          background: isActive || isRoundComplete ? 'rgba(251,191,36,0.1)' : 'rgba(124,58,237,0.1)',
+          border: `1px solid ${isActive || isRoundComplete ? 'rgba(251,191,36,0.2)' : 'rgba(124,58,237,0.2)'}`,
         }}>
-        {isActive ? '⚔️' : '🏆'}
+        {isActive ? '⚔️' : isRoundComplete ? '🔄' : '🏆'}
       </div>
 
       <div className="flex-1 min-w-0">
         <h3 className="font-bold text-white truncate text-base">{t.name}</h3>
         <div className="flex items-center gap-3 mt-1">
-          <span className={`text-xs font-semibold ${isActive ? 'text-yellow-400' : isFull ? 'text-red-400' : 'text-green-400'}`}>
+          <span className={`text-xs font-semibold ${isActive ? 'text-yellow-400' : isRoundComplete ? 'text-purple-400' : isFull ? 'text-red-400' : 'text-green-400'}`}>
             {isActive
               ? (lang === 'th' ? '⚔️ กำลังแข่ง' : '⚔️ In Progress')
-              : isFull
-                ? (lang === 'th' ? '❌ เต็ม' : '❌ Full')
-                : (lang === 'th' ? '✅ รับสมัคร' : '✅ Open')}
+              : isRoundComplete
+                ? (lang === 'th' ? '🔄 รอรอบถัดไป' : '🔄 Between Rounds')
+                : isFull
+                  ? (lang === 'th' ? '❌ เต็ม' : '❌ Full')
+                  : (lang === 'th' ? '✅ รับสมัคร' : '✅ Open')}
           </span>
           <span className="text-xs text-slate-500 flex items-center gap-1">
             <Users size={10} /> {t.playerCount}/{t.maxPlayers}
@@ -38,6 +57,11 @@ function TournamentCard({ t, lang, onJoin, joining }) {
           {t.isJoined && !isActive && (
             <span className="text-xs text-purple-400 font-semibold">
               {lang === 'th' ? '(เข้าร่วมแล้ว)' : '(Joined)'}
+            </span>
+          )}
+          {t.scheduledAt && (
+            <span className="text-xs text-slate-500">
+              ⏰ {new Date(t.scheduledAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
             </span>
           )}
         </div>
@@ -135,7 +159,7 @@ export default function TournamentListPage() {
   );
 
   const open   = tournaments.filter(t => t.status === 'waiting');
-  const active = tournaments.filter(t => t.status === 'active');
+  const active = tournaments.filter(t => ['active', 'round_complete'].includes(t.status));
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">

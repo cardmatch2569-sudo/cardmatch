@@ -134,6 +134,8 @@ const initTables = async () => {
     await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 0`).catch(() => {});
     await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0`).catch(() => {});
     await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0`).catch(() => {});
+    await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP NULL`).catch(() => {});
+    await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS scheduled_end TIMESTAMP NULL`).catch(() => {});
     console.log('[DB] Tournament tables ready');
   } catch (e) {
     console.error('[DB] Tournament tables warning:', e.message);

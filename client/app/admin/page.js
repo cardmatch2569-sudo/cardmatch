@@ -12,7 +12,7 @@ import {
 
 const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
 const EMPTY_GAME = { name: '', nameTh: '', description: '', descriptionTh: '', imageUrl: '', color: '#7c3aed', isActive: true };
-const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 8, totalRounds: 3 };
+const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 8, totalRounds: 3, scheduledAt: '', scheduledEnd: '' };
 
 export default function AdminPage() {
   const { user, loading: authLoading, lang, isAdminMode, toggleViewMode } = useAuth();
@@ -266,7 +266,14 @@ export default function AdminPage() {
       setTourneyCreating(false);
       return;
     }
-    socket.emit('create_tournament', { name: tourneyForm.name.trim(), gameTypeId: tourneyForm.gameTypeId, maxPlayers: tourneyForm.maxPlayers, totalRounds: tourneyForm.totalRounds });
+    socket.emit('create_tournament', {
+      name: tourneyForm.name.trim(),
+      gameTypeId: tourneyForm.gameTypeId,
+      maxPlayers: tourneyForm.maxPlayers,
+      totalRounds: tourneyForm.totalRounds,
+      scheduledAt:  tourneyForm.scheduledAt  || null,
+      scheduledEnd: tourneyForm.scheduledEnd || null,
+    });
     const onOk = () => {
       socket.off('tournament_error', onFail);
       setTourneyForm(EMPTY_TOURNEY);
@@ -1018,6 +1025,26 @@ export default function AdminPage() {
                     {n} {lang === 'th' ? 'รอบ' : 'rds'}
                   </button>
                 ))}
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500 block">{lang === 'th' ? '⏰ เวลาเริ่ม Tournament (ล็อกผู้เล่น)' : '⏰ Start Time (locks players)'}</label>
+                <input
+                  type="datetime-local"
+                  value={tourneyForm.scheduledAt}
+                  onChange={e => setTourneyForm(f => ({ ...f, scheduledAt: e.target.value }))}
+                  className="input-base text-sm w-full"
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500 block">{lang === 'th' ? '⏰ เวลาสิ้นสุด (auto-close)' : '⏰ End Time (auto-close)'} <span className="text-slate-700">{lang === 'th' ? 'ไม่บังคับ' : 'optional'}</span></label>
+                <input
+                  type="datetime-local"
+                  value={tourneyForm.scheduledEnd}
+                  onChange={e => setTourneyForm(f => ({ ...f, scheduledEnd: e.target.value }))}
+                  className="input-base text-sm w-full"
+                  style={{ colorScheme: 'dark' }}
+                />
               </div>
             </div>
             <button

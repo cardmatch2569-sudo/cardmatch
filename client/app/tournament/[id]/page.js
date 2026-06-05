@@ -3,6 +3,22 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
+
+function useCountdown(targetDate) {
+  const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
+  useEffect(() => {
+    if (!targetDate) return;
+    const id = setInterval(() => setDiff(new Date(targetDate) - Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [targetDate]);
+  if (diff === null || diff <= 0) return null;
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 24) return `${Math.floor(h/24)} วัน`;
+  if (h > 0) return `${h}ชม. ${m}น.`;
+  return `${m}:${String(s).padStart(2,'0')} น.`;
+}
 import { api } from '../../../lib/api';
 import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel } from 'lucide-react';
 
@@ -258,6 +274,9 @@ export default function TournamentWaitingRoom() {
 
   const dismissAlert = (id) => setAlerts(p => p.filter(a => a.id !== id));
 
+  // Must be called before any early returns (Rules of Hooks)
+  const scheduledCountdown = useCountdown(tournament?.scheduledAt);
+
   if (authLoading || pageLoading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
@@ -431,7 +450,19 @@ export default function TournamentWaitingRoom() {
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
             style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
             <Clock size={14} className="text-yellow-400 animate-pulse flex-shrink-0" />
-            <p className="text-sm text-yellow-300">{lang === 'th' ? 'รอ Admin กดเริ่มรอบที่ 1' : 'Waiting for Admin to start Round 1'}</p>
+            <div className="flex-1">
+              <p className="text-sm text-yellow-300">{lang === 'th' ? 'รอ Admin กดเริ่มรอบที่ 1' : 'Waiting for Admin to start Round 1'}</p>
+              {t?.scheduledAt && scheduledCountdown && (
+                <p className="text-xs text-yellow-500 mt-0.5">
+                  ⏰ {lang === 'th' ? `เริ่มใน ${scheduledCountdown}` : `Starts in ${scheduledCountdown}`}
+                </p>
+              )}
+              {t?.scheduledAt && !scheduledCountdown && (
+                <p className="text-xs text-green-400 mt-0.5">
+                  {lang === 'th' ? '✅ ถึงเวลาเริ่มแล้ว' : '✅ Start time reached'}
+                </p>
+              )}
+            </div>
           </div>
         )}
 

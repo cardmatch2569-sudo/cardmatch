@@ -73,7 +73,19 @@ const getTournamentPublic = (t) => ({
   currentRound:     t.currentRound,
   activeMatchCount: t.activeMatchCount,
   playerCount:      t.players.size,
+  scheduledAt:      t.scheduledAt || null,
+  scheduledEnd:     t.scheduledEnd || null,
 });
+
+const isLockedInTournament = (userId) => {
+  for (const t of tournaments.values()) {
+    if (t.status === 'ended') continue;
+    if (!t.players.has(userId)) continue;
+    if (t.scheduledAt) return Date.now() >= new Date(t.scheduledAt).getTime();
+    return t.status !== 'waiting';
+  }
+  return false;
+};
 
 const notifyAdmins = (io, type, data) => {
   for (const [, info] of onlineUsers) {
@@ -220,6 +232,8 @@ const setupSocketHandlers = (io) => {
     // ── MATCHMAKING ────────────────────────────────────────────────
     socket.on('join_queue', async ({ gameTypeId }) => {
       if (!rateOk(rateLimits.queueJoin, userId, 3000)) return;
+      if (isLockedInTournament(userId))
+        return socket.emit('tournament_lock_error', { message: 'คุณกำลังแข่ง Tournament อยู่ ไม่สามารถจับคู่ได้' });
       console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
 
       if (!gameTypeId) return;
@@ -279,12 +293,16 @@ const setupSocketHandlers = (io) => {
         return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าได้ขณะอยู่ในห้องแข่ง' });
       if ([...matchQueues.values()].some(q => q.some(p => p.userId === userId)))
         return socket.emit('challenge_id_error', { message: 'กรุณาออกจากคิวก่อนท้าด้วย Player ID' });
+      if (isLockedInTournament(userId))
+        return socket.emit('challenge_id_error', { message: 'คุณกำลังแข่ง Tournament อยู่' });
 
       const targetUser = await User.findByPlayerId(playerId);
       if (!targetUser) return socket.emit('challenge_id_error', { message: 'ไม่พบผู้เล่น ID นี้' });
       if (targetUser._id === userId) return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าตัวเองได้' });
       const target = onlineUsers.get(targetUser._id);
       if (!target) return socket.emit('challenge_id_error', { message: `${targetUser.username} ออฟไลน์อยู่` });
+      if (isLockedInTournament(targetUser._id))
+        return socket.emit('challenge_id_error', { message: `${targetUser.username} กำลังแข่ง Tournament อยู่` });
 
       const challengeId = uuidv4();
       const gameType    = await GameType.findById(gameTypeId);
@@ -302,6 +320,10 @@ const setupSocketHandlers = (io) => {
       if (targetUserId === userId) return;
       const target = onlineUsers.get(targetUserId);
       if (!target) return socket.emit('error', { message: 'Player is offline' });
+      if (isLockedInTournament(userId))
+        return socket.emit('error', { message: 'คุณกำลังแข่ง Tournament อยู่' });
+      if (isLockedInTournament(targetUserId))
+        return socket.emit('error', { message: 'ผู้เล่นนั้นกำลังแข่ง Tournament อยู่' });
 
       const challengeId = uuidv4();
       const gameType    = await GameType.findById(gameTypeId);
@@ -327,6 +349,9 @@ const setupSocketHandlers = (io) => {
         io.to(fromInfo.socketId).emit('challenge_declined', { by: user.username });
         return;
       }
+
+      if (isLockedInTournament(userId) || isLockedInTournament(challenge.from))
+        return; // silently drop — tournament takes priority
 
       const roomId   = uuidv4();
       const gameType = await GameType.findById(challenge.gameTypeId);
@@ -371,7 +396,7 @@ const setupSocketHandlers = (io) => {
     });
 
     // ── TOURNAMENT MANAGEMENT (Admin) ─────────────────────────────
-    socket.on('create_tournament', async ({ name, gameTypeId, maxPlayers, totalRounds }) => {
+    socket.on('create_tournament', async ({ name, gameTypeId, maxPlayers, totalRounds, scheduledAt, scheduledEnd }) => {
       if (!user.isAdmin) return;
       if (!name?.trim() || !gameTypeId) return socket.emit('tournament_error', { message: 'กรุณากรอกข้อมูลให้ครบ' });
       const id = uuidv4();
@@ -388,12 +413,14 @@ const setupSocketHandlers = (io) => {
         points:           new Map(),
         createdBy:        userId,
         players:          new Set(),
+        scheduledAt:      scheduledAt ? new Date(scheduledAt) : null,
+        scheduledEnd:     scheduledEnd ? new Date(scheduledEnd) : null,
       };
       tournaments.set(id, tournament);
       try {
         await getPool().query(
-          `INSERT INTO Tournaments (id, name, game_type_id, status, max_players, total_rounds, created_by) VALUES ($1,$2,$3,'waiting',$4,$5,$6)`,
-          [id, tournament.name, gameTypeId, tournament.maxPlayers, tournament.totalRounds, userId]
+          `INSERT INTO Tournaments (id, name, game_type_id, status, max_players, total_rounds, created_by, scheduled_at, scheduled_end) VALUES ($1,$2,$3,'waiting',$4,$5,$6,$7,$8)`,
+          [id, tournament.name, gameTypeId, tournament.maxPlayers, tournament.totalRounds, userId, tournament.scheduledAt || null, tournament.scheduledEnd || null]
         );
       } catch (e) { console.error('[create_tournament]', e.message); }
       io.emit('tournament_created', getTournamentPublic(tournament));
@@ -408,6 +435,8 @@ const setupSocketHandlers = (io) => {
       if (!['waiting', 'round_complete'].includes(t.status))
         return socket.emit('tournament_error', { message: 'มีแมตช์ที่ยังไม่จบ หรือ Tournament สิ้นสุดแล้ว' });
       if (t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
+      if (t.scheduledAt && Date.now() < new Date(t.scheduledAt).getTime())
+        return socket.emit('tournament_error', { message: 'ยังไม่ถึงเวลาเริ่มทัวร์นาเมนต์' });
       if (t.currentRound >= t.totalRounds) return socket.emit('tournament_error', { message: 'ครบทุกรอบแล้ว' });
 
       const { pairs, bye } = pairPlayersNoRepeat([...t.players], t.playedPairs);
@@ -505,10 +534,28 @@ const setupSocketHandlers = (io) => {
       if (t.status === 'ended') return socket.emit('tournament_error', { message: 'Tournament นี้จบแล้ว' });
 
       const alreadyIn = t.players.has(userId);
-      // New players can only join during 'waiting' phase and if not full
       if (!alreadyIn) {
-        if (t.status !== 'waiting') return socket.emit('tournament_error', { message: 'Tournament เริ่มไปแล้ว ไม่รับสมัครเพิ่ม' });
-        if (t.players.size >= t.maxPlayers) return socket.emit('tournament_error', { message: 'ห้องเต็มแล้ว' });
+        if (t.status !== 'waiting') {
+          // Not in memory — check DB for prior registration (reconnect case)
+          const { rows } = await getPool().query(
+            'SELECT 1 FROM TournamentPlayers WHERE tournament_id=$1 AND user_id=$2',
+            [tournamentId, userId]
+          ).catch(() => ({ rows: [] }));
+          if (!rows.length)
+            return socket.emit('tournament_error', { message: 'Tournament กำลังแข่งขันอยู่ ไม่รับสมัครเพิ่ม' });
+          // Re-entry: registered before but lost in-memory slot (reconnect)
+        } else {
+          // New registration during waiting phase
+          if (t.players.size >= t.maxPlayers) return socket.emit('tournament_error', { message: 'ห้องเต็มแล้ว' });
+          // Block if locked in another active tournament
+          for (const ot of tournaments.values()) {
+            if (ot.id === tournamentId) continue;
+            if (ot.status === 'ended') continue;
+            if (!ot.players.has(userId)) continue;
+            const otLocked = ot.scheduledAt ? Date.now() >= new Date(ot.scheduledAt).getTime() : ot.status !== 'waiting';
+            if (otLocked) return socket.emit('tournament_error', { message: 'คุณอยู่ใน Tournament อื่นอยู่แล้ว' });
+          }
+        }
       }
 
       t.players.add(userId);
@@ -700,6 +747,20 @@ const setupSocketHandlers = (io) => {
       console.log(`[-] ${user.username}`);
     });
   });
+
+  // Auto-close tournaments past their scheduledEnd
+  setInterval(async () => {
+    for (const [id, t] of tournaments) {
+      if (!t.scheduledEnd || t.status === 'ended') continue;
+      if (Date.now() < new Date(t.scheduledEnd).getTime()) continue;
+      t.status = 'ended';
+      try { await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW() WHERE id=$1", [id]); } catch {}
+      io.to(`tournament:${id}`).emit('tournament_closed', { tournamentId: id });
+      io.emit('tournament_closed', { tournamentId: id });
+      tournaments.delete(id);
+      console.log(`[Tournament] Auto-closed ${t.name} (scheduledEnd passed)`);
+    }
+  }, 60000);
 };
 
 const getOnlineUsers  = () => onlineUsers;

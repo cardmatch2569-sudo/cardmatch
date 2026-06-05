@@ -40,6 +40,7 @@ export default function LobbyPage() {
   const pidTimeoutRef = useRef(null);
   const [chatMessages, setChatMessages]   = useState([]);
   const [announcement, setAnnouncement]   = useState(null);
+  const [lockedTournament, setLockedTournament] = useState(null); // { id, name, scheduledAt }
 
   const inQueueRef  = useRef(false);
   const searchTimer = useRef(null);
@@ -79,6 +80,38 @@ export default function LobbyPage() {
   useEffect(() => {
     api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
   }, []);
+
+  // Check if player is locked in a tournament
+  useEffect(() => {
+    if (!user) return;
+    api.get('/api/tournament').then(({ tournaments: list }) => {
+      const locked = (list || []).find(t => {
+        if (!t.isJoined || t.status === 'ended') return false;
+        if (t.scheduledAt) return Date.now() >= new Date(t.scheduledAt).getTime();
+        return t.status !== 'waiting';
+      });
+      setLockedTournament(locked || null);
+    }).catch(() => {});
+  }, [user]);
+
+  // Listen for tournament lock-related socket events
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const onTournamentClosed = ({ tournamentId }) => {
+      setLockedTournament(prev => prev?.id === tournamentId ? null : prev);
+    };
+    const onTournamentLockError = ({ message }) => {
+      showToast(message, 'error');
+    };
+    socket.on('tournament_closed', onTournamentClosed);
+    socket.on('tournament_lock_error', onTournamentLockError);
+    return () => {
+      socket.off('tournament_closed', onTournamentClosed);
+      socket.off('tournament_lock_error', onTournamentLockError);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getSocket]);
 
   // Auto-queue when coming from a room — skip PreMatchModal, join queue immediately
   useEffect(() => {
@@ -305,6 +338,22 @@ export default function LobbyPage() {
         </div>
       )}
 
+      {/* ── Tournament lock banner ─────────────────────────────── */}
+      {lockedTournament && (
+        <div className="mb-4 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}>
+          <div>
+            <p className="text-yellow-400 font-semibold text-sm">🔒 {lang === 'th' ? 'กำลังแข่ง Tournament' : 'In Tournament'}</p>
+            <p className="text-slate-500 text-xs mt-0.5">{lockedTournament.name} — {lang === 'th' ? 'ไม่สามารถจับคู่ได้ระหว่างนี้' : 'matchmaking disabled'}</p>
+          </div>
+          <button onClick={() => router.push(`/tournament/${lockedTournament.id}`)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0"
+            style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+            {lang === 'th' ? 'ไปที่ Tournament →' : 'Go to Tournament →'}
+          </button>
+        </div>
+      )}
+
       {/* ── How to Play ──────────────────────────────────────────── */}
       {(() => {
         const steps = lang === 'th' ? [
@@ -452,15 +501,15 @@ export default function LobbyPage() {
             )}
 
             <button onClick={handleQuickMatch}
-              disabled={!connected && !inQueue}
+              disabled={(!connected && !inQueue) || !!lockedTournament}
               className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
                 ${inQueue
                   ? 'text-red-300'
-                  : connected
+                  : connected && !lockedTournament
                     ? 'btn-primary text-white'
                     : 'opacity-50 cursor-wait text-slate-400'}`}
               style={inQueue ? { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }
-                : !connected ? { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' } : {}}>
+                : (!connected || lockedTournament) ? { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' } : {}}>
               {inQueue ? (
                 <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={15} /></>
               ) : !connected ? (
@@ -507,7 +556,8 @@ export default function LobbyPage() {
                       <div className="text-xs text-slate-600">{p.stats?.totalGames || 0} {lang === 'th' ? 'เกม' : 'games'}</div>
                     </div>
                     <button onClick={() => handleChallenge(p._id)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition flex-shrink-0"
+                      disabled={!!lockedTournament}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa' }}>
                       <Swords size={12} /> {t.challenge}
                     </button>
@@ -551,7 +601,7 @@ export default function LobbyPage() {
               </div>
               <button
                 onClick={handleChallengeById}
-                disabled={pidInput.length !== 6 || pidLoading || !selectedGame}
+                disabled={pidInput.length !== 6 || pidLoading || !selectedGame || !!lockedTournament}
                 className="btn-primary px-4 py-2 rounded-xl text-sm flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
                 {pidLoading
                   ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
