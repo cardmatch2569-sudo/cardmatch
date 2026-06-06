@@ -402,25 +402,34 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <div className="mb-5">
-              <label className="text-xs text-slate-400 block mb-2 font-medium">
-                {t.deleteUserPasswordLabel}
-              </label>
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
-                onKeyDown={e => e.key === 'Enter' && deletePassword && handleDeleteUser()}
-                placeholder={t.deleteUserPasswordPlaceholder}
-                className="input-base text-sm"
-                autoFocus
-              />
-              {deleteError && (
-                <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
-                  <span>⚠</span> {deleteError}
-                </p>
-              )}
-            </div>
+            {user?.googleId && !user?.password ? (
+              <div className="mb-5 px-3 py-3 rounded-xl text-xs"
+                style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
+                ⚠️ {lang === 'th'
+                  ? 'บัญชี Admin Google ไม่รองรับการลบผู้ใช้ กรุณาล็อกอินด้วยบัญชี Admin ที่มีรหัสผ่าน'
+                  : 'Google-only Admin accounts cannot delete users. Please log in with a password-enabled Admin account.'}
+              </div>
+            ) : (
+              <div className="mb-5">
+                <label className="text-xs text-slate-400 block mb-2 font-medium">
+                  {lang === 'th' ? '🔐 ยืนยันด้วยรหัสผ่านของคุณ (Admin)' : '🔐 Confirm with your Admin password'}
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && deletePassword && handleDeleteUser()}
+                  placeholder={lang === 'th' ? 'รหัสผ่านของคุณ (Admin)' : 'Your Admin password'}
+                  className="input-base text-sm"
+                  autoFocus
+                />
+                {deleteError && (
+                  <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
+                    <span>⚠</span> {deleteError}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button onClick={closeDeleteModal}
@@ -428,7 +437,7 @@ export default function AdminPage() {
                 {t.cancel}
               </button>
               <button onClick={handleDeleteUser}
-                disabled={!deletePassword || deleting}
+                disabled={(user?.googleId && !user?.password) || !deletePassword || deleting}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
                 {deleting
@@ -654,12 +663,13 @@ export default function AdminPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl mb-6 overflow-x-auto" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
+        {TABS.map(tabKey => (
+          <button key={tabKey} onClick={() => setTab(tabKey)}
+            title={{ overview: t.overview, users: t.users, games: t.games, rooms: t.rooms, tournament: t.tournament }[tabKey]}
             className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all text-center whitespace-nowrap px-2
-              ${tab === t ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-            style={tab === t ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
-            {tabLabels[t]}
+              ${tab === tabKey ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            style={tab === tabKey ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
+            {tabLabels[tabKey]}
           </button>
         ))}
       </div>

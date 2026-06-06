@@ -39,6 +39,7 @@ export default function LobbyPage() {
   const [pidLoading, setPidLoading]       = useState(false);
   const [pidPending, setPidPending]       = useState(null); // { username } — waiting for response
   const pidTimeoutRef = useRef(null);
+  const [pidCountdown, setPidCountdown]   = useState(0);
   const [chatMessages, setChatMessages]   = useState([]);
   const [announcement, setAnnouncement]   = useState(null);
   const [lockedTournament, setLockedTournament] = useState(null); // { id, name, scheduledAt }
@@ -79,9 +80,11 @@ export default function LobbyPage() {
     if (!loading && !user) router.push('/login');
   }, [loading, user, router]);
 
-  useEffect(() => {
+  const loadGames = useCallback(() => {
+    setGamesError(false);
     api.get('/api/games').then(({ games }) => setGames(games)).catch(() => setGamesError(true));
   }, []);
+  useEffect(() => { loadGames(); }, [loadGames]);
 
   // Check if player is locked in a tournament
   useEffect(() => {
@@ -170,6 +173,14 @@ export default function LobbyPage() {
       clearTimeout(pidTimeoutRef.current);
     };
   }, [getSocket]);
+
+  // Countdown timer for pending challenge-by-ID
+  useEffect(() => {
+    if (!pidPending) { setPidCountdown(0); return; }
+    setPidCountdown(30);
+    const id = setInterval(() => setPidCountdown(p => p > 0 ? p - 1 : 0), 1000);
+    return () => clearInterval(id);
+  }, [pidPending]);
 
   const setQueue = (val) => {
     inQueueRef.current = val;
@@ -395,7 +406,7 @@ export default function LobbyPage() {
           style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}>
           <div>
             <p className="text-yellow-400 font-semibold text-sm">🔒 {lang === 'th' ? 'กำลังแข่ง Tournament' : 'In Tournament'}</p>
-            <p className="text-slate-500 text-xs mt-0.5">{lockedTournament.name} — {lang === 'th' ? 'ไม่สามารถจับคู่ได้ระหว่างนี้' : 'matchmaking disabled'}</p>
+            <p className="text-slate-500 text-xs mt-0.5">{lockedTournament.name} — {lang === 'th' ? 'ออกจาก Tournament ก่อนจึงจะจับคู่ได้' : 'Leave the tournament to re-enable matchmaking'}</p>
           </div>
           <button onClick={() => router.push(`/tournament/${lockedTournament.id}`)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0"
@@ -475,7 +486,14 @@ export default function LobbyPage() {
         <div className="lg:col-span-2 min-w-0 overflow-hidden">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{t.selectGame}</p>
           {gamesError && (
-            <p className="text-red-400 text-sm text-center py-4">{t.failedToLoad}</p>
+            <div className="text-center py-4">
+              <p className="text-red-400 text-sm mb-2">{t.failedToLoad}</p>
+              <button onClick={loadGames}
+                className="text-xs px-3 py-1.5 rounded-lg transition active:scale-95"
+                style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                🔄 {lang === 'th' ? 'ลองอีกครั้ง' : 'Retry'}
+              </button>
+            </div>
           )}
           {/* Mobile: horizontal scroll tabs */}
           <div className="lg:hidden relative">
@@ -686,7 +704,7 @@ export default function LobbyPage() {
                     {lang === 'th' ? `รอ ${pidPending.username} ตอบรับ...` : `Waiting for ${pidPending.username}...`}
                   </p>
                   <p className="text-slate-600 text-[10px]">
-                    {lang === 'th' ? 'คำท้าจะหมดอายุใน 30 วินาที' : 'Challenge expires in 30 seconds'}
+                    {lang === 'th' ? `คำท้าหมดอายุใน ${pidCountdown}s` : `Challenge expires in ${pidCountdown}s`}
                   </p>
                 </div>
                 <button onClick={() => { setPidPending(null); clearTimeout(pidTimeoutRef.current); }}

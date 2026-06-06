@@ -838,6 +838,18 @@ export default function RoomPage() {
           style={{ top: `calc(52px + max(0px, ${safeTop}))`, background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5' }}>
           <p className="font-semibold">📷 {lang === 'th' ? 'ไม่สามารถเปิดกล้องได้' : 'Cannot access camera'}</p>
           {mediaError.split('\n').map((line, i) => <p key={i} className="text-[11px] mt-0.5 opacity-80">{line}</p>)}
+          <div className="flex gap-2 mt-2.5">
+            <button onClick={startMedia}
+              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
+              style={{ background: 'rgba(239,68,68,0.3)', border: '1px solid rgba(239,68,68,0.5)', color: '#fca5a5' }}>
+              🔄 {lang === 'th' ? 'ลองอีกครั้ง' : 'Retry'}
+            </button>
+            <button onClick={goToLobby}
+              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8' }}>
+              {lang === 'th' ? 'กลับ Lobby' : 'Back to Lobby'}
+            </button>
+          </div>
         </div>
       )}
 
