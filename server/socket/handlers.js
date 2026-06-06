@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Room = require('../models/Room');
 const GameType = require('../models/GameType');
 const { getPool } = require('../config/db');
+const log = require('../utils/logger');
 
 // ── In-memory state ────────────────────────────────────────────────
 const onlineUsers = new Map();       // userId → { socketId, username, avatar, isAdmin }
@@ -223,6 +224,7 @@ const setupSocketHandlers = (io) => {
     onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar, isAdmin: !!user.isAdmin });
     io.emit('online_count', { count: onlineUsers.size });
     console.log(`[+] ${user.username} (${socket.id})`);
+    log.info({ event: 'connect', userId, username: user.username, isAdmin: !!user.isAdmin, socketId: socket.id, onlineCount: onlineUsers.size });
 
     socket.emit('public_chat_history', publicChatBuffer);
     if (currentAnnouncement) socket.emit('announcement', currentAnnouncement);
@@ -412,6 +414,7 @@ const setupSocketHandlers = (io) => {
 
     // ── TOURNAMENT MANAGEMENT (Admin) ─────────────────────────────
     socket.on('create_tournament', async ({ name, gameTypeId, maxPlayers, totalRounds, scheduledAt, scheduledEnd }) => {
+      log.info({ event: 'create_tournament', userId, username: user.username, name, gameTypeId, maxPlayers, totalRounds, scheduledAt });
       if (!user.isAdmin) return;
       if (!name?.trim() || !gameTypeId) return socket.emit('tournament_error', { message: 'กรุณากรอกข้อมูลให้ครบ' });
       const id = uuidv4();
@@ -450,24 +453,49 @@ const setupSocketHandlers = (io) => {
     // start_round: starts first round OR next round (admin only, all matches must be done first)
     socket.on('start_round', async ({ tournamentId }) => {
       const fallback = setTimeout(() => {
+        log.error({ event: 'start_round', step: 'fallback_timeout', tournamentId, userId }, 'start_round timed out after 10s — no response sent');
         socket.emit('tournament_error', { message: 'หมดเวลา กรุณาลองใหม่' });
       }, 10000);
       try {
-      if (!user.isAdmin) return socket.emit('tournament_error', { message: 'ไม่มีสิทธิ์' });
+      log.info({ event: 'start_round', step: 'received', tournamentId, userId, username: user.username });
+
+      if (!user.isAdmin) {
+        log.warn({ event: 'start_round', step: 'rejected_not_admin', userId });
+        return socket.emit('tournament_error', { message: 'ไม่มีสิทธิ์' });
+      }
       const t = tournaments.get(tournamentId);
-      if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament' });
-      if (!['waiting', 'round_complete'].includes(t.status))
+      if (!t) {
+        log.warn({ event: 'start_round', step: 'rejected_not_found', tournamentId });
+        return socket.emit('tournament_error', { message: 'ไม่พบ Tournament' });
+      }
+      log.info({ event: 'start_round', step: 'tournament_state', tournamentId, status: t.status, currentRound: t.currentRound, totalRounds: t.totalRounds, playerCount: t.players?.size, activeMatchCount: t.activeMatchCount });
+
+      if (!['waiting', 'round_complete'].includes(t.status)) {
+        log.warn({ event: 'start_round', step: 'rejected_bad_status', tournamentId, status: t.status });
         return socket.emit('tournament_error', { message: 'มีแมตช์ที่ยังไม่จบ หรือ Tournament สิ้นสุดแล้ว' });
-      if (!t.players || t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
-      if (t.scheduledAt && Date.now() < new Date(t.scheduledAt).getTime())
+      }
+      if (!t.players || t.players.size < 2) {
+        log.warn({ event: 'start_round', step: 'rejected_not_enough_players', tournamentId, playerCount: t.players?.size });
+        return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
+      }
+      if (t.scheduledAt && Date.now() < new Date(t.scheduledAt).getTime()) {
+        log.warn({ event: 'start_round', step: 'rejected_not_scheduled_time', tournamentId, scheduledAt: t.scheduledAt });
         return socket.emit('tournament_error', { message: 'ยังไม่ถึงเวลาเริ่มทัวร์นาเมนต์' });
-      if (t.currentRound >= t.totalRounds) return socket.emit('tournament_error', { message: 'ครบทุกรอบแล้ว' });
+      }
+      if (t.currentRound >= t.totalRounds) {
+        log.warn({ event: 'start_round', step: 'rejected_all_rounds_done', tournamentId, currentRound: t.currentRound, totalRounds: t.totalRounds });
+        return socket.emit('tournament_error', { message: 'ครบทุกรอบแล้ว' });
+      }
 
       if (!t.playedPairs) t.playedPairs = new Set();
       const { pairs, bye } = pairPlayersNoRepeat([...t.players], t.playedPairs);
+      log.info({ event: 'start_round', step: 'paired', tournamentId, pairCount: pairs.length, bye: bye || null });
 
+      log.info({ event: 'start_round', step: 'fetching_game_type', tournamentId, gameTypeId: t.gameTypeId });
       let gameType = null;
-      try { gameType = await GameType.findById(t.gameTypeId); } catch (e) { console.error('[start_round] GameType:', e.message); }
+      try { gameType = await GameType.findById(t.gameTypeId); } catch (e) {
+        log.error({ event: 'start_round', step: 'game_type_error', tournamentId, err: e.message });
+      }
       const gameInfo  = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
 
       t.currentRound++;
@@ -483,18 +511,26 @@ const setupSocketHandlers = (io) => {
         const p1Info  = onlineUsers.get(p1Id);
         const p2Info  = onlineUsers.get(p2Id);
 
+        log.info({ event: 'start_round', step: 'creating_room', tournamentId, roomId, p1Id, p2Id, p1Online: !!p1Info, p2Online: !!p2Info });
         try { await Room.create({ roomId, gameTypeId: t.gameTypeId, players: [p1Id, p2Id] }); }
-        catch (e) { console.error('[start_round] Room.create:', e.message); t.activeMatchCount--; continue; }
+        catch (e) {
+          log.error({ event: 'start_round', step: 'room_create_error', tournamentId, roomId, err: e.message });
+          t.activeMatchCount--; continue;
+        }
 
         activeRooms.set(roomId, { players: [p1Id, p2Id], isTournament: true });
         tourneyMatches.set(roomId, { matchId, tournamentId, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null });
 
+        log.info({ event: 'start_round', step: 'inserting_match_db', tournamentId, matchId, roomId });
         try {
           await getPool().query(
             `INSERT INTO TournamentMatches (id, tournament_id, room_id, player1_id, player2_id, status, round) VALUES ($1,$2,$3,$4,$5,'playing',$6)`,
             [matchId, tournamentId, roomId, p1Id, p2Id, t.currentRound]
           );
-        } catch (e) { console.error('[start_round] TM insert:', e.message); }
+          log.info({ event: 'start_round', step: 'match_db_ok', tournamentId, matchId });
+        } catch (e) {
+          log.error({ event: 'start_round', step: 'match_db_error', tournamentId, matchId, err: e.message });
+        }
 
         // Remove paired players from matchmaking queues to prevent double match_found
         matchQueues.forEach((queue, gtId) => {
@@ -508,22 +544,28 @@ const setupSocketHandlers = (io) => {
 
       if (bye) {
         const byeInfo = onlineUsers.get(bye);
+        log.info({ event: 'start_round', step: 'bye_player', tournamentId, byeUserId: bye, byeOnline: !!byeInfo });
         if (byeInfo) io.to(byeInfo.socketId).emit('tournament_bye', { message: `คุณได้รับ BYE รอบที่ ${t.currentRound}`, roundNumber: t.currentRound });
-        // Check if round instantly complete (all byes — edge case)
         if (t.activeMatchCount === 0) t.status = 'round_complete';
       }
 
+      log.info({ event: 'start_round', step: 'updating_tournament_db', tournamentId, currentRound: t.currentRound });
       try {
         await getPool().query(
           "UPDATE Tournaments SET status='active', current_round=$1, started_at=COALESCE(started_at,NOW()) WHERE id=$2",
           [t.currentRound, tournamentId]
         );
-      } catch {}
+        log.info({ event: 'start_round', step: 'tournament_db_ok', tournamentId });
+      } catch (e) {
+        log.error({ event: 'start_round', step: 'tournament_db_error', tournamentId, err: e.message });
+      }
 
       const roundInfo = { tournamentId, roundNumber: t.currentRound, totalRounds: t.totalRounds, matches: createdMatches };
+      log.info({ event: 'start_round', step: 'emitting_round_started', tournamentId, roundNumber: t.currentRound, matchCount: createdMatches.length });
       io.emit('round_started', roundInfo);
       io.emit('tournament_updated', getTournamentPublic(t));
       } catch (e) {
+        log.error({ event: 'start_round', step: 'unhandled_error', tournamentId, userId, err: e.message, stack: e.stack });
         console.error('[start_round] unhandled error:', e.message, e.stack);
         socket.emit('tournament_error', { message: 'เกิดข้อผิดพลาดในการเริ่มรอบ' });
       } finally {
@@ -563,6 +605,7 @@ const setupSocketHandlers = (io) => {
 
     // ── TOURNAMENT LOBBY (Players) ────────────────────────────────
     socket.on('join_tournament', async ({ tournamentId }) => {
+      log.info({ event: 'join_tournament', userId, username: user.username, tournamentId });
       const t = tournaments.get(tournamentId);
       if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament นี้' });
       if (t.status === 'ended') return socket.emit('tournament_error', { message: 'Tournament นี้จบแล้ว' });
@@ -646,6 +689,7 @@ const setupSocketHandlers = (io) => {
 
     // ── TOURNAMENT MATCH RESULT ───────────────────────────────────
     socket.on('end_game', ({ roomId }) => {
+      log.info({ event: 'end_game', userId, username: user.username, roomId });
       const tm = tourneyMatches.get(roomId);
       if (!tm || tm.phase !== 'playing') return;
       if (!tm.players.includes(userId)) return;
@@ -658,6 +702,7 @@ const setupSocketHandlers = (io) => {
     });
 
     socket.on('declare_result', ({ roomId, result }) => {
+      log.info({ event: 'declare_result', userId, username: user.username, roomId, result });
       const tm = tourneyMatches.get(roomId);
       if (!tm || tm.phase !== 'result_reporting') return;
       if (!tm.players.includes(userId)) return;
@@ -703,6 +748,7 @@ const setupSocketHandlers = (io) => {
     });
 
     socket.on('admin_decide_match', ({ roomId, winnerId }) => {
+      log.info({ event: 'admin_decide_match', userId, username: user.username, roomId, winnerId });
       if (!user.isAdmin) return;
       const tm = tourneyMatches.get(roomId);
       if (!tm || !tm.players.includes(winnerId)) return;
@@ -801,6 +847,7 @@ const setupSocketHandlers = (io) => {
       }
       io.emit('online_count', { count: onlineUsers.size });
       console.log(`[-] ${user.username}`);
+      log.info({ event: 'disconnect', userId, username: user.username, onlineCount: onlineUsers.size });
     });
   });
 
