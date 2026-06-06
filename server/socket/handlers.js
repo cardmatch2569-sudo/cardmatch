@@ -449,6 +449,9 @@ const setupSocketHandlers = (io) => {
 
     // start_round: starts first round OR next round (admin only, all matches must be done first)
     socket.on('start_round', async ({ tournamentId }) => {
+      const fallback = setTimeout(() => {
+        socket.emit('tournament_error', { message: 'หมดเวลา กรุณาลองใหม่' });
+      }, 10000);
       try {
       if (!user.isAdmin) return socket.emit('tournament_error', { message: 'ไม่มีสิทธิ์' });
       const t = tournaments.get(tournamentId);
@@ -523,6 +526,8 @@ const setupSocketHandlers = (io) => {
       } catch (e) {
         console.error('[start_round] unhandled error:', e.message, e.stack);
         socket.emit('tournament_error', { message: 'เกิดข้อผิดพลาดในการเริ่มรอบ' });
+      } finally {
+        clearTimeout(fallback);
       }
     });
 
