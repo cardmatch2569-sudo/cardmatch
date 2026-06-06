@@ -61,7 +61,7 @@ export default function LobbyPage() {
     onQueueLeft:         () => setQueue(false),
     onChallengeReceived: (data) => setChallenge(data),
     onChallengeAccepted: ({ roomId, gameType }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); router.push(`/room/${roomId}`); },
-    onChallengeDeclined:  ({ by }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); showToast(`${by} ${langRef.current === 'th' ? 'ปฏิเสธคำท้า' : 'declined'}`, 'error'); },
+    onChallengeDeclined:  ({ by }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); showToast(`${by} ${translations[langRef.current].challengeDeclined}`, 'error'); },
     onChallengeIdSent:    ({ to }) => {
       setPidLoading(false); setPidInput('');
       setPidPending({ username: to });
@@ -241,7 +241,7 @@ export default function LobbyPage() {
   const handleChallenge = (targetUserId) => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
     safeEmit('challenge_player', { targetUserId, gameTypeId: selectedGame._id });
-    showToast(lang === 'th' ? 'ส่งคำท้าแล้ว รอการตอบรับ...' : 'Challenge sent!', 'info');
+    showToast(t.challengeSent, 'info');
   };
 
   const handleChallengeResponse = (accepted) => { getSocket()?.emit('challenge_response', { challengeId: challenge.challengeId, accepted }); setChallenge(null); };
@@ -254,14 +254,14 @@ export default function LobbyPage() {
   const handleChallengeById = () => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
     if (pidInput.length !== 6) return;
-    if (inQueue) return showToast(lang === 'th' ? 'ออกจากคิวก่อนท้าด้วย ID' : 'Leave queue before challenging by ID', 'error');
+    if (inQueue) return showToast(t.leaveQueueFirst, 'error');
     setPidLoading(true);
     safeEmit('challenge_by_player_id', { playerId: pidInput.toUpperCase(), gameTypeId: selectedGame._id });
     // Auto-reset loading if server doesn't respond within 10s
     clearTimeout(pidTimeoutRef.current);
     pidTimeoutRef.current = setTimeout(() => {
       setPidLoading(false);
-      showToast(lang === 'th' ? 'ไม่ได้รับการตอบกลับ ลองอีกครั้ง' : 'No response, please try again', 'error');
+      showToast(translations[langRef.current].challengeExpired, 'error');
     }, 10000);
   };
   const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;

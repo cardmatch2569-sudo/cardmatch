@@ -266,6 +266,17 @@ const translations = {
     failedToLoad: 'โหลดข้อมูลไม่ได้',
     retryBtn: 'ลองใหม่',
 
+    // Camera / media errors
+    mediaErrorCamera: 'ไม่สามารถเปิดกล้องได้',
+    mediaErrorPermission: 'กรุณาอนุญาตการเข้าถึงกล้องและไมค์',
+    mediaErrorNotFound: 'ไม่พบกล้องหรือไมค์',
+
+    // Challenge toasts
+    challengeSent: 'ส่งคำท้าแล้ว รอการตอบรับ...',
+    challengeDeclined: 'ปฏิเสธคำท้า',
+    challengeExpired: 'ไม่ได้รับการตอบกลับ ลองอีกครั้ง',
+    leaveQueueFirst: 'ออกจากคิวก่อนท้าด้วย ID',
+
     // General
     loading: 'กำลังโหลด...',
     error: 'เกิดข้อผิดพลาด',
@@ -532,6 +543,17 @@ const translations = {
     // Error / retry
     failedToLoad: 'Failed to load data',
     retryBtn: 'Retry',
+
+    // Camera / media errors
+    mediaErrorCamera: 'Cannot access camera',
+    mediaErrorPermission: 'Please allow camera & mic access',
+    mediaErrorNotFound: 'No camera or mic found',
+
+    // Challenge toasts
+    challengeSent: 'Challenge sent!',
+    challengeDeclined: 'declined',
+    challengeExpired: 'No response, please try again',
+    leaveQueueFirst: 'Leave queue before challenging by ID',
 
     loading: 'Loading...',
     error: 'Error',

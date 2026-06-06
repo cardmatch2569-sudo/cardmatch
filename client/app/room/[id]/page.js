@@ -260,10 +260,11 @@ export default function RoomPage() {
       setMediaError('');
       return stream;
     } catch (err) {
+      const tRef = translations[langRef.current];
       const msg = err.name === 'NotAllowedError'
-        ? (langRef.current === 'th' ? 'กรุณาอนุญาตการเข้าถึงกล้องและไมค์' : 'Please allow camera & mic access')
+        ? tRef.mediaErrorPermission
         : err.name === 'NotFoundError'
-          ? (langRef.current === 'th' ? 'ไม่พบกล้องหรือไมค์' : 'No camera or mic found')
+          ? tRef.mediaErrorNotFound
           : (langRef.current === 'th' ? `เปิดกล้องไม่ได้: ${err.message}` : `Camera error: ${err.message}`);
       setMediaError(msg);
       return null;
@@ -836,7 +837,7 @@ export default function RoomPage() {
       {mediaError && (
         <div className="absolute z-30 left-3 right-3 p-3 rounded-xl text-xs"
           style={{ top: `calc(52px + max(0px, ${safeTop}))`, background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5' }}>
-          <p className="font-semibold">📷 {lang === 'th' ? 'ไม่สามารถเปิดกล้องได้' : 'Cannot access camera'}</p>
+          <p className="font-semibold">📷 {t.mediaErrorCamera}</p>
           {mediaError.split('\n').map((line, i) => <p key={i} className="text-[11px] mt-0.5 opacity-80">{line}</p>)}
           <div className="flex gap-2 mt-2.5">
             <button onClick={startMedia}
