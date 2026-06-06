@@ -59,7 +59,7 @@ function ChatPanel({ messages, msgInput, setMsgInput, onSend, onClose, user, lan
         {messages.map((msg, i) => {
           const isMe = msg.from._id === user._id;
           return (
-            <div key={msg.timestamp ? `${msg.from._id}-${msg.timestamp}` : i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+            <div key={`${msg.from._id || 'sys'}-${msg.timestamp || ''}-${i}`} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
               <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed
                 ${isMe ? 'rounded-br-sm text-white' : 'rounded-bl-sm text-slate-200'}`}
                 style={isMe
@@ -75,13 +75,21 @@ function ChatPanel({ messages, msgInput, setMsgInput, onSend, onClose, user, lan
       </div>
       <div className="p-3 border-t flex-shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         <div className="flex gap-2">
-          <input type="text" value={msgInput}
-            onChange={e => setMsgInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && onSend()}
-            onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300)}
-            placeholder={t.typeMessage}
-            className="input-base text-sm flex-1 py-2" style={{ minHeight: '44px' }}
-            enterKeyHint="send" />
+          <div className="flex-1 relative">
+            <input type="text" value={msgInput}
+              onChange={e => setMsgInput(e.target.value.slice(0, 200))}
+              onKeyDown={e => e.key === 'Enter' && onSend()}
+              onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300)}
+              placeholder={t.typeMessage}
+              className="input-base text-sm w-full py-2 pr-10" style={{ minHeight: '44px' }}
+              enterKeyHint="send" />
+            {msgInput.length > 150 && (
+              <span className="absolute right-2 bottom-1.5 text-[10px] pointer-events-none"
+                style={{ color: msgInput.length >= 200 ? '#f87171' : '#64748b' }}>
+                {msgInput.length}/200
+              </span>
+            )}
+          </div>
           <button onClick={onSend} disabled={!msgInput.trim()}
             className="w-11 h-11 rounded-lg flex items-center justify-center transition flex-shrink-0 disabled:opacity-60"
             style={{ background: 'rgba(124,58,237,0.8)', color: 'white' }}>
@@ -151,11 +159,21 @@ export default function RoomPage() {
   const [isTournament,   setIsTournament]   = useState(false);
   const [tourneyPhase,   setTourneyPhase]   = useState('playing'); // playing | result_reporting | admin_decision | done
   const [myResult,       setMyResult]       = useState(null);      // 'win' | 'lose' | null
+  const [pendingResult,  setPendingResult]  = useState(null);      // 'win' | 'lose' — awaiting user confirm
   const [opponentResult, setOpponentResult] = useState(null);
   const [matchResult,    setMatchResult]    = useState(null);      // { winnerId, loserId, method }
   const [timeoutAt,      setTimeoutAt]      = useState(null);
   const [adminWatching,  setAdminWatching]  = useState(false);
   const [adminCalledMsg, setAdminCalledMsg] = useState('');
+
+  // Admin spectate mode (admin entering room to watch before deciding)
+  const [spectateMode] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('spectate') === 'admin');
+  const [spectatorTid] = useState(() => typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('tid') || '') : '');
+  const adminPeersRef   = useRef({});
+  const adminStreamRefs = useRef({});
+  const [adminPlayers,    setAdminPlayers]    = useState([]);
+  const [adminStreamsMap,  setAdminStreamsMap]  = useState({});
+  const [adminDecided,    setAdminDecided]    = useState(false);
 
   // Detect tournament match from sessionStorage
   const [tournamentId, setTournamentId] = useState('');
@@ -298,8 +316,14 @@ export default function RoomPage() {
     const socket = getSocket();
     if (!socket) return;
 
+    const isAdminSpectate = spectateMode && !!user?.isAdmin;
+
     let aborted = false;
     const init = async () => {
+      if (isAdminSpectate) {
+        socket.emit('admin_watch_room', { roomId });
+        return;
+      }
       await startMedia();
       if (!aborted) socket.emit('join_room', { roomId });
     };
@@ -368,8 +392,40 @@ export default function RoomPage() {
     const onAdminPeerAnswer = ({ answer }) => {
       adminPeerRef.current?.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
     };
-    const onAdminPeerIce = ({ candidate }) => {
-      try { adminPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    const onAdminPeerIce = ({ candidate, from }) => {
+      if (isAdminSpectate) {
+        // Admin mode: ICE from a player
+        const pc = adminPeersRef.current[from];
+        if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+      } else {
+        try { adminPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      }
+    };
+
+    // Admin spectate: handle offer from each player
+    const onAdminPeerOfferReceived = async ({ from, fromUsername, offer }) => {
+      if (!isAdminSpectate) return;
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+      });
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) socket.emit('admin_peer_ice', { roomId, targetUserId: from, candidate });
+      };
+      pc.ontrack = ({ streams }) => {
+        setAdminStreamsMap(prev => ({ ...prev, [from]: streams[0] }));
+      };
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
+        adminPeersRef.current[from] = pc;
+        setAdminPlayers(p => [...p.filter(x => x.userId !== from), { userId: from, username: fromUsername || '?' }]);
+      } catch (e) { console.warn('[admin spectate] offer error:', e.message); }
     };
     const onAdminLeft = () => {
       setAdminWatching(false);
@@ -386,6 +442,7 @@ export default function RoomPage() {
     socket.on('admin_peer_answer',    onAdminPeerAnswer);
     socket.on('admin_peer_ice',       onAdminPeerIce);
     socket.on('admin_left',           onAdminLeft);
+    if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
 
@@ -407,8 +464,11 @@ export default function RoomPage() {
       socket.off('admin_peer_ice',       onAdminPeerIce);
       socket.off('admin_left',           onAdminLeft);
       socket.off('admin_called', onAdminCalled);
+      if (isAdminSpectate) socket.off('admin_peer_offer', onAdminPeerOfferReceived);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
+      Object.values(adminPeersRef.current).forEach(pc => { try { pc.close(); } catch {} });
+      adminPeersRef.current = {};
 
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
@@ -429,7 +489,10 @@ export default function RoomPage() {
         }
         sessionStorage.removeItem('cg_tournament_match_id');
       } catch {}
-      if (!leftRef.current) socket.emit('leave_room', { roomId });
+      if (!leftRef.current) {
+        if (isAdminSpectate) socket.emit('admin_stop_watching', { roomId });
+        else socket.emit('leave_room', { roomId });
+      }
     };
   }, [loading, user, roomId, router, getSocket, startMedia, createPeer]);
 
@@ -448,6 +511,24 @@ export default function RoomPage() {
       peerRef.current = null;
     }
   }, [getSocket, roomId]);
+
+  // Set streams on video elements when either stream or player ref becomes available
+  useEffect(() => {
+    for (const [userId, stream] of Object.entries(adminStreamsMap)) {
+      const vid = adminStreamRefs.current[userId];
+      if (vid && vid.srcObject !== stream) vid.srcObject = stream;
+    }
+  }, [adminStreamsMap, adminPlayers]);
+
+  const handleAdminDecide = useCallback((winnerId) => {
+    const s = getSocket();
+    if (!s) return;
+    s.emit('admin_decide_match', { roomId, winnerId });
+    s.emit('admin_stop_watching', { roomId });
+    setAdminDecided(true);
+    leftRef.current = true;
+    setTimeout(() => router.push(spectatorTid ? `/tournament/${spectatorTid}` : '/tournament'), 1500);
+  }, [getSocket, roomId, spectatorTid, router]);
 
   const handleLeave = () => setEndModal('leave');
 
@@ -529,6 +610,102 @@ export default function RoomPage() {
       <div className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
     </div>
   );
+
+  // ── Admin Spectate UI ────────────────────────────────────────────
+  if (spectateMode && user.isAdmin) {
+    const backUrl = spectatorTid ? `/tournament/${spectatorTid}` : '/tournament';
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+
+        {/* Header */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b flex-shrink-0"
+          style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
+          <button
+            onClick={() => { leftRef.current = true; getSocket()?.emit('admin_stop_watching', { roomId }); router.push(backUrl); }}
+            className="text-slate-400 hover:text-white transition text-xs flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-white/10">
+            ← {lang === 'th' ? 'กลับ' : 'Back'}
+          </button>
+          <span className="flex-1 text-center text-sm font-semibold text-yellow-300">
+            ⚖️ {lang === 'th' ? 'ดูห้องแข่ง — Admin' : 'Watching Match — Admin'}
+          </span>
+          <span className="text-[10px] text-slate-600">{roomId.slice(0, 8)}…</span>
+        </div>
+
+        {/* Two player video feeds */}
+        <div className="flex-1 flex gap-2 p-3 min-h-0">
+          {adminPlayers.length === 0 && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <div className="w-10 h-10 border-2 border-yellow-500/30 border-t-yellow-400 rounded-full animate-spin mx-auto" />
+                <p className="text-slate-500 text-sm">{lang === 'th' ? 'รอสัญญาณกล้อง...' : 'Waiting for camera feeds...'}</p>
+              </div>
+            </div>
+          )}
+          {adminPlayers.map(player => (
+            <div key={player.userId} className="flex-1 relative rounded-2xl overflow-hidden bg-gray-900 min-h-0"
+              style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <video
+                ref={el => { adminStreamRefs.current[player.userId] = el; }}
+                autoPlay playsInline
+                className="w-full h-full object-cover"
+              />
+              {!adminStreamsMap[player.userId] && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                  <div className="text-center">
+                    <div className="w-8 h-8 border-2 border-white/10 border-t-white/40 rounded-full animate-spin mx-auto mb-2" />
+                    <p className="text-slate-600 text-xs">{lang === 'th' ? 'รอกล้อง...' : 'Connecting...'}</p>
+                  </div>
+                </div>
+              )}
+              <div className="absolute bottom-0 left-0 right-0 px-3 py-2"
+                style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}>
+                <p className="text-white text-sm font-semibold drop-shadow">{player.username}</p>
+              </div>
+            </div>
+          ))}
+          {adminPlayers.length === 1 && (
+            <div className="flex-1 flex items-center justify-center rounded-2xl"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+              <p className="text-slate-600 text-sm">{lang === 'th' ? 'รอกล้องผู้เล่น 2...' : 'Waiting P2 camera...'}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Decide panel */}
+        <div className="px-3 pb-3 space-y-2">
+          {!adminDecided ? (
+            <>
+              <p className="text-center text-[11px] text-slate-500 pb-1">
+                {lang === 'th' ? 'ดูและพูดคุยกับผู้เล่น แล้วกดเลือกผู้ชนะ' : 'Review the match, then select the winner'}
+              </p>
+              <div className="flex gap-2">
+                {adminPlayers.map(player => (
+                  <button key={player.userId}
+                    onClick={() => handleAdminDecide(player.userId)}
+                    className="flex-1 py-3 rounded-xl font-semibold text-sm transition active:scale-95"
+                    style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80' }}>
+                    🏆 {player.username} {lang === 'th' ? 'ชนะ' : 'wins'}
+                  </button>
+                ))}
+                {adminPlayers.length < 2 && Array.from({ length: 2 - adminPlayers.length }).map((_, i) => (
+                  <div key={i} className="flex-1 py-3 rounded-xl text-center text-sm text-slate-700"
+                    style={{ border: '1px solid rgba(255,255,255,0.04)' }}>
+                    {lang === 'th' ? 'รอผู้เล่น...' : 'Waiting...'}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center gap-2 py-4 text-green-400 text-sm font-semibold">
+              <div className="w-4 h-4 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
+              {lang === 'th' ? 'บันทึกผลเสร็จแล้ว กำลังกลับ...' : 'Result saved, returning...'}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // CSS rotation is active when forced landscape but system hasn't rotated yet
   const cssLandscapeActive = forcedLandscape && !systemLandscape;
@@ -758,9 +935,9 @@ export default function RoomPage() {
         <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
           title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
           className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
-          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+          style={{ background: remoteRotation !== 0 ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.1)', border: `1px solid ${remoteRotation !== 0 ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.12)'}`, color: remoteRotation !== 0 ? '#c4b5fd' : 'white' }}>
           <RotateCw size={14} />
-          <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'คู่แข่ง' : 'Opp'}</span>
+          <span className="text-[8px] leading-none">{remoteRotation}°</span>
         </button>
 
         <button onClick={toggleCamera}
@@ -814,9 +991,9 @@ export default function RoomPage() {
         <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
           title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
           className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
-          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+          style={{ background: localRotation !== 0 ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.1)', border: `1px solid ${localRotation !== 0 ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.12)'}`, color: localRotation !== 0 ? '#c4b5fd' : 'white' }}>
           <RotateCw size={14} />
-          <span className="text-[8px] leading-none opacity-70">{lang === 'th' ? 'ของฉัน' : 'Mine'}</span>
+          <span className="text-[8px] leading-none">{localRotation}°</span>
         </button>
 
         <button onClick={() => setChatOpen(p => !p)}
@@ -876,18 +1053,40 @@ export default function RoomPage() {
                 </p>
                 <TournamentTimer timeoutAt={timeoutAt} />
                 {!myResult ? (
+                  pendingResult ? (
+                    <div className="mt-5 space-y-3">
+                      <div className={`px-5 py-3 rounded-2xl font-bold text-base ${pendingResult === 'win' ? 'text-green-400' : 'text-red-400'}`}
+                        style={{ background: pendingResult === 'win' ? 'rgba(74,222,128,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${pendingResult === 'win' ? 'rgba(74,222,128,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                        {pendingResult === 'win' ? '🏆 ' : '💔 '}
+                        {pendingResult === 'win' ? (lang === 'th' ? 'ยืนยัน: ฉันชนะ?' : 'Confirm: I Won?') : (lang === 'th' ? 'ยืนยัน: ฉันแพ้?' : 'Confirm: I Lost?')}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setPendingResult(null)}
+                          className="flex-1 py-2.5 rounded-xl text-sm font-medium text-slate-400 transition active:scale-95"
+                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>
+                          {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                        </button>
+                        <button onClick={() => { handleDeclareResult(pendingResult); setPendingResult(null); }}
+                          className="flex-1 py-2.5 rounded-xl text-sm font-bold transition active:scale-95"
+                          style={pendingResult === 'win' ? { background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' } : { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }}>
+                          {lang === 'th' ? 'ยืนยัน' : 'Confirm'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="flex gap-3 mt-5">
-                    <button onClick={() => handleDeclareResult('win')}
+                    <button onClick={() => setPendingResult('win')}
                       className="flex-1 py-4 rounded-2xl font-bold text-lg transition active:scale-95"
                       style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80' }}>
                       🏆<br /><span className="text-sm">{lang === 'th' ? 'ฉันชนะ' : 'I Won'}</span>
                     </button>
-                    <button onClick={() => handleDeclareResult('lose')}
+                    <button onClick={() => setPendingResult('lose')}
                       className="flex-1 py-4 rounded-2xl font-bold text-lg transition active:scale-95"
                       style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
                       💔<br /><span className="text-sm">{lang === 'th' ? 'ฉันแพ้' : 'I Lost'}</span>
                     </button>
                   </div>
+                  )
                 ) : (
                   <div className="mt-5 space-y-3">
                     <div className={`px-5 py-3 rounded-2xl font-bold text-base ${myResult === 'win' ? 'text-green-400' : 'text-red-400'}`}

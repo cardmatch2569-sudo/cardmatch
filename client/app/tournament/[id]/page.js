@@ -424,6 +424,14 @@ export default function TournamentWaitingRoom() {
               <div className="flex gap-1.5 flex-shrink-0">
                 {(a.type === 'conflict' || a.type === 'timeout') && a.roomId && (
                   <button
+                    onClick={() => router.push(`/room/${a.roomId}?spectate=admin&tid=${tournamentId}`)}
+                    className="px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1"
+                    style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.25)' }}>
+                    🎥 {lang === 'th' ? 'ดูห้อง' : 'Watch'}
+                  </button>
+                )}
+                {(a.type === 'conflict' || a.type === 'timeout') && a.roomId && (
+                  <button
                     onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || a.players?.map((_, i) => `P${i+1}`) || [] })}
                     className="px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1"
                     style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
