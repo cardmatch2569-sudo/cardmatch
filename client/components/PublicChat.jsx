@@ -73,11 +73,11 @@ export default function PublicChat({ lang, user, messages, onSend }) {
                 </p>
               </div>
             ) : (
-              messages.map((msg, i) => { // eslint-disable-line
+              messages.map((msg) => {
                 const isMe = msg.from._id === user?._id;
                 const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 return (
-                  <div key={msg.timestamp ? `${msg.from._id}-${msg.timestamp}` : i} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                  <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
                       {msg.from.username[0].toUpperCase()}
                     </div>
@@ -121,6 +121,12 @@ export default function PublicChat({ lang, user, messages, onSend }) {
                 <Send size={14} />
               </button>
             </div>
+            {input.length > 200 && (
+              <p className="text-[10px] text-right mt-1"
+                style={{ color: input.length >= 300 ? '#f87171' : '#94a3b8' }}>
+                {input.length}/300
+              </p>
+            )}
           </div>
         </div>
       )}

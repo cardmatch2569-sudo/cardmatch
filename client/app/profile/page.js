@@ -11,7 +11,9 @@ export default function ProfilePage() {
   const router = useRouter();
   const t = translations[lang];
   const [games, setGames]             = useState([]);
+  const [gamesError, setGamesError]   = useState(false);
   const [matchHistory, setMatchHistory] = useState([]);
+  const [historyError, setHistoryError] = useState(false);
   const [copied, setCopied]           = useState(false);
   const [refreshing, setRefreshing]   = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -86,8 +88,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!loading && !user) { router.push('/login'); return; }
     if (user) {
-      api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
-      api.get('/api/users/me/history').then(({ matches }) => setMatchHistory(matches || [])).catch(() => {});
+      api.get('/api/games').then(({ games }) => setGames(games)).catch(() => setGamesError(true));
+      api.get('/api/users/me/history')
+        .then(({ matches }) => setMatchHistory(matches || []))
+        .catch(() => setHistoryError(true));
       if (!user.playerId) refreshUser();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,7 +145,12 @@ export default function ProfilePage() {
           <div className="mb-4 flex items-center gap-3 px-3 py-2.5 rounded-xl"
             style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-slate-500 mb-0.5">{t.myPlayerId}</p>
+              <p className="text-[10px] text-slate-500 mb-0.5">
+                {t.myPlayerId}
+                <span className="ml-1 text-slate-700">
+                  {lang === 'th' ? '— ใช้ท้าด้วย ID' : '— used to challenge by ID'}
+                </span>
+              </p>
               {user.playerId
                 ? <p className="text-purple-300 font-mono font-bold tracking-widest text-base">{user.playerId}</p>
                 : <p className="text-slate-600 text-xs">{lang === 'th' ? 'กำลังสร้าง ID...' : 'Generating ID...'}</p>
@@ -214,12 +223,58 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* ── Stats by game type ──────────────────────────────────── */}
+      {matchHistory.length > 0 && (() => {
+        const byGame = {};
+        matchHistory.forEach(m => {
+          const key = m.game_name || '?';
+          if (!byGame[key]) byGame[key] = { name: m.game_name || '?', nameTh: m.game_name_th || m.game_name || '?', color: m.game_color || '#7c3aed', total: 0, wins: 0 };
+          byGame[key].total++;
+          if (m.outcome === 'win') byGame[key].wins++;
+        });
+        const rows = Object.values(byGame);
+        if (rows.length < 2) return null;
+        return (
+          <div className="card p-5 mb-5">
+            <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-widest">
+              {lang === 'th' ? 'สถิติแยกตามเกม' : 'Stats by Game'}
+            </h2>
+            <div className="space-y-3">
+              {rows.map(g => {
+                const wr = g.total ? Math.round((g.wins / g.total) * 100) : 0;
+                return (
+                  <div key={g.name}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: g.color }} />
+                        <span className="text-slate-300 font-medium">{lang === 'th' ? g.nameTh : g.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <span>{g.wins}W/{g.total - g.wins}L</span>
+                        <span className="text-white font-bold">{wr}%</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${wr}%`, background: g.color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Available games */}
       <div className="card p-5">
         <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-widest">
           {lang === 'th' ? 'เกมที่รองรับ' : 'Available Games'}
         </h2>
         <div className="space-y-2">
+          {gamesError && (
+            <p className="text-red-400 text-sm text-center py-2">{t.failedToLoad}</p>
+          )}
           {games.map((game) => (
             <div key={game._id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] hover:border-[var(--border-2)] transition"
               style={{ background: 'var(--bg-2)' }}>
@@ -244,7 +299,9 @@ export default function ProfilePage() {
             {lang === 'th' ? 'ประวัติการแข่ง' : 'Match History'}
           </h2>
         </div>
-        {matchHistory.length === 0 ? (
+        {historyError ? (
+          <p className="text-red-400 text-sm text-center py-4">{t.failedToLoad}</p>
+        ) : matchHistory.length === 0 ? (
           <p className="text-slate-600 text-sm text-center py-4">
             {lang === 'th' ? 'ยังไม่มีประวัติการแข่ง' : 'No matches yet'}
           </p>
@@ -268,7 +325,15 @@ export default function ProfilePage() {
                       {lang === 'th' ? 'vs ' : 'vs '}{m.opponent_username || '—'}
                     </div>
                   </div>
-                  <div className="text-xs text-slate-600 flex-shrink-0">{dateStr}</div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {m.outcome === 'win' && (
+                      <span className="badge badge-green text-[10px]">{lang === 'th' ? 'ชนะ' : 'Win'}</span>
+                    )}
+                    {m.outcome === 'lose' && (
+                      <span className="badge badge-red text-[10px]">{lang === 'th' ? 'แพ้' : 'Lose'}</span>
+                    )}
+                    <div className="text-xs text-slate-600">{dateStr}</div>
+                  </div>
                 </div>
               );
             })}

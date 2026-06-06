@@ -80,11 +80,133 @@ const translations = {
     gameNameTh: 'ชื่อเกม (TH)',
     gameDesc: 'คำอธิบาย (EN)',
     gameDescTh: 'คำอธิบาย (TH)',
+    gameImageUrl: 'URL รูปภาพ (ไม่บังคับ)',
     gameColor: 'สีธีม',
     save: 'บันทึก',
     cancel: 'ยกเลิก',
     active: 'เปิดใช้งาน',
     inactive: 'ปิดใช้งาน',
+
+    // Admin — tabs & stats
+    overview: 'ภาพรวม',
+    users: 'ผู้ใช้',
+    games: 'เกม',
+    rooms: 'ห้อง',
+    tournament: 'ทัวร์นาเมนต์',
+    totalUsers: 'ผู้ใช้ทั้งหมด',
+    onlineNow: 'ออนไลน์ตอนนี้',
+    totalRooms: 'ห้องทั้งหมด',
+    activeRooms: 'ห้องกำลังเล่น',
+
+    // Admin — announcement
+    announcement: 'ประชาสัมพันธ์',
+    announcementLive: 'กำลังแสดง',
+    announcementCurrent: 'ข้อความปัจจุบัน: ',
+    announcementPlaceholder: 'พิมพ์ข้อความประชาสัมพันธ์ (สูงสุด 400 ตัวอักษร)',
+    announcementSend: 'ส่ง',
+    announcementClear: 'ลบ',
+
+    // Admin — overview panel
+    onlineNowTitle: 'ออนไลน์ตอนนี้',
+    noUsersOnline: 'ไม่มีผู้ใช้ออนไลน์',
+    recentRooms: 'ห้องล่าสุด',
+    noRooms: 'ยังไม่มีห้อง',
+    systemStatus: 'สถานะระบบ',
+
+    // Admin — preview button
+    previewUser: 'ดูเป็นผู้ใช้',
+    previewUserShort: 'ผู้ใช้',
+
+    // Admin — users tab
+    userSearchPlaceholder: 'ค้นหา username หรือ email...',
+    userTotal: 'รวม',
+    userTotalSuffix: 'คน',
+    colUser: 'ผู้ใช้',
+    colGames: 'เกม',
+    colRole: 'สิทธิ์',
+    roleUser: 'ผู้ใช้',
+    removeAdmin: 'ถอด',
+    setAdmin: 'ตั้ง Admin',
+    deleteShort: 'ลบ',
+    prevPage: 'ก่อนหน้า',
+    nextPage: 'ถัดไป',
+
+    // Admin — games tab
+    noGames: 'ยังไม่มีเกม',
+    colGame: 'เกม',
+    colThai: 'ชื่อไทย',
+    colStatus: 'สถานะ',
+    statusOn: 'เปิด',
+    statusOff: 'ปิด',
+    editTitle: 'แก้ไข',
+    deleteTitle: 'ลบ',
+    colorLabel: 'สี',
+
+    // Admin — rooms tab
+    refresh: 'รีเฟรช',
+    colGame2: 'เกม',
+    colStatusR: 'สถานะ',
+    colTime: 'เวลา',
+
+    // Admin — delete user modal
+    deleteUserTitle: 'ลบผู้ใช้ออกจากระบบ?',
+    deleteUserMsg: 'จะถูกลบออกถาวร ไม่สามารถกู้คืนได้',
+    deleteUserNote: 'รวมข้อมูลทั้งหมด: โปรไฟล์ สถิติ และประวัติการแข่ง',
+    deleteUserPasswordLabel: '🔐 ยืนยันด้วยรหัสผ่าน Admin ของคุณ',
+    deleteUserPasswordPlaceholder: 'รหัสผ่านของคุณ',
+    deleteUserDeleting: 'กำลังลบ...',
+    deleteUserConfirm: '🗑 ลบถาวร',
+    deleteUserLabel: 'ผู้ใช้',
+    wrongPassword: 'รหัสผ่านไม่ถูกต้อง',
+
+    // Admin — spectate
+    watchingMatch: 'ดูการแข่ง',
+    stopWatching: 'หยุดดู',
+
+    // Admin — decide match
+    decideMatch: 'ตัดสินผลการแข่ง',
+    selectWinner: 'เลือกผู้ชนะ',
+    conflictChooseWinner: 'ผลไม่ตรงกัน — เลือกผู้ชนะ',
+
+    // Admin — game form validation
+    bothNamesRequired: 'กรุณากรอกชื่อทั้ง 2 ภาษา',
+
+    // Admin — tournament
+    createTournament: 'สร้างทัวร์นาเมนต์',
+    tournamentName: 'ชื่อทัวร์นาเมนต์',
+    loadingGames: 'กำลังโหลดเกม...',
+    selectGame2: '— เลือกเกม —',
+    maxPlayers: 'ผู้เล่นสูงสุด',
+    roundsLabel: 'จำนวนรอบ',
+    roundsUnit: 'รอบ',
+    startTimeLock: '⏰ เวลาเริ่ม Tournament (ล็อกผู้เล่น)',
+    endTimeAuto: '⏰ เวลาสิ้นสุด (auto-close)',
+    optional: 'ไม่บังคับ',
+    creating: 'กำลังสร้าง...',
+    activeTournaments: 'ทัวร์นาเมนต์ที่เปิดอยู่',
+    noTournaments: 'ยังไม่มีทัวร์นาเมนต์',
+    tourneyStatusActive: '⚔️ กำลังแข่ง',
+    tourneyStatusBetween: '🔄 รอรอบถัดไป',
+    tourneyStatusOpen: '✅ รับสมัคร',
+    closeTourney: 'ปิด',
+    closeTourneyConfirm: 'ปิด Tournament นี้?',
+    needMorePlayers: 'ต้องการผู้เล่นอย่างน้อย 2 คนเพื่อเริ่ม',
+    tourneyNameRequired: 'กรุณากรอกชื่อทัวร์นาเมนต์',
+    tourneyGameRequired: 'กรุณาเลือกเกม',
+    tourneyStartFuture: 'เวลาเริ่มต้องอยู่ในอนาคต',
+    tourneyEndAfterStart: 'เวลาจบต้องมาหลังเวลาเริ่ม',
+    notConnected: 'ยังไม่ได้เชื่อมต่อ Socket',
+
+    // Admin — alerts
+    alertPlayerCalled: '📣 ผู้เล่นเรียก Admin',
+    alertConflict: '⚠️ ผลไม่ตรงกัน — ต้องตัดสิน',
+    alertTimeout: '⏰ หมดเวลา — ต้องตัดสิน',
+    decideBtn: 'ตัดสิน',
+    watchBtn: 'ดู',
+
+    // Admin — system status
+    pendingOTPs: 'OTP รอยืนยัน',
+    pendingOTPsSuffix: 'รหัส',
 
     // Donate
     donate: 'สนับสนุน',
@@ -108,6 +230,41 @@ const translations = {
     donateDisclaimer3: 'ไม่สามารถขอคืนเงินได้ เนื่องจากการโอนผ่าน PromptPay เป็นที่สุด',
     donateDisclaimer4: 'ผู้รับเป็นบุคคลธรรมดา — CardMatch เป็นโปรเจคอิสระ ไม่ใช่บริษัท มูลนิธิ หรือนิติบุคคล',
     donateDisclaimer5: 'โปรดอ่านและยอมรับข้อตกลงนี้ก่อนโอนเงินทุกครั้ง',
+
+    // Tournament waiting room
+    backBtn: 'กลับ',
+    backToLobby: 'กลับ Lobby',
+    tourneyComplete: 'Tournament จบแล้ว!',
+    roundsWord: 'รอบ',
+    standings: 'คะแนนสะสม',
+    youParens: '(คุณ)',
+    startRound: 'เริ่มรอบ',
+    closeTourneyFull: 'ปิด Tournament',
+    roundPrefix: 'รอบที่',
+    leaveBtn: 'ออก',
+    waitingForAdmin1: 'รอ Admin กดเริ่มรอบที่ 1',
+    startsIn: 'เริ่มใน',
+    startTimeReached: '✅ ถึงเวลาเริ่มแล้ว',
+    roundInProgressTxt: 'กำลังแข่งรอบที่ {n} — รอผลจากห้องแข่ง',
+    roundCompleteTxt: 'รอบที่ {cur} จบแล้ว — รอ Admin เริ่มรอบที่ {next}',
+    byeTxt: 'คุณได้รับ BYE รอบที่ {n} — รอรอบถัดไป',
+    progressLabel: 'ความคืบหน้า',
+    joinedPlayers: 'ผู้เข้าร่วม',
+    waitingForPlayersTxt: 'รอผู้เล่น...',
+    tourneyNotFound: 'ไม่พบ Tournament นี้',
+    tourneyClosedAdmin: 'Admin ปิด Tournament แล้ว',
+
+    // Admin additional
+    toggleAdminPfx: 'เปลี่ยนสิทธิ์ของ',
+    pageXOfY: 'หน้า {page} / {total}',
+    statusOffline: 'ออฟไลน์',
+
+    // Tournament list
+    waitingAdminNextRound: 'รอ Admin เริ่มรอบถัดไป',
+
+    // Error / retry
+    failedToLoad: 'โหลดข้อมูลไม่ได้',
+    retryBtn: 'ลองใหม่',
 
     // General
     loading: 'กำลังโหลด...',
@@ -190,11 +347,133 @@ const translations = {
     gameNameTh: 'Game Name (TH)',
     gameDesc: 'Description (EN)',
     gameDescTh: 'Description (TH)',
+    gameImageUrl: 'Image URL (optional)',
     gameColor: 'Theme Color',
     save: 'Save',
     cancel: 'Cancel',
     active: 'Active',
     inactive: 'Inactive',
+
+    // Admin — tabs & stats
+    overview: 'Overview',
+    users: 'Users',
+    games: 'Games',
+    rooms: 'Rooms',
+    tournament: 'Tournament',
+    totalUsers: 'Total Users',
+    onlineNow: 'Online Now',
+    totalRooms: 'Total Rooms',
+    activeRooms: 'Active Rooms',
+
+    // Admin — announcement
+    announcement: 'Announcement',
+    announcementLive: 'Live',
+    announcementCurrent: 'Current: ',
+    announcementPlaceholder: 'Type announcement (max 400 chars)',
+    announcementSend: 'Send',
+    announcementClear: 'Clear',
+
+    // Admin — overview panel
+    onlineNowTitle: 'Online Now',
+    noUsersOnline: 'No users online',
+    recentRooms: 'Recent Rooms',
+    noRooms: 'No rooms',
+    systemStatus: 'System Status',
+
+    // Admin — preview button
+    previewUser: 'Preview',
+    previewUserShort: 'User',
+
+    // Admin — users tab
+    userSearchPlaceholder: 'Search username or email...',
+    userTotal: '',
+    userTotalSuffix: 'total',
+    colUser: 'User',
+    colGames: 'Games',
+    colRole: 'Role',
+    roleUser: 'User',
+    removeAdmin: 'Remove',
+    setAdmin: 'Admin',
+    deleteShort: 'Del',
+    prevPage: 'Prev',
+    nextPage: 'Next',
+
+    // Admin — games tab
+    noGames: 'No games',
+    colGame: 'Game',
+    colThai: 'Thai',
+    colStatus: 'Status',
+    statusOn: 'On',
+    statusOff: 'Off',
+    editTitle: 'Edit',
+    deleteTitle: 'Delete',
+    colorLabel: 'Color',
+
+    // Admin — rooms tab
+    refresh: 'Refresh',
+    colGame2: 'Game',
+    colStatusR: 'Status',
+    colTime: 'Time',
+
+    // Admin — delete user modal
+    deleteUserTitle: 'Delete User?',
+    deleteUserMsg: 'will be permanently deleted',
+    deleteUserNote: 'Includes all data: profile, stats, match history',
+    deleteUserPasswordLabel: '🔐 Confirm with your Admin password',
+    deleteUserPasswordPlaceholder: 'Your password',
+    deleteUserDeleting: 'Deleting...',
+    deleteUserConfirm: '🗑 Delete permanently',
+    deleteUserLabel: 'User',
+    wrongPassword: 'Wrong password',
+
+    // Admin — spectate
+    watchingMatch: 'Watching Match',
+    stopWatching: 'Stop Watching',
+
+    // Admin — decide match
+    decideMatch: 'Decide Match Result',
+    selectWinner: 'Select the winner',
+    conflictChooseWinner: 'Conflict — Choose winner',
+
+    // Admin — game form validation
+    bothNamesRequired: 'Both names required',
+
+    // Admin — tournament
+    createTournament: 'Create Tournament',
+    tournamentName: 'Tournament name',
+    loadingGames: 'Loading games...',
+    selectGame2: '— Select game —',
+    maxPlayers: 'Max players',
+    roundsLabel: 'Rounds',
+    roundsUnit: 'rds',
+    startTimeLock: '⏰ Start Time (locks players)',
+    endTimeAuto: '⏰ End Time (auto-close)',
+    optional: 'optional',
+    creating: 'Creating...',
+    activeTournaments: 'Active Tournaments',
+    noTournaments: 'No tournaments',
+    tourneyStatusActive: '⚔️ In Progress',
+    tourneyStatusBetween: '🔄 Between Rounds',
+    tourneyStatusOpen: '✅ Open',
+    closeTourney: 'Close',
+    closeTourneyConfirm: 'Close this tournament?',
+    needMorePlayers: 'Need at least 2 players to start',
+    tourneyNameRequired: 'Please enter a tournament name',
+    tourneyGameRequired: 'Please select a game',
+    tourneyStartFuture: 'Start time must be in the future',
+    tourneyEndAfterStart: 'End time must be after start time',
+    notConnected: 'Not connected',
+
+    // Admin — alerts
+    alertPlayerCalled: '📣 Player called Admin',
+    alertConflict: '⚠️ Result conflict — decision needed',
+    alertTimeout: '⏰ Timeout — decision needed',
+    decideBtn: 'Decide',
+    watchBtn: 'Watch',
+
+    // Admin — system status
+    pendingOTPs: 'Pending OTPs',
+    pendingOTPsSuffix: '',
 
     // Donate
     donate: 'Support',
@@ -218,6 +497,41 @@ const translations = {
     donateDisclaimer3: 'Non-refundable — PromptPay transfers are final and cannot be reversed.',
     donateDisclaimer4: 'Received by an individual — CardMatch is an independent project, not a company, foundation, or legal entity.',
     donateDisclaimer5: 'Please read and accept these terms before transferring.',
+
+    // Tournament waiting room
+    backBtn: 'Back',
+    backToLobby: 'Back to Lobby',
+    tourneyComplete: 'Tournament Complete!',
+    roundsWord: 'rounds',
+    standings: 'Standings',
+    youParens: '(You)',
+    startRound: 'Round',
+    closeTourneyFull: 'Close Tournament',
+    roundPrefix: 'Round',
+    leaveBtn: 'Leave',
+    waitingForAdmin1: 'Waiting for Admin to start Round 1',
+    startsIn: 'Starts in',
+    startTimeReached: '✅ Start time reached',
+    roundInProgressTxt: 'Round {n} in progress — awaiting results',
+    roundCompleteTxt: 'Round {cur} done — waiting for Admin to start Round {next}',
+    byeTxt: 'BYE this round — wait for next round',
+    progressLabel: 'Progress',
+    joinedPlayers: 'Joined Players',
+    waitingForPlayersTxt: 'Waiting for players...',
+    tourneyNotFound: 'Tournament not found',
+    tourneyClosedAdmin: 'Tournament was closed',
+
+    // Admin additional
+    toggleAdminPfx: 'Toggle admin for',
+    pageXOfY: 'Page {page} / {total}',
+    statusOffline: 'Offline',
+
+    // Tournament list
+    waitingAdminNextRound: 'Waiting for Admin to start next round',
+
+    // Error / retry
+    failedToLoad: 'Failed to load data',
+    retryBtn: 'Retry',
 
     loading: 'Loading...',
     error: 'Error',

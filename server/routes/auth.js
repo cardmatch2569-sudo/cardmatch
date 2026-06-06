@@ -159,7 +159,7 @@ router.post('/resend-otp', async (req, res) => {
     const data    = JSON.parse(rows[0].google_data);
     const newCode = generateOTP();
     await EmailVerification.create(email, newCode, data);
-    console.log(`\n🔑 OTP (resend) for ${email} : ${newCode}\n`);
+    if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 OTP (resend) for ${email} : ${newCode}\n`);
 
     const fn = data.type === 'email'
       ? sendRegisterOTPEmail(email, newCode, data.username)

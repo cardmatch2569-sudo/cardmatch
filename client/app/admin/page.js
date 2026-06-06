@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
+import translations from '../../lib/translations';
 import {
   Shield, Users, Gamepad2, Radio, Plus, Pencil, Trash2, X, Save,
   ToggleLeft, ToggleRight, Search, RefreshCw, Crown, UserX,
@@ -187,10 +188,7 @@ export default function AdminPage() {
   };
 
   const handleToggleAdmin = async (id, name) => {
-    const confirmMsg = lang === 'th'
-      ? `เปลี่ยนสิทธิ์ของ "${name}"?`
-      : `Toggle admin for "${name}"?`;
-    if (!confirm(confirmMsg)) return;
+    if (!confirm(`${translations[lang].toggleAdminPfx} "${name}"?`)) return;
     try {
       const { isAdmin } = await api.put(`/api/admin/users/${id}/role`, {});
       setUsers(p => p.map(u => u._id === id ? { ...u, isAdmin } : u));
@@ -205,7 +203,7 @@ export default function AdminPage() {
   };
   const handleSaveGame = async () => {
     if (!form.name || !form.nameTh) {
-      setFormError(lang === 'th' ? 'กรุณากรอกชื่อทั้ง 2 ภาษา' : 'Both names required');
+      setFormError(translations[lang].bothNamesRequired);
       return;
     }
     setSaving(true);
@@ -217,8 +215,7 @@ export default function AdminPage() {
     finally { setSaving(false); }
   };
   const handleDeleteGame = async (id, name) => {
-    const msg = lang === 'th' ? `ลบเกม "${name}"?` : `Delete "${name}"?`;
-    if (!confirm(msg)) return;
+    if (!confirm(`${translations[lang].deleteGame} "${name}"?`)) return;
     try { await api.delete(`/api/games/${id}`); await loadGames(); } catch {}
   };
 
@@ -242,7 +239,7 @@ export default function AdminPage() {
       setDeleteTarget(null);
       setDeletePassword('');
     } catch (err) {
-      setDeleteError(err.message || (lang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Wrong password'));
+      setDeleteError(err.message || translations[lang].wrongPassword);
     } finally { setDeleting(false); }
   };
 
@@ -252,26 +249,26 @@ export default function AdminPage() {
   const handleCreateTourney = () => {
     setTourneyError('');
     if (!tourneyForm.name.trim()) {
-      setTourneyError(lang === 'th' ? 'กรุณากรอกชื่อทัวร์นาเมนต์' : 'Please enter a tournament name');
+      setTourneyError(translations[lang].tourneyNameRequired);
       return;
     }
     if (!tourneyForm.gameTypeId) {
-      setTourneyError(lang === 'th' ? 'กรุณาเลือกเกม' : 'Please select a game');
+      setTourneyError(translations[lang].tourneyGameRequired);
       return;
     }
     if (tourneyForm.scheduledAt && new Date(tourneyForm.scheduledAt) <= new Date()) {
-      setTourneyError(lang === 'th' ? 'เวลาเริ่มต้องอยู่ในอนาคต' : 'Start time must be in the future');
+      setTourneyError(translations[lang].tourneyStartFuture);
       return;
     }
     if (tourneyForm.scheduledAt && tourneyForm.scheduledEnd &&
         new Date(tourneyForm.scheduledEnd) <= new Date(tourneyForm.scheduledAt)) {
-      setTourneyError(lang === 'th' ? 'เวลาจบต้องมาหลังเวลาเริ่ม' : 'End time must be after start time');
+      setTourneyError(translations[lang].tourneyEndAfterStart);
       return;
     }
     setTourneyCreating(true);
     const socket = getSocket();
     if (!socket) {
-      setTourneyError(lang === 'th' ? 'ยังไม่ได้เชื่อมต่อ Socket' : 'Not connected');
+      setTourneyError(translations[lang].notConnected);
       setTourneyCreating(false);
       return;
     }
@@ -311,7 +308,7 @@ export default function AdminPage() {
   };
 
   const handleCloseTourney = (tournamentId) => {
-    if (!confirm(lang === 'th' ? 'ปิด Tournament นี้?' : 'Close this tournament?')) return;
+    if (!confirm(translations[lang].closeTourneyConfirm)) return;
     getSocket()?.emit('close_tournament', { tournamentId });
   };
 
@@ -353,16 +350,18 @@ export default function AdminPage() {
     </div>
   );
 
+  const t = translations[lang];
+
   // Short labels for mobile, full for desktop
   const tabLabels = {
-    overview:   <><span className="hidden sm:inline">📊 </span><span className="sm:hidden">📊</span><span className="hidden sm:inline">{lang === 'th' ? 'ภาพรวม' : 'Overview'}</span></>,
-    users:      <><span className="hidden sm:inline">👥 </span><span className="sm:hidden">👥</span><span className="hidden sm:inline">{lang === 'th' ? 'ผู้ใช้' : 'Users'}</span></>,
-    games:      <><span className="hidden sm:inline">🃏 </span><span className="sm:hidden">🃏</span><span className="hidden sm:inline">{lang === 'th' ? 'เกม' : 'Games'}</span></>,
-    rooms:      <><span className="hidden sm:inline">🎮 </span><span className="sm:hidden">🎮</span><span className="hidden sm:inline">{lang === 'th' ? 'ห้อง' : 'Rooms'}</span></>,
+    overview:   <><span className="hidden sm:inline">📊 </span><span className="sm:hidden">📊</span><span className="hidden sm:inline">{t.overview}</span></>,
+    users:      <><span className="hidden sm:inline">👥 </span><span className="sm:hidden">👥</span><span className="hidden sm:inline">{t.users}</span></>,
+    games:      <><span className="hidden sm:inline">🃏 </span><span className="sm:hidden">🃏</span><span className="hidden sm:inline">{t.games}</span></>,
+    rooms:      <><span className="hidden sm:inline">🎮 </span><span className="sm:hidden">🎮</span><span className="hidden sm:inline">{t.rooms}</span></>,
     tournament: (
       <span className="relative flex items-center gap-1">
         <span>🏆</span>
-        <span className="hidden sm:inline">{lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament'}</span>
+        <span className="hidden sm:inline">{t.tournament}</span>
         {alerts.length > 0 && (
           <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">{alerts.length}</span>
         )}
@@ -371,10 +370,10 @@ export default function AdminPage() {
   };
 
   const statCards = stats ? [
-    { label: lang === 'th' ? 'ผู้ใช้ทั้งหมด' : 'Total Users',   value: stats.totalUsers,  icon: <Users size={18} />,    color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.2)' },
-    { label: lang === 'th' ? 'ออนไลน์ตอนนี้' : 'Online Now',    value: stats.onlineUsers, icon: <Radio size={18} />,    color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.2)' },
-    { label: lang === 'th' ? 'ห้องทั้งหมด'  : 'Total Rooms',    value: stats.totalRooms,  icon: <Gamepad2 size={18} />, color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)' },
-    { label: lang === 'th' ? 'ห้องกำลังเล่น' : 'Active Rooms',  value: stats.activeRooms, icon: <Activity size={18} />, color: '#fb923c', bg: 'rgba(251,146,60,0.1)',  border: 'rgba(251,146,60,0.2)' },
+    { label: t.totalUsers,  value: stats.totalUsers,  icon: <Users size={18} />,    color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.2)' },
+    { label: t.onlineNow,   value: stats.onlineUsers, icon: <Radio size={18} />,    color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.2)' },
+    { label: t.totalRooms,  value: stats.totalRooms,  icon: <Gamepad2 size={18} />, color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)' },
+    { label: t.activeRooms, value: stats.activeRooms, icon: <Activity size={18} />, color: '#fb923c', bg: 'rgba(251,146,60,0.1)',  border: 'rgba(251,146,60,0.2)' },
   ] : [];
 
   return (
@@ -391,28 +390,28 @@ export default function AdminPage() {
             <div className="text-center mb-5">
               <div className="text-4xl mb-3">⚠️</div>
               <h2 className="text-lg font-bold text-white mb-1">
-                {lang === 'th' ? 'ลบผู้ใช้ออกจากระบบ?' : 'Delete User?'}
+                {t.deleteUserTitle}
               </h2>
               <p className="text-sm text-slate-400 mb-1">
-                {lang === 'th' ? 'ผู้ใช้' : 'User'}{' '}
+                {t.deleteUserLabel}{' '}
                 <span className="text-red-400 font-bold">"{deleteTarget.username}"</span>
-                {' '}{lang === 'th' ? 'จะถูกลบออกถาวร ไม่สามารถกู้คืนได้' : 'will be permanently deleted'}
+                {' '}{t.deleteUserMsg}
               </p>
               <p className="text-xs text-slate-600">
-                {lang === 'th' ? 'รวมข้อมูลทั้งหมด: โปรไฟล์ สถิติ และประวัติการแข่ง' : 'Includes all data: profile, stats, match history'}
+                {t.deleteUserNote}
               </p>
             </div>
 
             <div className="mb-5">
               <label className="text-xs text-slate-400 block mb-2 font-medium">
-                {lang === 'th' ? '🔐 ยืนยันด้วยรหัสผ่าน Admin ของคุณ' : '🔐 Confirm with your Admin password'}
+                {t.deleteUserPasswordLabel}
               </label>
               <input
                 type="password"
                 value={deletePassword}
                 onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
                 onKeyDown={e => e.key === 'Enter' && deletePassword && handleDeleteUser()}
-                placeholder={lang === 'th' ? 'รหัสผ่านของคุณ' : 'Your password'}
+                placeholder={t.deleteUserPasswordPlaceholder}
                 className="input-base text-sm"
                 autoFocus
               />
@@ -426,15 +425,15 @@ export default function AdminPage() {
             <div className="flex gap-3">
               <button onClick={closeDeleteModal}
                 className="btn-ghost flex-1 py-2.5 rounded-xl text-sm">
-                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                {t.cancel}
               </button>
               <button onClick={handleDeleteUser}
                 disabled={!deletePassword || deleting}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
                 {deleting
-                  ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {lang === 'th' ? 'กำลังลบ...' : 'Deleting...'}</span>
-                  : (lang === 'th' ? '🗑 ลบถาวร' : '🗑 Delete permanently')}
+                  ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {t.deleteUserDeleting}</span>
+                  : t.deleteUserConfirm}
               </button>
             </div>
           </div>
@@ -449,12 +448,12 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-white font-bold text-lg flex items-center gap-2">
                 <Eye size={18} className="text-yellow-400" />
-                {lang === 'th' ? 'ดูการแข่ง' : 'Watching Match'}
+                {t.watchingMatch}
               </h2>
               <button onClick={stopSpectating}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-red-400 transition hover:bg-red-500/10"
                 style={{ border: '1px solid rgba(239,68,68,0.3)' }}>
-                <X size={14} /> {lang === 'th' ? 'หยุดดู' : 'Stop Watching'}
+                <X size={14} /> {t.stopWatching}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -480,7 +479,7 @@ export default function AdminPage() {
             {decideMatch && (
               <div className="mt-4 card p-4 text-center" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
                 <p className="text-yellow-300 font-semibold text-sm mb-3">
-                  {lang === 'th' ? 'ผลไม่ตรงกัน — เลือกผู้ชนะ' : 'Conflict — Choose winner'}
+                  {t.conflictChooseWinner}
                 </p>
                 <div className="flex gap-3 justify-center">
                   {decideMatch.players.map((pid, i) => (
@@ -505,10 +504,10 @@ export default function AdminPage() {
             style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(251,191,36,0.3)' }}>
             <div className="text-4xl mb-3">⚖️</div>
             <h2 className="text-white font-bold text-lg mb-2">
-              {lang === 'th' ? 'ตัดสินผลการแข่ง' : 'Decide Match Result'}
+              {t.decideMatch}
             </h2>
             <p className="text-slate-500 text-sm mb-5">
-              {lang === 'th' ? 'เลือกผู้ชนะ' : 'Select the winner'}
+              {t.selectWinner}
             </p>
             <div className="flex gap-3 justify-center mb-4">
               {decideMatch.players.map((pid, i) => (
@@ -521,7 +520,7 @@ export default function AdminPage() {
             </div>
             <button onClick={() => setDecideMatch(null)}
               className="btn-ghost w-full py-2 rounded-xl text-xs">
-              {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+              {t.cancel}
             </button>
           </div>
         </div>
@@ -536,16 +535,17 @@ export default function AdminPage() {
             <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-purple-500 to-transparent" />
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-white">{editId ? (lang === 'th' ? 'แก้ไขเกม' : 'Edit Game') : (lang === 'th' ? 'เพิ่มเกม' : 'Add Game')}</h2>
+                <h2 className="text-lg font-bold text-white">{editId ? t.editGame : t.addGame}</h2>
                 <button onClick={() => setModal(null)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition"><X size={15} /></button>
               </div>
               {formError && <div className="badge badge-red w-full justify-center py-2 rounded-lg text-xs mb-4">{formError}</div>}
               <div className="space-y-3">
                 {[
-                  { key: 'name',          label: lang === 'th' ? 'ชื่อเกม (EN)' : 'Game Name (EN)' },
-                  { key: 'nameTh',        label: lang === 'th' ? 'ชื่อเกม (TH)' : 'Game Name (TH)' },
-                  { key: 'description',   label: lang === 'th' ? 'คำอธิบาย (EN)' : 'Description (EN)' },
-                  { key: 'descriptionTh', label: lang === 'th' ? 'คำอธิบาย (TH)' : 'Description (TH)' },
+                  { key: 'name',          label: t.gameName },
+                  { key: 'nameTh',        label: t.gameNameTh },
+                  { key: 'description',   label: t.gameDesc },
+                  { key: 'descriptionTh', label: t.gameDescTh },
+                  { key: 'imageUrl',      label: t.gameImageUrl },
                 ].map(({ key, label }) => (
                   <div key={key}>
                     <label className="text-xs text-slate-500 block mb-1.5 font-medium">{label}</label>
@@ -553,7 +553,7 @@ export default function AdminPage() {
                   </div>
                 ))}
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1.5 font-medium">{lang === 'th' ? 'สีธีม' : 'Color'}</label>
+                  <label className="text-xs text-slate-500 block mb-1.5 font-medium">{t.colorLabel}</label>
                   <div className="flex items-center gap-3">
                     <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
                       className="w-10 h-10 rounded-lg cursor-pointer p-0.5"
@@ -567,14 +567,14 @@ export default function AdminPage() {
                 <button type="button" onClick={() => setForm({ ...form, isActive: !form.isActive })}
                   className="flex items-center justify-between w-full px-4 py-3 rounded-xl border transition"
                   style={{ background: form.isActive ? 'rgba(74,222,128,0.06)' : 'rgba(255,255,255,0.02)', borderColor: form.isActive ? 'rgba(74,222,128,0.2)' : 'var(--border)' }}>
-                  <span className="text-sm text-slate-300">{lang === 'th' ? 'เปิดใช้งาน' : 'Active'}</span>
+                  <span className="text-sm text-slate-300">{t.active}</span>
                   {form.isActive ? <ToggleRight size={22} className="text-green-400" /> : <ToggleLeft size={22} className="text-slate-600" />}
                 </button>
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={() => setModal(null)} className="btn-ghost flex-1 py-2.5 rounded-xl text-sm">{lang === 'th' ? 'ยกเลิก' : 'Cancel'}</button>
+                <button onClick={() => setModal(null)} className="btn-ghost flex-1 py-2.5 rounded-xl text-sm">{t.cancel}</button>
                 <button onClick={handleSaveGame} disabled={saving} className="btn-primary flex-1 py-2.5 rounded-xl text-sm gap-1.5">
-                  <Save size={14} /> {saving ? '...' : (lang === 'th' ? 'บันทึก' : 'Save')}
+                  <Save size={14} /> {saving ? '...' : t.save}
                 </button>
               </div>
             </div>
@@ -596,8 +596,8 @@ export default function AdminPage() {
         <button onClick={toggleViewMode}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition border flex-shrink-0"
           style={{ background: 'rgba(124,58,237,0.1)', borderColor: 'rgba(124,58,237,0.25)', color: '#a78bfa' }}>
-          👤 <span className="hidden sm:inline">{lang === 'th' ? 'ดูเป็นผู้ใช้' : 'Preview'}</span>
-          <span className="sm:hidden">{lang === 'th' ? 'ผู้ใช้' : 'User'}</span>
+          👤 <span className="hidden sm:inline">{t.previewUser}</span>
+          <span className="sm:hidden">{t.previewUserShort}</span>
         </button>
       </div>
 
@@ -620,13 +620,13 @@ export default function AdminPage() {
       <div className="card p-4 md:p-5 mb-5" style={{ borderColor: annActive ? 'rgba(251,191,36,0.3)' : 'var(--border)' }}>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-base">📢</span>
-          <h3 className="font-bold text-white text-sm">{lang === 'th' ? 'ประชาสัมพันธ์' : 'Announcement'}</h3>
-          {annActive && <span className="badge badge-yellow text-[10px]">{lang === 'th' ? 'กำลังแสดง' : 'Live'}</span>}
+          <h3 className="font-bold text-white text-sm">{t.announcement}</h3>
+          {annActive && <span className="badge badge-yellow text-[10px]">{t.announcementLive}</span>}
         </div>
         {annActive && (
           <div className="mb-3 px-3 py-2 rounded-lg text-xs text-yellow-300 overflow-hidden"
             style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
-            <span className="font-medium">{lang === 'th' ? 'ข้อความปัจจุบัน: ' : 'Current: '}</span>{annActive.text}
+            <span className="font-medium">{t.announcementCurrent}</span>{annActive.text}
           </div>
         )}
         <div className="flex gap-2">
@@ -634,18 +634,18 @@ export default function AdminPage() {
             value={annText}
             onChange={e => setAnnText(e.target.value.slice(0, 400))}
             onKeyDown={e => e.key === 'Enter' && saveAnnouncement()}
-            placeholder={lang === 'th' ? 'พิมพ์ข้อความประชาสัมพันธ์ (สูงสุด 400 ตัวอักษร)' : 'Type announcement (max 400 chars)'}
+            placeholder={t.announcementPlaceholder}
             className="input-base text-sm flex-1 py-2"
           />
           <button onClick={saveAnnouncement} disabled={!annText.trim() || annSaving}
             className="btn-primary px-4 py-2 rounded-xl text-sm flex-shrink-0 disabled:opacity-40">
-            {annSaving ? '...' : (lang === 'th' ? 'ส่ง' : 'Send')}
+            {annSaving ? '...' : t.announcementSend}
           </button>
           {annActive && (
             <button onClick={clearAnnouncement}
               className="px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0 transition"
               style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-              {lang === 'th' ? 'ลบ' : 'Clear'}
+              {t.announcementClear}
             </button>
           )}
         </div>
@@ -669,11 +669,11 @@ export default function AdminPage() {
         <div className="grid md:grid-cols-2 gap-5">
           <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white flex items-center gap-2"><Radio size={15} className="text-green-400" />{lang === 'th' ? 'ออนไลน์ตอนนี้' : 'Online Now'}</h3>
+              <h3 className="font-bold text-white flex items-center gap-2"><Radio size={15} className="text-green-400" />{t.onlineNowTitle}</h3>
               <button onClick={loadOnline} className="text-slate-600 hover:text-slate-400 transition"><RefreshCw size={13} /></button>
             </div>
             {online.length === 0
-              ? <p className="text-slate-700 text-sm text-center py-4">{lang === 'th' ? 'ไม่มีผู้ใช้ออนไลน์' : 'No users online'}</p>
+              ? <p className="text-slate-700 text-sm text-center py-4">{t.noUsersOnline}</p>
               : <div className="space-y-2 max-h-52 overflow-y-auto">
                   {online.map(u => (
                     <div key={u.userId} className="flex items-center gap-2 text-sm">
@@ -689,11 +689,11 @@ export default function AdminPage() {
 
           <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white flex items-center gap-2"><Activity size={15} className="text-purple-400" />{lang === 'th' ? 'ห้องล่าสุด' : 'Recent Rooms'}</h3>
+              <h3 className="font-bold text-white flex items-center gap-2"><Activity size={15} className="text-purple-400" />{t.recentRooms}</h3>
               <button onClick={loadRooms} className="text-slate-600 hover:text-slate-400 transition"><RefreshCw size={13} /></button>
             </div>
             {rooms.length === 0
-              ? <p className="text-slate-700 text-sm text-center py-4">{lang === 'th' ? 'ยังไม่มีห้อง' : 'No rooms'}</p>
+              ? <p className="text-slate-700 text-sm text-center py-4">{t.noRooms}</p>
               : <div className="space-y-2 max-h-52 overflow-y-auto">
                   {rooms.slice(0, 8).map(r => (
                     <div key={r.RoomId} className="flex items-center gap-2 text-xs">
@@ -707,7 +707,7 @@ export default function AdminPage() {
           </div>
 
           <div className="card p-5 md:col-span-2">
-            <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Activity size={15} className="text-blue-400" />{lang === 'th' ? 'สถานะระบบ' : 'System Status'}</h3>
+            <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Activity size={15} className="text-blue-400" />{t.systemStatus}</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: 'API Server', status: true },
@@ -726,7 +726,7 @@ export default function AdminPage() {
               <div className="mt-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2"
                 style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', color: '#fbbf24' }}>
                 <Clock size={12} />
-                {lang === 'th' ? `OTP รอยืนยัน: ${stats.pendingOTPs} รหัส` : `Pending OTPs: ${stats.pendingOTPs}`}
+                {`${t.pendingOTPs}: ${stats.pendingOTPs}${t.pendingOTPsSuffix ? ' ' + t.pendingOTPsSuffix : ''}`}
               </div>
             )}
           </div>
@@ -742,12 +742,12 @@ export default function AdminPage() {
               <input
                 value={userSearch}
                 onChange={e => handleUserSearch(e.target.value)}
-                placeholder={lang === 'th' ? 'ค้นหา username หรือ email...' : 'Search username or email...'}
+                placeholder={t.userSearchPlaceholder}
                 className="input-base text-sm pl-9"
               />
             </div>
             <div className="text-xs text-slate-600 flex-shrink-0">
-              {lang === 'th' ? `รวม ${userTotal} คน` : `${userTotal} total`}
+              {t.userTotal} {userTotal} {t.userTotalSuffix}
             </div>
           </div>
 
@@ -757,7 +757,7 @@ export default function AdminPage() {
               : <table className="w-full text-sm" style={{ minWidth: '500px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-                      {[lang === 'th' ? 'ผู้ใช้' : 'User', 'Email', 'Status', lang === 'th' ? 'เกม' : 'Games', lang === 'th' ? 'สิทธิ์' : 'Role', ''].map((h, i) => (
+                      {[t.colUser, 'Email', 'Status', t.colGames, t.colRole, ''].map((h, i) => (
                         <th key={i} className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -784,14 +784,14 @@ export default function AdminPage() {
                           <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${u.isOnline ? 'text-green-400' : 'text-slate-600'}`}
                             style={u.isOnline ? { background: 'rgba(74,222,128,0.1)' } : {}}>
                             {u.isOnline && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
-                            {u.isOnline ? 'Online' : 'Offline'}
+                            {u.isOnline ? t.online : t.statusOffline}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-500 text-xs">{u.stats.totalGames}</td>
                         <td className="px-4 py-3">
                           {u.isAdmin
                             ? <span className="badge badge-yellow text-[10px]"><Crown size={9} /> Admin</span>
-                            : <span className="text-xs text-slate-600">{lang === 'th' ? 'ผู้ใช้' : 'User'}</span>}
+                            : <span className="text-xs text-slate-600">{t.roleUser}</span>}
                         </td>
                         <td className="px-4 py-3">
                           {u._id !== user._id && (
@@ -800,13 +800,13 @@ export default function AdminPage() {
                                 className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition"
                                 style={{ background: u.isAdmin ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)', color: u.isAdmin ? '#f87171' : '#fbbf24', border: `1px solid ${u.isAdmin ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'}` }}>
                                 {u.isAdmin ? <UserX size={11} /> : <Crown size={11} />}
-                                <span className="hidden sm:inline">{u.isAdmin ? (lang === 'th' ? 'ถอด' : 'Remove') : (lang === 'th' ? 'ตั้ง Admin' : 'Admin')}</span>
+                                <span className="hidden sm:inline">{u.isAdmin ? t.removeAdmin : t.setAdmin}</span>
                               </button>
                               <button onClick={() => openDeleteUser(u)}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition"
                                 style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
                                 <Trash2 size={11} />
-                                <span className="hidden sm:inline">{lang === 'th' ? 'ลบ' : 'Del'}</span>
+                                <span className="hidden sm:inline">{t.deleteShort}</span>
                               </button>
                             </div>
                           )}
@@ -821,14 +821,14 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mt-4 text-sm">
               <button onClick={() => loadUsers(userPage - 1, userSearch)} disabled={userPage === 1}
                 className="btn-ghost px-4 py-2 rounded-lg text-xs disabled:opacity-30">
-                ← {lang === 'th' ? 'ก่อนหน้า' : 'Prev'}
+                ← {t.prevPage}
               </button>
               <span className="text-slate-600">
-                {lang === 'th' ? `หน้า ${userPage} / ${Math.ceil(userTotal / 15)}` : `Page ${userPage} / ${Math.ceil(userTotal / 15)}`}
+                {t.pageXOfY.replace('{page}', userPage).replace('{total}', Math.ceil(userTotal / 15))}
               </span>
               <button onClick={() => loadUsers(userPage + 1, userSearch)} disabled={userPage >= Math.ceil(userTotal / 15)}
                 className="btn-ghost px-4 py-2 rounded-lg text-xs disabled:opacity-30">
-                {lang === 'th' ? 'ถัดไป' : 'Next'} →
+                {t.nextPage} →
               </button>
             </div>
           )}
@@ -840,18 +840,18 @@ export default function AdminPage() {
         <div>
           <div className="flex justify-end mb-4">
             <button onClick={openAdd} className="btn-primary text-sm gap-1.5 px-4 py-2.5 rounded-xl">
-              <Plus size={15} /> {lang === 'th' ? 'เพิ่มเกม' : 'Add Game'}
+              <Plus size={15} /> {t.addGame}
             </button>
           </div>
           <div className="card overflow-hidden table-wrap">
             {games.length === 0
-              ? <div className="text-center py-12 text-slate-600"><div className="text-4xl mb-3">🃏</div><p>{lang === 'th' ? 'ยังไม่มีเกม' : 'No games'}</p></div>
+              ? <div className="text-center py-12 text-slate-600"><div className="text-4xl mb-3">🃏</div><p>{t.noGames}</p></div>
               : <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{lang === 'th' ? 'เกม' : 'Game'}</th>
-                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">{lang === 'th' ? 'ชื่อไทย' : 'Thai'}</th>
-                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{t.colGame}</th>
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">{t.colThai}</th>
+                      <th className="px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{t.colStatus}</th>
                       <th className="px-4 py-3.5 w-20"></th>
                     </tr>
                   </thead>
@@ -871,13 +871,13 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className={`badge text-[10px] ${g.isActive ? 'badge-green' : 'badge-red'}`}>
-                            {g.isActive ? (lang === 'th' ? 'เปิด' : 'On') : (lang === 'th' ? 'ปิด' : 'Off')}
+                            {g.isActive ? t.statusOn : t.statusOff}
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition">
-                            <button onClick={() => openEdit(g)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition active:scale-95" title={lang === 'th' ? 'แก้ไข' : 'Edit'}><Pencil size={14} /></button>
-                            <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition active:scale-95" title={lang === 'th' ? 'ลบ' : 'Delete'}><Trash2 size={14} /></button>
+                            <button onClick={() => openEdit(g)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition active:scale-95" title={t.editTitle}><Pencil size={14} /></button>
+                            <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition active:scale-95" title={t.deleteTitle}><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>
@@ -893,16 +893,16 @@ export default function AdminPage() {
         <div>
           <div className="flex justify-end mb-4">
             <button onClick={loadRooms} className="btn-ghost text-sm gap-1.5 px-3 py-2 rounded-lg">
-              <RefreshCw size={14} /> {lang === 'th' ? 'รีเฟรช' : 'Refresh'}
+              <RefreshCw size={14} /> {t.refresh}
             </button>
           </div>
           <div className="card overflow-hidden table-wrap">
             {rooms.length === 0
-              ? <div className="text-center py-12 text-slate-600"><div className="text-4xl mb-3">🎮</div><p>{lang === 'th' ? 'ยังไม่มีห้อง' : 'No rooms'}</p></div>
+              ? <div className="text-center py-12 text-slate-600"><div className="text-4xl mb-3">🎮</div><p>{t.noRooms}</p></div>
               : <table className="w-full text-sm" style={{ minWidth: '500px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
-                      {['Room ID', lang === 'th' ? 'เกม' : 'Game', lang === 'th' ? 'สถานะ' : 'Status', lang === 'th' ? 'เวลา' : 'Time'].map((h, i) => (
+                      {['Room ID', t.colGame2, t.colStatusR, t.colTime].map((h, i) => (
                         <th key={i} className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -938,14 +938,15 @@ export default function AdminPage() {
           {alerts.length > 0 && (
             <div className="space-y-2">
               {alerts.map(a => (
-                <div key={a.id} className="card p-4 flex items-start gap-3"
-                  style={{ borderColor: a.type === 'conflict' || a.type === 'timeout' ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)' }}>
+                <div key={a.id} className="card p-4 flex items-start gap-3 overflow-hidden"
+                  style={{ borderColor: a.type === 'conflict' || a.type === 'timeout' ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)', position: 'relative' }}>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px', transformOrigin: 'left', background: a.type === 'conflict' || a.type === 'timeout' ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)', animation: 'countdown-bar 30s linear forwards' }} />
                   <Bell size={16} className={a.type === 'conflict' || a.type === 'timeout' ? 'text-red-400 flex-shrink-0 mt-0.5' : 'text-yellow-400 flex-shrink-0 mt-0.5'} />
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-white">
-                      {a.type === 'call'      && (lang === 'th' ? '📣 ผู้เล่นเรียก Admin' : '📣 Player called Admin')}
-                      {a.type === 'conflict'  && (lang === 'th' ? '⚠️ ผลไม่ตรงกัน — ต้องตัดสิน' : '⚠️ Result conflict — decision needed')}
-                      {a.type === 'timeout'   && (lang === 'th' ? '⏰ หมดเวลา — ต้องตัดสิน' : '⏰ Timeout — decision needed')}
+                      {a.type === 'call'      && t.alertPlayerCalled}
+                      {a.type === 'conflict'  && t.alertConflict}
+                      {a.type === 'timeout'   && t.alertTimeout}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">Room: {a.roomId?.slice(0, 12)}...</p>
                   </div>
@@ -955,14 +956,14 @@ export default function AdminPage() {
                         onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || a.players?.map((_, i) => `Player ${i+1}`) || [] })}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
                         style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-                        <Gavel size={11} /> {lang === 'th' ? 'ตัดสิน' : 'Decide'}
+                        <Gavel size={11} /> {t.decideBtn}
                       </button>
                     )}
                     {a.roomId && (
                       <button onClick={() => startSpectating(a.roomId)}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
                         style={{ background: 'rgba(124,58,237,0.15)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.3)' }}>
-                        <Eye size={11} /> {lang === 'th' ? 'ดู' : 'Watch'}
+                        <Eye size={11} /> {t.watchBtn}
                       </button>
                     )}
                     <button onClick={() => dismissAlert(a.id)} className="text-slate-600 hover:text-slate-400 p-1">
@@ -978,7 +979,7 @@ export default function AdminPage() {
           <div className="card p-5">
             <h3 className="font-bold text-white flex items-center gap-2 mb-4">
               <Plus size={15} className="text-purple-400" />
-              {lang === 'th' ? 'สร้างทัวร์นาเมนต์' : 'Create Tournament'}
+              {t.createTournament}
             </h3>
             {tourneyError && (
               <div className="px-3 py-2 rounded-lg text-xs text-red-400 mb-1"
@@ -990,7 +991,7 @@ export default function AdminPage() {
               <input
                 value={tourneyForm.name}
                 onChange={e => { setTourneyForm(f => ({ ...f, name: e.target.value.slice(0, 100) })); setTourneyError(''); }}
-                placeholder={lang === 'th' ? 'ชื่อทัวร์นาเมนต์' : 'Tournament name'}
+                placeholder={t.tournamentName}
                 className="input-base text-sm"
               />
               <div className="relative">
@@ -1000,9 +1001,7 @@ export default function AdminPage() {
                   className="input-base text-sm w-full pr-8"
                   style={{ WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none', background: 'var(--bg-2,#0f0f1e)', color: 'var(--text,#e2e8f0)' }}>
                   <option value="" style={{ background: '#0f0f1e', color: '#94a3b8' }}>
-                    {games.length === 0
-                      ? (lang === 'th' ? 'กำลังโหลดเกม...' : 'Loading games...')
-                      : (lang === 'th' ? '— เลือกเกม —' : '— Select game —')}
+                    {games.length === 0 ? t.loadingGames : t.selectGame2}
                   </option>
                   {games.map(g => (
                     <option key={g._id} value={g._id} style={{ background: '#0f0f1e', color: '#e2e8f0' }}>{g.name}</option>
@@ -1013,7 +1012,7 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'ผู้เล่นสูงสุด' : 'Max players'}</label>
+                <label className="text-xs text-slate-500 flex-shrink-0">{t.maxPlayers}</label>
                 {[8, 16, 32].map(n => (
                   <button key={n} onClick={() => setTourneyForm(f => ({ ...f, maxPlayers: n }))}
                     className="px-4 py-1.5 rounded-lg text-xs font-semibold transition"
@@ -1025,19 +1024,19 @@ export default function AdminPage() {
                 ))}
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <label className="text-xs text-slate-500 flex-shrink-0">{lang === 'th' ? 'จำนวนรอบ' : 'Rounds'}</label>
+                <label className="text-xs text-slate-500 flex-shrink-0">{t.roundsLabel}</label>
                 {[3, 5, 7].map(n => (
                   <button key={n} onClick={() => setTourneyForm(f => ({ ...f, totalRounds: n }))}
                     className="px-4 py-1.5 rounded-lg text-xs font-semibold transition"
                     style={tourneyForm.totalRounds === n
                       ? { background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.5)' }
                       : { background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                    {n} {lang === 'th' ? 'รอบ' : 'rds'}
+                    {n} {t.roundsUnit}
                   </button>
                 ))}
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-slate-500 block">{lang === 'th' ? '⏰ เวลาเริ่ม Tournament (ล็อกผู้เล่น)' : '⏰ Start Time (locks players)'}</label>
+                <label className="text-xs text-slate-500 block">{t.startTimeLock}</label>
                 <input
                   type="datetime-local"
                   value={tourneyForm.scheduledAt}
@@ -1047,7 +1046,7 @@ export default function AdminPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-slate-500 block">{lang === 'th' ? '⏰ เวลาสิ้นสุด (auto-close)' : '⏰ End Time (auto-close)'} <span className="text-slate-700">{lang === 'th' ? 'ไม่บังคับ' : 'optional'}</span></label>
+                <label className="text-xs text-slate-500 block">{t.endTimeAuto} <span className="text-slate-700">{t.optional}</span></label>
                 <input
                   type="datetime-local"
                   value={tourneyForm.scheduledEnd}
@@ -1062,8 +1061,8 @@ export default function AdminPage() {
               disabled={!tourneyForm.name.trim() || !tourneyForm.gameTypeId || tourneyCreating}
               className="btn-primary w-full py-2.5 rounded-xl text-sm mt-4 gap-1.5 disabled:opacity-40">
               {tourneyCreating
-                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {lang === 'th' ? 'กำลังสร้าง...' : 'Creating...'}</>
-                : <><Trophy size={14} /> {lang === 'th' ? 'สร้างทัวร์นาเมนต์' : 'Create Tournament'}</>}
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {t.creating}</>
+                : <><Trophy size={14} /> {t.createTournament}</>}
             </button>
           </div>
 
@@ -1072,7 +1071,7 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-white text-sm flex items-center gap-2">
                 <Trophy size={14} className="text-yellow-400" />
-                {lang === 'th' ? 'ทัวร์นาเมนต์ที่เปิดอยู่' : 'Active Tournaments'}
+                {t.activeTournaments}
               </h3>
               <button onClick={loadTournaments} className="text-slate-600 hover:text-slate-400 transition">
                 <RefreshCw size={13} />
@@ -1082,54 +1081,52 @@ export default function AdminPage() {
             {tournaments.length === 0 ? (
               <div className="card p-8 text-center">
                 <div className="text-4xl mb-3">🏆</div>
-                <p className="text-slate-700 text-sm">{lang === 'th' ? 'ยังไม่มีทัวร์นาเมนต์' : 'No tournaments'}</p>
+                <p className="text-slate-700 text-sm">{t.noTournaments}</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {tournaments.map(t => (
-                  <div key={t.id} className="card p-5">
+                {tournaments.map(tourney => (
+                  <div key={tourney.id} className="card p-5">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-white truncate">{t.name}</h4>
+                        <h4 className="font-bold text-white truncate">{tourney.name}</h4>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs font-semibold ${t.status === 'active' ? 'text-yellow-400' : t.status === 'round_complete' ? 'text-purple-400' : 'text-green-400'}`}>
-                            {t.status === 'active'
-                              ? (lang === 'th' ? '⚔️ กำลังแข่ง' : '⚔️ In Progress')
-                              : t.status === 'round_complete'
-                                ? (lang === 'th' ? '🔄 รอรอบถัดไป' : '🔄 Between Rounds')
-                                : (lang === 'th' ? '✅ รับสมัคร' : '✅ Open')}
+                          <span className={`text-xs font-semibold ${tourney.status === 'active' ? 'text-yellow-400' : tourney.status === 'round_complete' ? 'text-purple-400' : 'text-green-400'}`}>
+                            {tourney.status === 'active'
+                              ? t.tourneyStatusActive
+                              : tourney.status === 'round_complete'
+                                ? t.tourneyStatusBetween
+                                : t.tourneyStatusOpen}
                           </span>
                           <span className="text-xs text-slate-600">
                             <Users size={10} className="inline mr-0.5" />
-                            {t.playerCount}/{t.maxPlayers}
+                            {tourney.playerCount}/{tourney.maxPlayers}
                           </span>
                         </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
-                        {['waiting', 'round_complete'].includes(t.status) && t.currentRound < (t.totalRounds || 3) && (
+                        {['waiting', 'round_complete'].includes(tourney.status) && tourney.currentRound < (tourney.totalRounds || 3) && (
                           <button
-                            onClick={() => handleStartRound(t.id)}
-                            disabled={(t.playerCount || 0) < 2 || (t.activeMatchCount || 0) > 0}
+                            onClick={() => handleStartRound(tourney.id)}
+                            disabled={(tourney.playerCount || 0) < 2 || (tourney.activeMatchCount || 0) > 0}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40"
                             style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
                             <Play size={11} />
-                            {lang === 'th'
-                              ? `เริ่มรอบ ${(t.currentRound || 0) + 1}/${t.totalRounds || 3}`
-                              : `Round ${(t.currentRound || 0) + 1}/${t.totalRounds || 3}`}
+                            {`${t.startRound} ${(tourney.currentRound || 0) + 1}/${tourney.totalRounds || 3}`}
                           </button>
                         )}
                         <button
-                          onClick={() => handleCloseTourney(t.id)}
+                          onClick={() => handleCloseTourney(tourney.id)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
                           style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-                          <X size={11} /> {lang === 'th' ? 'ปิด' : 'Close'}
+                          <X size={11} /> {t.closeTourney}
                         </button>
                       </div>
                     </div>
 
-                    {(t.playerCount || 0) < 2 && t.status === 'waiting' && (
+                    {(tourney.playerCount || 0) < 2 && tourney.status === 'waiting' && (
                       <p className="text-xs text-slate-600 mt-1">
-                        {lang === 'th' ? 'ต้องการผู้เล่นอย่างน้อย 2 คนเพื่อเริ่ม' : 'Need at least 2 players to start'}
+                        {t.needMorePlayers}
                       </p>
                     )}
                   </div>

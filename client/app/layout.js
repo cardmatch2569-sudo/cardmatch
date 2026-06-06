@@ -47,9 +47,11 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="th" data-scroll-behavior="smooth">
-      {/* UX-5: Restore theme before first paint to avoid flash */}
-      <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('cg_theme')==='light')document.documentElement.classList.add('light');}catch(e){}})();` }} />
+    <html lang="th" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        {/* Restore theme + lang before first paint to avoid flash */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('cg_theme')==='light')document.documentElement.classList.add('light');document.documentElement.lang=localStorage.getItem('cg_lang')||'th';}catch(e){}})();` }} />
+      </head>
       <body>
         <Providers>
           <ViewportHeight />

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
+import translations from '../../lib/translations';
 
 function useCountdown(targetDate) {
   const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
@@ -23,6 +24,7 @@ function useCountdown(targetDate) {
 }
 
 function TournamentCard({ t, lang, onJoin, joining }) {
+  const tl = translations[lang];
   const countdown = useCountdown(t.scheduledAt);
   const isFull  = t.playerCount >= t.maxPlayers;
   const canJoin = t.status === 'waiting' && !isFull;
@@ -42,16 +44,31 @@ function TournamentCard({ t, lang, onJoin, joining }) {
 
       <div className="flex-1 min-w-0">
         <h3 className="font-bold text-white truncate text-base">{t.name}</h3>
+        {(t.gameTypeNameTh || t.gameTypeName) && (
+          <p className="text-xs text-slate-500 truncate mt-0.5">
+            🎮 {lang === 'th' ? (t.gameTypeNameTh || t.gameTypeName) : (t.gameTypeName || t.gameTypeNameTh)}
+            {t.totalRounds > 0 && (
+              <span className="ml-2 text-slate-600">
+                · {isActive || isRoundComplete
+                  ? (lang === 'th' ? `รอบ ${t.currentRound}/${t.totalRounds}` : `Round ${t.currentRound}/${t.totalRounds}`)
+                  : (lang === 'th' ? `${t.totalRounds} รอบ` : `${t.totalRounds} rounds`)}
+              </span>
+            )}
+          </p>
+        )}
         <div className="flex items-center gap-3 mt-1">
           <span className={`text-xs font-semibold ${isActive ? 'text-yellow-400' : isRoundComplete ? 'text-purple-400' : isFull ? 'text-red-400' : 'text-green-400'}`}>
             {isActive
-              ? (lang === 'th' ? '⚔️ กำลังแข่ง' : '⚔️ In Progress')
+              ? tl.tourneyStatusActive
               : isRoundComplete
-                ? (lang === 'th' ? '🔄 รอรอบถัดไป' : '🔄 Between Rounds')
+                ? tl.tourneyStatusBetween
                 : isFull
                   ? (lang === 'th' ? '❌ เต็ม' : '❌ Full')
-                  : (lang === 'th' ? '✅ รับสมัคร' : '✅ Open')}
+                  : tl.tourneyStatusOpen}
           </span>
+          {isRoundComplete && (
+            <span className="text-[10px] text-slate-500">{tl.waitingAdminNextRound}</span>
+          )}
           <span className="text-xs text-slate-500 flex items-center gap-1">
             <Users size={10} /> {t.playerCount}/{t.maxPlayers}
           </span>
@@ -112,14 +129,16 @@ export default function TournamentListPage() {
   const router = useRouter();
   const [tournaments, setTournaments] = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [loadError,   setLoadError]   = useState(false);
   const [joining,     setJoining]     = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const { tournaments: list } = await api.get('/api/tournament');
       setTournaments(list || []);
-    } catch {} finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -193,6 +212,16 @@ export default function TournamentListPage() {
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 size={24} className="text-slate-600 animate-spin" />
+        </div>
+      ) : loadError ? (
+        <div className="card p-10 text-center">
+          <p className="text-slate-400 font-semibold mb-3">
+            {translations[lang].failedToLoad}
+          </p>
+          <button onClick={load}
+            className="btn-ghost px-5 py-2 rounded-xl text-sm">
+            {translations[lang].retryBtn}
+          </button>
         </div>
       ) : open.length === 0 && active.length === 0 ? (
         <div className="card p-12 text-center">

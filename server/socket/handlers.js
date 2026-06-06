@@ -283,6 +283,7 @@ const setupSocketHandlers = (io) => {
       if (isBlocked(message)) return socket.emit('error', { message: 'ข้อความถูกบล็อกเนื่องจากเนื้อหาไม่เหมาะสม' });
       if (!rateOk(rateLimits.publicMsg, userId, 1500)) return;
       const msg = {
+        id: `${userId}-${Date.now()}`,
         from: { _id: userId, username: user.username, avatar: user.avatar },
         message: message.trim().slice(0, 300),
         timestamp: new Date().toISOString(),
@@ -448,16 +449,18 @@ const setupSocketHandlers = (io) => {
 
     // start_round: starts first round OR next round (admin only, all matches must be done first)
     socket.on('start_round', async ({ tournamentId }) => {
+      try {
       if (!user.isAdmin) return socket.emit('tournament_error', { message: 'ไม่มีสิทธิ์' });
       const t = tournaments.get(tournamentId);
       if (!t) return socket.emit('tournament_error', { message: 'ไม่พบ Tournament' });
       if (!['waiting', 'round_complete'].includes(t.status))
         return socket.emit('tournament_error', { message: 'มีแมตช์ที่ยังไม่จบ หรือ Tournament สิ้นสุดแล้ว' });
-      if (t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
+      if (!t.players || t.players.size < 2) return socket.emit('tournament_error', { message: 'ต้องมีผู้เล่นอย่างน้อย 2 คน' });
       if (t.scheduledAt && Date.now() < new Date(t.scheduledAt).getTime())
         return socket.emit('tournament_error', { message: 'ยังไม่ถึงเวลาเริ่มทัวร์นาเมนต์' });
       if (t.currentRound >= t.totalRounds) return socket.emit('tournament_error', { message: 'ครบทุกรอบแล้ว' });
 
+      if (!t.playedPairs) t.playedPairs = new Set();
       const { pairs, bye } = pairPlayersNoRepeat([...t.players], t.playedPairs);
 
       let gameType = null;
@@ -517,6 +520,10 @@ const setupSocketHandlers = (io) => {
       const roundInfo = { tournamentId, roundNumber: t.currentRound, totalRounds: t.totalRounds, matches: createdMatches };
       io.emit('round_started', roundInfo);
       io.emit('tournament_updated', getTournamentPublic(t));
+      } catch (e) {
+        console.error('[start_round] unhandled error:', e.message, e.stack);
+        socket.emit('tournament_error', { message: 'เกิดข้อผิดพลาดในการเริ่มรอบ' });
+      }
     });
 
 

@@ -91,6 +91,7 @@ const initTables = async () => {
       created_at  TIMESTAMP    DEFAULT NOW()
     )
   `);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_ev_email ON EmailVerifications(email)`).catch(() => {});
 
   try {
     await p.query(`
@@ -128,6 +129,7 @@ const initTables = async () => {
         ended_at      TIMESTAMP
       )
     `);
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_tm_tournament_id ON TournamentMatches(tournament_id)`).catch(() => {});
     // Add multi-round columns (safe on re-deploy)
     await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS total_rounds INTEGER DEFAULT 3`).catch(() => {});
     await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS current_round INTEGER DEFAULT 0`).catch(() => {});

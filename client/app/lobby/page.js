@@ -17,6 +17,7 @@ export default function LobbyPage() {
   const t = translations[lang];
 
   const [games, setGames]               = useState([]);
+  const [gamesError, setGamesError]     = useState(false);
   const [selectedGame, setSelectedGame] = useState(null);
   // Pre-detect autoQueue so lobby shows searching state immediately (no flash of game grid)
   const pendingAutoQueue = typeof window !== 'undefined'
@@ -42,7 +43,8 @@ export default function LobbyPage() {
   const [announcement, setAnnouncement]   = useState(null);
   const [lockedTournament, setLockedTournament] = useState(null); // { id, name, scheduledAt }
 
-  const inQueueRef  = useRef(false);
+  const inQueueRef  = useRef(inQueue); // mirror inQueue for socket closures
+  const restoredQueueRef = useRef(restoredQueue); // capture before SocketContext clears sessionStorage
   const searchTimer = useRef(null);
   // Bug fix: use ref for lang so socket closures read current value without re-registering
   const langRef = useRef(lang);
@@ -78,7 +80,7 @@ export default function LobbyPage() {
   }, [loading, user, router]);
 
   useEffect(() => {
-    api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
+    api.get('/api/games').then(({ games }) => setGames(games)).catch(() => setGamesError(true));
   }, []);
 
   // Check if player is locked in a tournament
@@ -141,6 +143,17 @@ export default function LobbyPage() {
     setQueueGame(game._id);
     safeEmit('join_queue', { gameTypeId: game._id });
     setQueue(true); // FIX: use setQueue() to keep inQueue state + inQueueRef in sync
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [games]);
+
+  // Restore selectedGame after page refresh (when user was in queue)
+  useEffect(() => {
+    const qid = restoredQueueRef.current;
+    if (!qid || !games.length || selectedGame) return;
+    const game = games.find(g => g._id === qid);
+    if (!game) return;
+    setSelectedGame(game);
+    setQueueGame(game._id); // re-persist so subsequent refreshes also see the queue state
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games]);
 
@@ -461,22 +474,32 @@ export default function LobbyPage() {
         {/* Game selection */}
         <div className="lg:col-span-2 min-w-0 overflow-hidden">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{t.selectGame}</p>
+          {gamesError && (
+            <p className="text-red-400 text-sm text-center py-4">{t.failedToLoad}</p>
+          )}
           {/* Mobile: horizontal scroll tabs */}
-          <div className="flex lg:hidden gap-2 overflow-x-auto pb-3 w-full"
-            style={{ WebkitOverflowScrolling: 'touch' }}>
-            {games.map((game) => {
-              const active = selectedGame?._id === game._id;
-              return (
-                <button key={game._id} onClick={() => setSelectedGame(game)}
-                  className={`flex-shrink-0 snap-start flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition whitespace-nowrap
-                    ${active ? 'border-purple-500/50' : 'border-[var(--border)]'}`}
-                  style={active ? { background: 'rgba(124,58,237,0.12)', color: game.color } : { background: 'var(--card)', color: '#94a3b8' }}>
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center text-sm"
-                    style={{ background: `${game.color}20` }}>🃏</div>
-                  {lang === 'th' ? game.nameTh : game.name}
-                </button>
-              );
-            })}
+          <div className="lg:hidden relative">
+            <div className="flex gap-2 overflow-x-auto pb-3 w-full scrollbar-hide"
+              style={{ WebkitOverflowScrolling: 'touch' }}>
+              {games.map((game) => {
+                const active = selectedGame?._id === game._id;
+                return (
+                  <button key={game._id} onClick={() => setSelectedGame(game)}
+                    className={`flex-shrink-0 snap-start flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition whitespace-nowrap
+                      ${active ? 'border-purple-500/50' : 'border-[var(--border)]'}`}
+                    style={active ? { background: 'rgba(124,58,237,0.12)', color: game.color } : { background: 'var(--card)', color: '#94a3b8' }}>
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center text-sm"
+                      style={{ background: `${game.color}20` }}>🃏</div>
+                    {lang === 'th' ? game.nameTh : game.name}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Right-edge fade to indicate more content when scrollable */}
+            {games.length > 3 && (
+              <div className="absolute right-0 top-0 bottom-3 w-8 pointer-events-none"
+                style={{ background: 'linear-gradient(to right, transparent, var(--bg))' }} />
+            )}
           </div>
           {/* Desktop: vertical list */}
           <div className="hidden lg:flex flex-col space-y-2">

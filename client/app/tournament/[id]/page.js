@@ -5,6 +5,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
 import { api } from '../../../lib/api';
 import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel } from 'lucide-react';
+import translations from '../../../lib/translations';
 
 function useCountdown(targetDate) {
   const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
@@ -18,18 +19,19 @@ function useCountdown(targetDate) {
   const m = Math.floor((diff % 3600000) / 60000);
   const s = Math.floor((diff % 60000) / 1000);
   if (h > 24) return `${Math.floor(h/24)} วัน`;
-  if (h > 0) return `${h}ชม. ${m}น.`;
-  return `${m}:${String(s).padStart(2,'0')} น.`;
+  if (h >= 2) return `${h}ชม. ${m}น.`;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────
-function Leaderboard({ standings, myId, lang }) {
+function Leaderboard({ standings, myId, tl }) {
   if (!standings || standings.length === 0) return null;
   return (
     <div className="card p-5 mt-4">
       <h3 className="font-semibold text-white flex items-center gap-2 text-sm mb-3">
         <Medal size={14} className="text-yellow-400" />
-        {lang === 'th' ? 'คะแนนสะสม' : 'Standings'}
+        {tl.standings}
       </h3>
       <div className="space-y-2">
         {standings.map((p, i) => {
@@ -47,7 +49,7 @@ function Leaderboard({ standings, myId, lang }) {
                 {p.username[0]?.toUpperCase() || '?'}
               </div>
               <span className={`text-sm flex-1 truncate ${isMe ? 'text-purple-300 font-semibold' : 'text-white'}`}>
-                {p.username} {isMe && <span className="text-xs text-purple-500">{lang === 'th' ? '(คุณ)' : '(You)'}</span>}
+                {p.username} {isMe && <span className="text-xs text-purple-500">{tl.youParens}</span>}
               </span>
               <span className="text-sm font-bold text-yellow-400 flex-shrink-0">{p.points} <span className="text-xs text-slate-500">pt</span></span>
             </div>
@@ -61,13 +63,14 @@ function Leaderboard({ standings, myId, lang }) {
 export default function TournamentWaitingRoom() {
   const { id: tournamentId } = useParams();
   const { user, loading: authLoading, lang } = useAuth();
-  const { getSocket, connected } = useSocket();
+  const { getSocket, connected, socketReady } = useSocket();
   const router = useRouter();
 
-  const [tournament,  setTournament]  = useState(null);
-  const [players,     setPlayers]     = useState([]);
-  const [standings,   setStandings]   = useState([]);
-  const [pageLoading, setPageLoading] = useState(true);
+  const [tournament,    setTournament]    = useState(null);
+  const [players,       setPlayers]       = useState([]);
+  const [standings,     setStandings]     = useState([]);
+  const [pageLoading,   setPageLoading]   = useState(true);
+  const [startingRound, setStartingRound] = useState(false);
   // status: loading | waiting | round_in_progress | round_complete | bye | tournament_complete | error
   const [status,      setStatus]      = useState('loading');
   const [roundInfo,   setRoundInfo]   = useState(null); // { roundNumber, totalRounds }
@@ -89,8 +92,9 @@ export default function TournamentWaitingRoom() {
       if (t.playersInfo) setStandings([...t.playersInfo].sort((a, b) => b.points - a.points));
       return t;
     } catch {
-      setErrorMsg(langRef.current === 'th' ? 'ไม่พบ Tournament นี้' : 'Tournament not found');
+      setErrorMsg(translations[langRef.current].tourneyNotFound);
       setStatus('error');
+      setPageLoading(false);
       return null;
     }
   }, [tournamentId]);
@@ -144,6 +148,7 @@ export default function TournamentWaitingRoom() {
 
     const onRoundStarted = ({ tournamentId: tid, roundNumber, totalRounds }) => {
       if (!mounted || tid !== tournamentId) return;
+      setStartingRound(false);
       setRoundInfo({ roundNumber, totalRounds });
       setTournament(prev => prev ? { ...prev, currentRound: roundNumber, totalRounds, status: 'active' } : prev);
       setStatus('round_in_progress');
@@ -166,7 +171,7 @@ export default function TournamentWaitingRoom() {
     const onClosed = ({ tournamentId: tid }) => {
       if (!mounted || tid !== tournamentId) return;
       setStatus('error');
-      setErrorMsg(langRef.current === 'th' ? 'Admin ปิด Tournament แล้ว' : 'Tournament was closed');
+      setErrorMsg(translations[langRef.current].tourneyClosedAdmin);
     };
 
     const onMatchFound = ({ roomId, isTournament, tournamentId: tid, matchId, gameType, roundNumber }) => {
@@ -194,6 +199,7 @@ export default function TournamentWaitingRoom() {
 
     const onError = ({ message }) => {
       if (!mounted) return;
+      setStartingRound(false);
       setToast(message);
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => setToast(''), 5000);
@@ -242,7 +248,7 @@ export default function TournamentWaitingRoom() {
         socket.emit('leave_tournament', { tournamentId });
       }
     };
-  }, [authLoading, user, tournamentId, router, getSocket, load]);
+  }, [authLoading, user, tournamentId, router, getSocket, socketReady, load]);
 
   // Re-join tournament room when socket reconnects (handles mobile screen-sleep disconnect)
   useEffect(() => {
@@ -264,11 +270,17 @@ export default function TournamentWaitingRoom() {
   };
 
   const handleStartRound = () => {
-    getSocket()?.emit('start_round', { tournamentId });
+    const socket = getSocket();
+    if (!socket || !socket.connected) {
+      setToast(translations[lang].notConnected || 'Not connected');
+      return;
+    }
+    setStartingRound(true);
+    socket.emit('start_round', { tournamentId });
   };
 
   const handleCloseTourney = () => {
-    if (!confirm(lang === 'th' ? 'ปิด Tournament นี้?' : 'Close this tournament?')) return;
+    if (!confirm(translations[lang].closeTourneyConfirm)) return;
     getSocket()?.emit('close_tournament', { tournamentId });
   };
 
@@ -283,6 +295,7 @@ export default function TournamentWaitingRoom() {
 
   // Must be called before any early returns (Rules of Hooks)
   const scheduledCountdown = useCountdown(tournament?.scheduledAt);
+  const tl = translations[lang]; // plain variable — not a hook
 
   if (authLoading || pageLoading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -294,9 +307,9 @@ export default function TournamentWaitingRoom() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="card max-w-sm w-full p-8 text-center">
         <div className="text-4xl mb-4">⚠️</div>
-        <p className="text-white font-bold mb-4">{errorMsg || (lang === 'th' ? 'เกิดข้อผิดพลาด' : 'Error')}</p>
+        <p className="text-white font-bold mb-4">{errorMsg || tl.error}</p>
         <button onClick={() => router.push('/tournament')} className="btn-ghost px-6 py-2.5 rounded-xl text-sm">
-          {lang === 'th' ? 'กลับ' : 'Back'}
+          {tl.backBtn}
         </button>
       </div>
     </div>
@@ -307,15 +320,15 @@ export default function TournamentWaitingRoom() {
       <div className="card p-8 text-center mb-4" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
         <div className="text-5xl mb-3">🏆</div>
         <h1 className="text-white font-bold text-2xl mb-1">
-          {lang === 'th' ? 'Tournament จบแล้ว!' : 'Tournament Complete!'}
+          {tl.tourneyComplete}
         </h1>
         <p className="text-slate-500 text-sm">
-          {tournament?.name} · {tournament?.totalRounds} {lang === 'th' ? 'รอบ' : 'rounds'}
+          {tournament?.name} · {tournament?.totalRounds} {tl.roundsWord}
         </p>
       </div>
-      <Leaderboard standings={standings} myId={user?._id} lang={lang} />
+      <Leaderboard standings={standings} myId={user?._id} lang={lang} tl={tl} />
       <button onClick={() => router.push('/lobby')} className="btn-ghost w-full py-3 rounded-xl text-sm mt-4">
-        {lang === 'th' ? 'กลับ Lobby' : 'Back to Lobby'}
+        {tl.backToLobby}
       </button>
     </div>
   );
@@ -343,9 +356,9 @@ export default function TournamentWaitingRoom() {
             style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(251,191,36,0.3)' }}>
             <div className="text-4xl mb-3">⚖️</div>
             <h2 className="text-white font-bold text-lg mb-2">
-              {lang === 'th' ? 'ตัดสินผลการแข่ง' : 'Decide Match Result'}
+              {tl.decideMatch}
             </h2>
-            <p className="text-slate-500 text-sm mb-5">{lang === 'th' ? 'เลือกผู้ชนะ' : 'Select the winner'}</p>
+            <p className="text-slate-500 text-sm mb-5">{tl.selectWinner}</p>
             <div className="flex gap-3 justify-center mb-4">
               {decideMatch.players.map((pid, i) => (
                 <button key={pid} onClick={() => handleDecideMatch(pid)}
@@ -356,7 +369,7 @@ export default function TournamentWaitingRoom() {
               ))}
             </div>
             <button onClick={() => setDecideMatch(null)} className="btn-ghost w-full py-2 rounded-xl text-xs">
-              {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+              {tl.cancel}
             </button>
           </div>
         </div>
@@ -374,27 +387,25 @@ export default function TournamentWaitingRoom() {
                 {['waiting', 'round_complete'].includes(status) && (t?.currentRound || 0) < (t?.totalRounds || 3) && (
                   <button
                     onClick={handleStartRound}
-                    disabled={players.length < 2 || (t?.activeMatchCount || 0) > 0}
+                    disabled={players.length < 2 || (t?.activeMatchCount || 0) > 0 || startingRound}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
-                    <Play size={11} />
-                    {lang === 'th'
-                      ? `เริ่มรอบ ${(t?.currentRound || 0) + 1}/${t?.totalRounds || 3}`
-                      : `Round ${(t?.currentRound || 0) + 1}/${t?.totalRounds || 3}`}
+                    {startingRound
+                      ? <span className="w-3 h-3 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
+                      : <Play size={11} />}
+                    {`${tl.startRound} ${(t?.currentRound || 0) + 1}/${t?.totalRounds || 3}`}
                   </button>
                 )}
                 <button
                   onClick={handleCloseTourney}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
                   style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <X size={11} /> {lang === 'th' ? 'ปิด Tournament' : 'Close Tournament'}
+                  <X size={11} /> {tl.closeTourneyFull}
                 </button>
               </div>
             </div>
             {players.length < 2 && status === 'waiting' && (
-              <p className="text-xs text-slate-600 mt-2">
-                {lang === 'th' ? 'ต้องการผู้เล่นอย่างน้อย 2 คนเพื่อเริ่ม' : 'Need at least 2 players to start'}
-              </p>
+              <p className="text-xs text-slate-600 mt-2">{tl.needMorePlayers}</p>
             )}
           </div>
 
@@ -404,9 +415,9 @@ export default function TournamentWaitingRoom() {
               <Bell size={14} className={a.type === 'conflict' || a.type === 'timeout' ? 'text-red-400 flex-shrink-0 mt-0.5' : 'text-yellow-400 flex-shrink-0 mt-0.5'} />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-white">
-                  {a.type === 'call'     && '📣 ผู้เล่นเรียก Admin'}
-                  {a.type === 'conflict' && '⚠️ ผลไม่ตรงกัน — ต้องตัดสิน'}
-                  {a.type === 'timeout'  && '⏰ หมดเวลา — ต้องตัดสิน'}
+                  {a.type === 'call'     && tl.alertPlayerCalled}
+                  {a.type === 'conflict' && tl.alertConflict}
+                  {a.type === 'timeout'  && tl.alertTimeout}
                 </p>
                 <p className="text-[10px] text-slate-500 mt-0.5 truncate">Room: {a.roomId?.slice(0, 12)}...</p>
               </div>
@@ -416,7 +427,7 @@ export default function TournamentWaitingRoom() {
                     onClick={() => setDecideMatch({ roomId: a.roomId, players: a.players || [], names: a.playerNames || a.players?.map((_, i) => `P${i+1}`) || [] })}
                     className="px-2 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1"
                     style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
-                    <Gavel size={10} /> {lang === 'th' ? 'ตัดสิน' : 'Decide'}
+                    <Gavel size={10} /> {tl.decideBtn}
                   </button>
                 )}
                 <button onClick={() => dismissAlert(a.id)} className="text-slate-600 hover:text-slate-400 p-0.5">
@@ -439,16 +450,16 @@ export default function TournamentWaitingRoom() {
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-white text-base leading-tight truncate">{t?.name || 'Tournament'}</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {lang === 'th' ? 'รอบที่' : 'Round'}{' '}
+              {tl.roundPrefix}{' '}
               <span className="text-white font-semibold">{currentRound}</span>
               {' '}/{' '}{totalRounds}
-              {' · '}{players.length} {lang === 'th' ? 'ผู้เล่น' : 'players'}
+              {' · '}{players.length} {tl.players}
             </p>
           </div>
           <button onClick={handleLeave}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs text-red-400 flex-shrink-0 transition hover:bg-red-500/10"
             style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
-            <LogOut size={13} /> {lang === 'th' ? 'ออก' : 'Leave'}
+            <LogOut size={13} /> {tl.leaveBtn}
           </button>
         </div>
 
@@ -458,16 +469,14 @@ export default function TournamentWaitingRoom() {
             style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
             <Clock size={14} className="text-yellow-400 animate-pulse flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-sm text-yellow-300">{lang === 'th' ? 'รอ Admin กดเริ่มรอบที่ 1' : 'Waiting for Admin to start Round 1'}</p>
+              <p className="text-sm text-yellow-300">{tl.waitingForAdmin1}</p>
               {t?.scheduledAt && scheduledCountdown && (
                 <p className="text-xs text-yellow-500 mt-0.5">
-                  ⏰ {lang === 'th' ? `เริ่มใน ${scheduledCountdown}` : `Starts in ${scheduledCountdown}`}
+                  ⏰ {tl.startsIn} {scheduledCountdown}
                 </p>
               )}
               {t?.scheduledAt && !scheduledCountdown && (
-                <p className="text-xs text-green-400 mt-0.5">
-                  {lang === 'th' ? '✅ ถึงเวลาเริ่มแล้ว' : '✅ Start time reached'}
-                </p>
+                <p className="text-xs text-green-400 mt-0.5">{tl.startTimeReached}</p>
               )}
             </div>
           </div>
@@ -478,7 +487,7 @@ export default function TournamentWaitingRoom() {
             style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
             <p className="text-sm text-green-300">
-              {lang === 'th' ? `กำลังแข่งรอบที่ ${currentRound} — รอผลจากห้องแข่ง` : `Round ${currentRound} in progress — awaiting results`}
+              {tl.roundInProgressTxt.replace('{n}', currentRound)}
             </p>
           </div>
         )}
@@ -488,9 +497,7 @@ export default function TournamentWaitingRoom() {
             style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.25)' }}>
             <Trophy size={14} className="text-purple-400 flex-shrink-0" />
             <p className="text-sm text-purple-300">
-              {lang === 'th'
-                ? `รอบที่ ${currentRound} จบแล้ว — รอ Admin เริ่มรอบที่ ${currentRound + 1}`
-                : `Round ${currentRound} done — waiting for Admin to start Round ${currentRound + 1}`}
+              {tl.roundCompleteTxt.replace('{cur}', currentRound).replace('{next}', currentRound + 1)}
             </p>
           </div>
         )}
@@ -500,7 +507,7 @@ export default function TournamentWaitingRoom() {
             style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
             <span className="text-lg">😴</span>
             <p className="text-sm text-yellow-300">
-              {lang === 'th' ? `คุณได้รับ BYE รอบที่ ${currentRound} — รอรอบถัดไป` : `BYE this round — wait for next round`}
+              {tl.byeTxt.replace('{n}', currentRound)}
             </p>
           </div>
         )}
@@ -509,7 +516,7 @@ export default function TournamentWaitingRoom() {
       {/* Round progress bar */}
       {totalRounds > 0 && (
         <div className="card px-5 py-3 mb-4 flex items-center gap-3">
-          <span className="text-xs text-slate-600 flex-shrink-0">{lang === 'th' ? 'ความคืบหน้า' : 'Progress'}</span>
+          <span className="text-xs text-slate-600 flex-shrink-0">{tl.progressLabel}</span>
           <div className="flex gap-1 flex-1">
             {Array.from({ length: totalRounds }).map((_, i) => (
               <div key={i} className="flex-1 h-2 rounded-full transition-colors"
@@ -528,7 +535,7 @@ export default function TournamentWaitingRoom() {
 
       {/* Leaderboard (shown once any round has happened) */}
       {currentRound > 0 && standings.length > 0 && (
-        <Leaderboard standings={standings} myId={user?._id} lang={lang} />
+        <Leaderboard standings={standings} myId={user?._id} tl={tl} />
       )}
 
       {/* Players list (shown during waiting phase) */}
@@ -537,12 +544,12 @@ export default function TournamentWaitingRoom() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-white flex items-center gap-2 text-sm">
               <Users size={14} className="text-purple-400" />
-              {lang === 'th' ? 'ผู้เข้าร่วม' : 'Players'}
+              {tl.joinedPlayers}
             </h3>
             <span className="text-xs text-slate-600">{players.length}/{t?.maxPlayers || 8}</span>
           </div>
           {players.length === 0 ? (
-            <p className="text-center text-slate-700 text-sm py-4">{lang === 'th' ? 'รอผู้เล่น...' : 'Waiting for players...'}</p>
+            <p className="text-center text-slate-700 text-sm py-4">{tl.waitingForPlayersTxt}</p>
           ) : (
             <div className="space-y-2">
               {players.map((p, i) => {
@@ -559,7 +566,7 @@ export default function TournamentWaitingRoom() {
                       {p.username[0]?.toUpperCase() || '?'}
                     </div>
                     <span className="text-sm font-medium text-white flex-1 truncate">{p.username}</span>
-                    {isMe && <span className="text-xs text-purple-400 flex-shrink-0">{lang === 'th' ? '(คุณ)' : '(You)'}</span>}
+                    {isMe && <span className="text-xs text-purple-400 flex-shrink-0">{tl.youParens}</span>}
                     <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
                   </div>
                 );
