@@ -761,6 +761,8 @@ const setupSocketHandlers = (io) => {
       if (!user.isAdmin) return;
       const room = activeRooms.get(roomId);
       if (!room) return socket.emit('error', { message: 'ห้องนี้ไม่พบ' });
+      const tm = tourneyMatches.get(roomId);
+      if (tm?.phase === 'done') return socket.emit('error', { message: 'แมตช์นี้จบแล้ว' });
 
       // BUG-05: Evict any other admin already watching this room
       const existing = adminWatching.get(roomId);

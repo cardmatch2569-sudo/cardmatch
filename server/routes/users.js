@@ -7,23 +7,23 @@ const { getOnlineUsers } = require('../socket/handlers');
 
 const router = express.Router();
 
-// Generate player_id for current user — also ensures column exists
+// Generate player_id for current user
 router.post('/generate-player-id', protect, async (req, res) => {
   try {
     const pool = getPool();
-    // Ensure column exists (safe on any DB state)
-    await pool.query(`ALTER TABLE Users ADD COLUMN IF NOT EXISTS player_id VARCHAR(8) UNIQUE`).catch(() => {});
 
     if (req.user.playerId) {
       return res.json({ user: req.user });
     }
 
-    let pid; let tries = 0;
+    let pid = null; let tries = 0;
     do {
-      pid = generatePlayerId();
-      const { rows } = await pool.query('SELECT 1 FROM Users WHERE player_id=$1', [pid]);
-      if (!rows.length) break;
+      const candidate = generatePlayerId();
+      const { rows } = await pool.query('SELECT 1 FROM Users WHERE player_id=$1', [candidate]);
+      if (!rows.length) { pid = candidate; break; }
     } while (++tries < 50);
+
+    if (!pid) return res.status(500).json({ message: 'ไม่สามารถสร้าง Player ID ได้ กรุณาลองใหม่' });
 
     await pool.query('UPDATE Users SET player_id=$1 WHERE id=$2', [pid, req.user._id]);
     const updated = await User.findById(req.user._id);
@@ -109,9 +109,20 @@ router.delete('/me', protect, async (req, res) => {
     }
 
     const pool = getPool();
-    await pool.query('DELETE FROM RoomPlayers WHERE user_id=$1', [req.user._id]);
-    await pool.query('DELETE FROM EmailVerifications WHERE email=$1', [user.email]);
-    await pool.query('DELETE FROM Users WHERE id=$1', [req.user._id]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM TournamentPlayers WHERE user_id=$1', [req.user._id]);
+      await client.query('DELETE FROM RoomPlayers WHERE user_id=$1', [req.user._id]);
+      await client.query('DELETE FROM EmailVerifications WHERE email=$1', [user.email]);
+      await client.query('DELETE FROM Users WHERE id=$1', [req.user._id]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
 
     // BUG-02: Force-disconnect own socket
     const io = req.app.get('io');
@@ -129,12 +140,18 @@ router.get('/me/history', protect, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT r.room_id, r.created_at, r.ended_at,
               g.name AS game_name, g.name_th AS game_name_th, g.color AS game_color,
-              u.username AS opponent_username, u.avatar AS opponent_avatar
+              u.username AS opponent_username, u.avatar AS opponent_avatar,
+              CASE
+                WHEN tm.winner_id = $1 THEN 'win'
+                WHEN tm.winner_id IS NOT NULL AND tm.winner_id != $1 THEN 'lose'
+                ELSE NULL
+              END AS outcome
        FROM RoomPlayers rp1
        JOIN Rooms r ON rp1.room_id = r.room_id
        LEFT JOIN RoomPlayers rp2 ON rp2.room_id = r.room_id AND rp2.user_id != $1
        LEFT JOIN Users u ON u.id = rp2.user_id
        LEFT JOIN GameTypes g ON r.game_type_id = g.id
+       LEFT JOIN TournamentMatches tm ON tm.room_id = r.room_id
        WHERE rp1.user_id = $1 AND r.status = 'ended'
        ORDER BY r.ended_at DESC NULLS LAST
        LIMIT 20`,

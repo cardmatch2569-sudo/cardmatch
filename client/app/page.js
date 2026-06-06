@@ -157,6 +157,26 @@ export default function HomePage() {
       </section>
 
       {/* ── GAMES ─────────────────────────────────────────────── */}
+      {games.length === 0 && (
+        <section className="py-20 px-4">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-14">
+              <div className="h-4 w-32 rounded-full mx-auto mb-3 animate-pulse" style={{ background: 'var(--border-2)' }} />
+              <div className="h-8 w-56 rounded-xl mx-auto animate-pulse" style={{ background: 'var(--border)' }} />
+            </div>
+            <div className="grid md:grid-cols-3 gap-5">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="card p-6" style={{ opacity: 0.5 }}>
+                  <div className="w-12 h-12 rounded-xl mb-4 animate-pulse" style={{ background: 'var(--border-2)' }} />
+                  <div className="h-2 w-2 rounded-full mb-3 animate-pulse" style={{ background: 'var(--border-2)' }} />
+                  <div className="h-4 w-3/4 rounded mb-2 animate-pulse" style={{ background: 'var(--border-2)' }} />
+                  <div className="h-3 w-full rounded animate-pulse" style={{ background: 'var(--border)' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
       {games.length > 0 && (
         <section className="py-20 px-4">
           <div className="max-w-5xl mx-auto">

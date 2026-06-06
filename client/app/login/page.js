@@ -186,6 +186,39 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* Step indicator for reset password flow */}
+        {(mode === 'forgot' || mode === 'reset') && (() => {
+          const resetStep = mode === 'forgot' ? 1 : resetCode.length === 6 ? 3 : 2;
+          const steps = [
+            { step: 1, label: lang === 'th' ? 'อีเมล' : 'Email' },
+            { step: 2, label: 'OTP' },
+            { step: 3, label: lang === 'th' ? 'รหัสใหม่' : 'Password' },
+          ];
+          return (
+            <div className="flex items-center justify-center gap-2 mb-4 anim-fade-up">
+              {steps.map(({ step, label }, idx) => (
+                <div key={step} className="flex items-center gap-2">
+                  {idx > 0 && <div className="w-6 h-px bg-slate-700" />}
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all"
+                      style={step === resetStep
+                        ? { background: 'rgba(124,58,237,0.85)', color: 'white', border: '1px solid rgba(124,58,237,0.6)' }
+                        : step < resetStep
+                          ? { background: 'rgba(74,222,128,0.2)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.4)' }
+                          : { background: 'rgba(255,255,255,0.06)', color: '#64748b', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {step < resetStep ? '✓' : step}
+                    </div>
+                    <span className={`text-[11px] font-medium ${step === resetStep ? 'text-slate-300' : 'text-slate-600'}`}>
+                      {label}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* FIX #4: card padding responsive */}
         <div className="anim-fade-up delay-100 card p-4 sm:p-5 overflow-hidden"
           style={{ background: 'rgba(15,15,30,0.85)', backdropFilter: 'blur(20px)' }}>

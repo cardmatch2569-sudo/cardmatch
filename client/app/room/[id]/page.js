@@ -383,10 +383,13 @@ export default function RoomPage() {
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) s.emit('admin_peer_ice', { roomId, candidate });
       };
-      pc.createOffer().then(offer => {
-        pc.setLocalDescription(offer);
-        s.emit('admin_peer_offer', { roomId, offer });
-      }).catch(() => {});
+      (async () => {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          s.emit('admin_peer_offer', { roomId, offer });
+        } catch (e) { console.warn('[admin spectate] offer failed:', e.message); }
+      })();
       adminPeerRef.current = pc;
     };
     const onAdminPeerAnswer = ({ answer }) => {

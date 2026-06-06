@@ -85,6 +85,7 @@ export function AuthProvider({ children }) {
     const next = lang === 'th' ? 'en' : 'th';
     setLang(next);
     localStorage.setItem('cg_lang', next);
+    document.documentElement.lang = next;
   };
 
   const toggleViewMode = () => {

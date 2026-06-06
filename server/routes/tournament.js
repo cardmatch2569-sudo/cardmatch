@@ -9,18 +9,25 @@ const router = express.Router();
 router.get('/', protect, async (req, res) => {
   try {
     const ts = getTournaments();
+    const pool = getPool();
+    const { rows: gameTypes } = await pool.query('SELECT id, name, name_th FROM GameTypes');
+    const gameTypeMap = Object.fromEntries(gameTypes.map(g => [g.id, g]));
     const list = [...ts.values()]
       .filter(t => t.status !== 'ended')
       .map(t => ({
-        id:          t.id,
-        name:        t.name,
-        gameTypeId:  t.gameTypeId,
-        status:      t.status,
-        maxPlayers:  t.maxPlayers,
-        playerCount: t.players.size,
-        isJoined:    t.players.has(req.user._id),
-        scheduledAt:  t.scheduledAt || null,
-        scheduledEnd: t.scheduledEnd || null,
+        id:              t.id,
+        name:            t.name,
+        gameTypeId:      t.gameTypeId,
+        gameTypeName:    gameTypeMap[t.gameTypeId]?.name    || '',
+        gameTypeNameTh:  gameTypeMap[t.gameTypeId]?.name_th || '',
+        status:          t.status,
+        maxPlayers:      t.maxPlayers,
+        totalRounds:     t.totalRounds  || 3,
+        currentRound:    t.currentRound || 0,
+        playerCount:     t.players.size,
+        isJoined:        t.players.has(req.user._id),
+        scheduledAt:     t.scheduledAt  || null,
+        scheduledEnd:    t.scheduledEnd || null,
       }));
     res.json({ tournaments: list });
   } catch (err) { res.status(500).json({ message: err.message }); }
