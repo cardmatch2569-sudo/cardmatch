@@ -43,6 +43,8 @@ export default function LobbyPage() {
   const [chatMessages, setChatMessages]   = useState([]);
   const [announcement, setAnnouncement]   = useState(null);
   const [lockedTournament, setLockedTournament] = useState(null); // { id, name, scheduledAt }
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const cancelConfirmTimer = useRef(null);
 
   const inQueueRef  = useRef(inQueue); // mirror inQueue for socket closures
   const restoredQueueRef = useRef(restoredQueue); // capture before SocketContext clears sessionStorage
@@ -199,7 +201,14 @@ export default function LobbyPage() {
   const handleQuickMatch = () => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
     if (inQueue) {
-      // Already in queue → cancel
+      if (!cancelConfirm) {
+        setCancelConfirm(true);
+        clearTimeout(cancelConfirmTimer.current);
+        cancelConfirmTimer.current = setTimeout(() => setCancelConfirm(false), 3000);
+        return;
+      }
+      clearTimeout(cancelConfirmTimer.current);
+      setCancelConfirm(false);
       getSocket()?.emit('leave_queue');
       setQueue(false);
       return;
@@ -590,7 +599,9 @@ export default function LobbyPage() {
               style={inQueue ? { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }
                 : (!connected || lockedTournament) ? { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' } : {}}>
               {inQueue ? (
-                <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={15} /></>
+                cancelConfirm
+                  ? <><X size={15} /><span className="font-semibold">{lang === 'th' ? 'ยืนยันออกจากคิว?' : 'Leave queue?'}</span></>
+                  : <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={15} /></>
               ) : !connected ? (
                 <><Loader2 size={16} className="animate-spin" />{lang === 'th' ? 'กำลังเชื่อมต่อ...' : 'Connecting...'}</>
               ) : (

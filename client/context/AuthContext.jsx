@@ -12,14 +12,15 @@ const removeToken = () => { sessionStorage.removeItem('cg_token'); localStorage.
 
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);
-  const [lang,    setLang]    = useState('th');
+  const [lang,    setLang]    = useState(() => {
+    if (typeof window === 'undefined') return 'th';
+    return localStorage.getItem('cg_lang') || 'th';
+  });
   const [loading, setLoading] = useState(true);
   // Bug fix: start as 'user' — only set to 'admin' for confirmed admins
   const [viewMode, setViewMode] = useState('user');
 
   useEffect(() => {
-    const savedLang = localStorage.getItem('cg_lang') || 'th';
-    setLang(savedLang);
 
     const token = getToken();
     if (!token) { setLoading(false); return; }

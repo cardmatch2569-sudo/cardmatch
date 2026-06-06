@@ -211,7 +211,9 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
                 {micOk ? (lang === 'th' ? 'รับเสียง ✓' : 'Active ✓') : (lang === 'th' ? 'เงียบ' : 'Silent')}
               </span>
             </div>
-            <div className="flex items-end gap-[2px]" style={{ height: '22px' }}>
+            <div className="flex items-end gap-[2px]" style={{ height: '22px' }}
+              role="meter" aria-label={lang === 'th' ? 'ระดับเสียงไมโครโฟน' : 'Microphone level'}
+              aria-valuenow={Math.round(micLevel)} aria-valuemin={0} aria-valuemax={100}>
               {bars.map(({ lit, color }, i) => (
                 <div key={i} className="flex-1 rounded-sm transition-all duration-75"
                   style={{ background: lit ? color : 'rgba(255,255,255,0.06)', height: `${30 + (i / BAR_COUNT) * 70}%`, opacity: lit ? 1 : 0.4 }} />

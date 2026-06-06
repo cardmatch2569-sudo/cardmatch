@@ -75,6 +75,7 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-1 flex-1 justify-center">
               {navLinks.map(({ href, label, icon, admin, tourney }) => (
                 <Link key={href} href={href}
+                  aria-current={isActive(href) ? 'page' : undefined}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                     ${isActive(href)
                       ? admin
@@ -231,6 +232,7 @@ export default function Navbar() {
               <div className="px-3 py-2 space-y-1">
                 {navLinks.map(({ href, label, icon, admin, tourney }) => (
                   <Link key={href} href={href} onClick={close}
+                    aria-current={isActive(href) ? 'page' : undefined}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
                       ${isActive(href)
                         ? admin ? 'bg-yellow-600/15 text-yellow-300' : tourney ? 'bg-yellow-500/12 text-yellow-300' : 'bg-purple-600/15 text-purple-300'

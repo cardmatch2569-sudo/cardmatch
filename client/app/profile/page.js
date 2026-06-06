@@ -337,6 +337,11 @@ export default function ProfilePage() {
                 </div>
               );
             })}
+            {matchHistory.length >= 20 && (
+              <p className="text-[11px] text-slate-600 text-center pt-1">
+                {lang === 'th' ? '· แสดง 20 รายการล่าสุด ·' : '· Showing last 20 matches ·'}
+              </p>
+            )}
           </div>
         )}
       </div>

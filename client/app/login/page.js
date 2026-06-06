@@ -283,8 +283,9 @@ export default function LoginPage() {
                   : <><KeyRound size={14} /> {lang === 'th' ? 'ตั้งรหัสผ่านใหม่' : 'Set New Password'}</>}
               </button>
               <button type="button" onClick={() => { setResetCode(''); handleForgotSubmit({ preventDefault: () => {} }); }}
-                className="w-full text-xs text-slate-600 hover:text-slate-400 transition py-2">
-                {lang === 'th' ? 'ส่ง OTP ใหม่อีกครั้ง' : 'Resend OTP'}
+                disabled={loading}
+                className="w-full text-xs text-slate-600 hover:text-slate-400 transition py-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                {loading ? (lang === 'th' ? 'กำลังส่ง...' : 'Sending...') : (lang === 'th' ? 'ส่ง OTP ใหม่อีกครั้ง' : 'Resend OTP')}
               </button>
             </form>
           )}

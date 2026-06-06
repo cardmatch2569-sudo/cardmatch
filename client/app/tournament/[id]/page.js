@@ -526,7 +526,12 @@ export default function TournamentWaitingRoom() {
       {totalRounds > 0 && (
         <div className="card px-5 py-3 mb-4 flex items-center gap-3">
           <span className="text-xs text-slate-600 flex-shrink-0">{tl.progressLabel}</span>
-          <div className="flex gap-1 flex-1">
+          <div className="flex gap-1 flex-1"
+            role="progressbar"
+            aria-valuenow={currentRound}
+            aria-valuemin={0}
+            aria-valuemax={totalRounds}
+            aria-label={tl.progressLabel}>
             {Array.from({ length: totalRounds }).map((_, i) => (
               <div key={i} className="flex-1 h-2 rounded-full transition-colors"
                 style={{

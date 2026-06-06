@@ -7,7 +7,7 @@ import { api } from '../../lib/api';
 import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import translations from '../../lib/translations';
 
-function useCountdown(targetDate) {
+function useCountdown(targetDate, lang) {
   const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
   useEffect(() => {
     if (!targetDate) return;
@@ -18,14 +18,15 @@ function useCountdown(targetDate) {
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   const s = Math.floor((diff % 60000) / 1000);
-  if (h > 24) return `${Math.floor(h/24)} วัน`;
-  if (h > 0) return `${h}ชม. ${m}น.`;
-  return `${m}:${String(s).padStart(2,'0')} น.`;
+  const isTh = lang !== 'en';
+  if (h > 24) return isTh ? `${Math.floor(h/24)} วัน` : `${Math.floor(h/24)}d`;
+  if (h > 0) return isTh ? `${h}ชม. ${m}น.` : `${h}h ${m}m`;
+  return `${m}:${String(s).padStart(2,'0')}${isTh ? ' น.' : ''}`;
 }
 
 function TournamentCard({ t, lang, onJoin, joining }) {
   const tl = translations[lang];
-  const countdown = useCountdown(t.scheduledAt);
+  const countdown = useCountdown(t.scheduledAt, lang);
   const isFull  = t.playerCount >= t.maxPlayers;
   const canJoin = t.status === 'waiting' && !isFull;
   const isActive = t.status === 'active';

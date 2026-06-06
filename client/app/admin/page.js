@@ -567,9 +567,18 @@ export default function AdminPage() {
                     <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
                       className="w-10 h-10 rounded-lg cursor-pointer p-0.5"
                       style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }} />
-                    <div className="flex-1 flex items-center gap-2 input-base text-sm font-mono text-slate-400">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: form.color }} />
-                      {form.color}
+                    <div className="flex-1 flex items-center gap-2 input-base text-sm">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ background: /^#[0-9a-fA-F]{6}$/.test(form.color) ? form.color : 'transparent' }} />
+                      <input
+                        type="text"
+                        key={form.color}
+                        defaultValue={form.color}
+                        maxLength={7}
+                        placeholder="#7c3aed"
+                        onChange={e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) setForm({ ...form, color: e.target.value }); }}
+                        className="flex-1 bg-transparent outline-none font-mono text-slate-400 min-w-0"
+                      />
                     </div>
                   </div>
                 </div>
