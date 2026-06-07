@@ -112,7 +112,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
                 placeholder={t ? 'พิมพ์ข้อความ...' : 'Type a message...'}
                 className="input-base text-xs flex-1 py-2 px-3"
                 style={{ minHeight: '36px' }}
-                maxLength={300}
+                maxLength={200}
                 enterKeyHint="send"
               />
               <button onClick={send} disabled={!input.trim()}
@@ -123,8 +123,8 @@ export default function PublicChat({ lang, user, messages, onSend }) {
             </div>
             {input.length > 0 && (
               <p className="text-[10px] text-right mt-1"
-                style={{ color: input.length >= 300 ? '#f87171' : input.length > 200 ? '#94a3b8' : '#475569' }}>
-                {input.length}/300
+                style={{ color: input.length >= 200 ? '#f87171' : input.length > 150 ? '#94a3b8' : '#475569' }}>
+                {input.length}/200
               </p>
             )}
           </div>

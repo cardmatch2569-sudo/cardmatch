@@ -96,7 +96,7 @@ export default function Navbar() {
           {/* Right side */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
 
-            {/* Online count / connecting status — desktop only */}
+            {/* Online count / connecting status */}
             {user && (
               <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border bg-[var(--card)]"
                 style={{ borderColor: connected ? 'var(--border)' : 'rgba(251,191,36,0.3)', color: connected ? '#64748b' : '#fbbf24' }}>

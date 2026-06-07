@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
@@ -36,6 +37,7 @@ export default function AdminPage() {
   const [editId,    setEditId]    = useState(null);
   const [saving,    setSaving]    = useState(false);
   const [formError, setFormError] = useState('');
+  const [hexError,  setHexError]  = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
   // Delete user
   const [deleteTarget,   setDeleteTarget]   = useState(null);
@@ -429,7 +431,10 @@ export default function AdminPage() {
                   ? 'บัญชี Admin Google ไม่รองรับการลบผู้ใช้ กรุณาล็อกอินด้วยบัญชี Admin ที่มีรหัสผ่าน'
                   : 'Google-only Admin accounts cannot delete users. Please log in with a password-enabled Admin account.'}</p>
                 <p className="mt-1 text-yellow-600">
-                  💡 {lang === 'th' ? 'เพิ่มรหัสผ่านได้ที่หน้าโปรไฟล์' : 'You can add a password on your profile page'}
+                  💡{' '}
+                  <Link href="/profile" className="underline hover:text-yellow-400 transition">
+                    {lang === 'th' ? 'เพิ่มรหัสผ่านที่หน้าโปรไฟล์ →' : 'Add a password on your profile page →'}
+                  </Link>
                 </p>
               </div>
             ) : (
@@ -587,7 +592,7 @@ export default function AdminPage() {
                 <div>
                   <label className="text-xs text-slate-500 block mb-1.5 font-medium">{t.colorLabel}</label>
                   <div className="flex items-center gap-3">
-                    <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
+                    <input type="color" value={form.color} onChange={e => { setForm({ ...form, color: e.target.value }); setHexError(false); }}
                       className="w-10 h-10 rounded-lg cursor-pointer p-0.5"
                       style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }} />
                     <div className="flex-1 flex items-center gap-2 input-base text-sm">
@@ -603,14 +608,21 @@ export default function AdminPage() {
                           if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) {
                             setForm({ ...form, color: e.target.value });
                             e.target.style.color = '';
+                            setHexError(false);
                           } else {
                             e.target.style.color = '#f87171';
+                            setHexError(e.target.value.length > 0);
                           }
                         }}
                         className="flex-1 bg-transparent outline-none font-mono text-slate-400 min-w-0"
                       />
                     </div>
                   </div>
+                  {hexError && (
+                    <p className="text-xs text-red-400 mt-1">
+                      {lang === 'th' ? '⚠ รูปแบบ hex ไม่ถูกต้อง (เช่น #7c3aed)' : '⚠ Invalid hex format (e.g. #7c3aed)'}
+                    </p>
+                  )}
                 </div>
                 <button type="button" onClick={() => setForm({ ...form, isActive: !form.isActive })}
                   className="flex items-center justify-between w-full px-4 py-3 rounded-xl border transition"
