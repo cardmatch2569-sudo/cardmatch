@@ -21,6 +21,14 @@ export default function Navbar() {
     setIsLight(document.documentElement.classList.contains('light'));
   }, []);
 
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 768) setMobileOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const toggleTheme = () => {
     const next = !isLight;
     document.documentElement.classList.toggle('light', next);
