@@ -581,18 +581,29 @@ export default function LobbyPage() {
 
             <button onClick={handleQuickMatch}
               disabled={(!connected && !inQueue) || !!lockedTournament}
-              className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+              className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2
+                ${inQueue && !cancelConfirm ? 'justify-between px-4' : 'justify-center'}
                 ${inQueue
                   ? 'text-red-300'
                   : connected && !lockedTournament
                     ? 'btn-primary text-white'
                     : 'opacity-50 cursor-wait text-slate-400'}`}
-              style={inQueue ? { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }
+              style={inQueue ? { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
                 : (!connected || lockedTournament) ? { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' } : {}}>
               {inQueue ? (
                 cancelConfirm
                   ? <><X size={15} /><span className="font-semibold">{lang === 'th' ? 'ยืนยันออกจากคิว?' : 'Leave queue?'}</span></>
-                  : <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={14} /><span className="text-xs">{lang === 'th' ? 'ยกเลิก' : 'Cancel'}</span></>
+                  : <>
+                      <div className="flex items-center gap-2 opacity-75">
+                        <Loader2 size={15} className="animate-spin flex-shrink-0" />
+                        <span className="font-medium text-red-300">{t.searching}</span>
+                        <span className="font-mono text-red-400 text-xs">{fmtTime(queueTime)}</span>
+                      </div>
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold flex-shrink-0"
+                        style={{ background: 'rgba(239,68,68,0.22)', border: '1px solid rgba(239,68,68,0.5)', color: '#fca5a5' }}>
+                        <X size={11} /> {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                      </span>
+                    </>
               ) : !connected ? (
                 <><Loader2 size={16} className="animate-spin" />{lang === 'th' ? 'กำลังเชื่อมต่อ...' : 'Connecting...'}</>
               ) : (
