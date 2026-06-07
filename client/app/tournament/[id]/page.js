@@ -79,6 +79,7 @@ export default function TournamentWaitingRoom() {
   const leftRef = useRef(false);
   const [alerts,      setAlerts]      = useState([]);
   const [decideMatch, setDecideMatch] = useState(null);
+  const [decidingMatch, setDecidingMatch] = useState(false);
   const [toast,       setToast]       = useState('');
   const langRef     = useRef(lang);
   const hasJoinedRef = useRef(false);
@@ -267,6 +268,8 @@ export default function TournamentWaitingRoom() {
       socket.emit('admin_join_tournament_watch', { tournamentId });
     } else {
       socket.emit('join_tournament', { tournamentId });
+      setToast(translations[langRef.current].reconnected || (langRef.current === 'th' ? '✓ เชื่อมต่อใหม่แล้ว' : '✓ Reconnected'));
+      setTimeout(() => setToast(''), 3000);
     }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,10 +298,14 @@ export default function TournamentWaitingRoom() {
   };
 
   const handleDecideMatch = (winnerId) => {
-    if (!decideMatch) return;
+    if (!decideMatch || decidingMatch) return;
+    setDecidingMatch(true);
     getSocket()?.emit('admin_decide_match', { roomId: decideMatch.roomId, winnerId });
-    setDecideMatch(null);
     setAlerts(p => p.filter(a => a.roomId !== decideMatch.roomId));
+    setTimeout(() => {
+      setDecideMatch(null);
+      setDecidingMatch(false);
+    }, 1500);
   };
 
   const dismissAlert = (id) => setAlerts(p => p.filter(a => a.id !== id));
@@ -372,13 +379,16 @@ export default function TournamentWaitingRoom() {
             <div className="flex gap-3 justify-center mb-4">
               {decideMatch.players.map((pid, i) => (
                 <button key={pid} onClick={() => handleDecideMatch(pid)}
-                  className="flex-1 py-3 rounded-xl font-semibold text-sm transition active:scale-95"
+                  disabled={decidingMatch}
+                  className="flex-1 py-3 rounded-xl font-semibold text-sm transition active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80' }}>
-                  🏆 {decideMatch.names[i] || `P${i + 1}`}
+                  {decidingMatch
+                    ? <span className="w-4 h-4 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
+                    : <>🏆 {decideMatch.names[i] || `P${i + 1}`}</>}
                 </button>
               ))}
             </div>
-            <button onClick={() => setDecideMatch(null)} className="btn-ghost w-full py-2 rounded-xl text-xs">
+            <button onClick={() => { if (!decidingMatch) setDecideMatch(null); }} disabled={decidingMatch} className="btn-ghost w-full py-2 rounded-xl text-xs disabled:opacity-40">
               {tl.cancel}
             </button>
           </div>

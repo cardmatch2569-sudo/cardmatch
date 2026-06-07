@@ -44,6 +44,8 @@ export default function LobbyPage() {
   const [lockedTournament, setLockedTournament] = useState(null); // { id, name, scheduledAt }
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const cancelConfirmTimer = useRef(null);
+  const [pidInputFocused, setPidInputFocused] = useState(false);
+  const [marqueeHovered, setMarqueeHovered] = useState(false);
 
   const inQueueRef  = useRef(inQueue); // mirror inQueue for socket closures
   const restoredQueueRef = useRef(restoredQueue); // capture before SocketContext clears sessionStorage
@@ -361,7 +363,9 @@ export default function LobbyPage() {
           <span className="text-yellow-400 text-xs font-bold flex-shrink-0">📢</span>
           <div className="flex-1 overflow-hidden">
             <p className="text-yellow-300 text-xs font-medium whitespace-nowrap"
-              style={{ animation: 'marquee 35s linear infinite', display: 'inline-block' }}>
+              onMouseEnter={() => setMarqueeHovered(true)}
+              onMouseLeave={() => setMarqueeHovered(false)}
+              style={{ animation: 'marquee 35s linear infinite', animationPlayState: marqueeHovered ? 'paused' : 'running', display: 'inline-block' }}>
               {announcement.text}
             </p>
           </div>
@@ -588,7 +592,7 @@ export default function LobbyPage() {
               {inQueue ? (
                 cancelConfirm
                   ? <><X size={15} /><span className="font-semibold">{lang === 'th' ? 'ยืนยันออกจากคิว?' : 'Leave queue?'}</span></>
-                  : <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={15} /></>
+                  : <><Loader2 size={16} className="animate-spin" />{t.searching}<span className="font-mono text-red-400">{fmtTime(queueTime)}</span><X size={14} /><span className="text-xs">{lang === 'th' ? 'ยกเลิก' : 'Cancel'}</span></>
               ) : !connected ? (
                 <><Loader2 size={16} className="animate-spin" />{lang === 'th' ? 'กำลังเชื่อมต่อ...' : 'Connecting...'}</>
               ) : (
@@ -685,7 +689,8 @@ export default function LobbyPage() {
                   placeholder={t.playerIdPlaceholder}
                   className="input-base pl-8 text-sm font-mono tracking-widest uppercase"
                   maxLength={6}
-                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300)}
+                  onFocus={e => { setPidInputFocused(true); setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300); }}
+                  onBlur={() => setPidInputFocused(false)}
                 />
               </div>
               <button
@@ -698,7 +703,7 @@ export default function LobbyPage() {
               </button>
             </div>
 
-            {pidInput.length === 6 && !selectedGame && (
+            {pidInputFocused && !selectedGame && (
               <p className="text-[11px] text-yellow-500 mt-2 text-center">
                 {lang === 'th' ? '⚠ เลือกประเภทเกมด้านบนก่อนส่งคำท้า' : '⚠ Select a game type above before sending'}
               </p>

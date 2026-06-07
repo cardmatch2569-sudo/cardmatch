@@ -168,7 +168,11 @@ export default function RoomPage() {
   const [adminWatching,    setAdminWatching]    = useState(false);
   const [adminCalledMsg,   setAdminCalledMsg]   = useState('');
   const [adminCameraStream, setAdminCameraStream] = useState(null);
+  const [adminCameraFading, setAdminCameraFading] = useState(false);
+  const adminCameraFadeTimer = useRef(null);
   const adminCameraVideoRef = useRef(null);
+  const [escapeCountdown, setEscapeCountdown] = useState(0);
+  const escapeTimerRef = useRef(null);
 
   // Admin spectate mode (admin entering room to watch before deciding)
   const [spectateMode] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('spectate') === 'admin');
@@ -189,13 +193,24 @@ export default function RoomPage() {
     }
   }, []);
 
-  // Show escape button after 30s if stuck in result/admin_decision overlay
+  // Show escape button after 30s; display countdown while waiting
   useEffect(() => {
     setResultEscape(false);
+    setEscapeCountdown(0);
+    clearInterval(escapeTimerRef.current);
     if (tourneyPhase === 'result_reporting' || tourneyPhase === 'admin_decision') {
-      const t = setTimeout(() => setResultEscape(true), 30000);
-      return () => clearTimeout(t);
+      let count = 30;
+      setEscapeCountdown(count);
+      escapeTimerRef.current = setInterval(() => {
+        count -= 1;
+        setEscapeCountdown(count);
+        if (count <= 0) {
+          clearInterval(escapeTimerRef.current);
+          setResultEscape(true);
+        }
+      }, 1000);
     }
+    return () => clearInterval(escapeTimerRef.current);
   }, [tourneyPhase]);
 
   useEffect(() => {
@@ -341,7 +356,10 @@ export default function RoomPage() {
       await startMedia();
       if (!aborted) socket.emit('join_room', { roomId });
     };
-    const onPeerJoined = () => createPeer(true, localStreamRef.current);
+    const onPeerJoined = () => {
+      setEndModal(prev => prev === 'partner_left' ? null : prev);
+      createPeer(true, localStreamRef.current);
+    };
     const onOffer = async ({ offer }) => {
       if (!peerRef.current) createPeer(false, localStreamRef.current);
       const pc = peerRef.current;
@@ -618,6 +636,18 @@ export default function RoomPage() {
     if (adminCameraVideoRef.current && adminCameraStream) {
       adminCameraVideoRef.current.srcObject = adminCameraStream;
     }
+  }, [adminCameraStream]);
+
+  // Fade-out admin camera PiP: keep visible for 350ms after stream goes null (H3)
+  useEffect(() => {
+    clearTimeout(adminCameraFadeTimer.current);
+    if (!adminCameraStream) {
+      setAdminCameraFading(true);
+      adminCameraFadeTimer.current = setTimeout(() => setAdminCameraFading(false), 350);
+    } else {
+      setAdminCameraFading(false);
+    }
+    return () => clearTimeout(adminCameraFadeTimer.current);
   }, [adminCameraStream]);
 
   const handleAdminDecide = useCallback((winnerId) => {
@@ -1128,18 +1158,20 @@ export default function RoomPage() {
       )}
 
       {/* ── Admin camera PiP — bottom-left, shown when admin turns on their camera ── */}
-      {adminCameraStream && (
+      {(adminCameraStream || adminCameraFading) && (
         <div className="absolute z-[21] rounded-xl overflow-hidden shadow-2xl"
           style={{
             bottom: cssLandscapeActive ? 'calc(68px + 8px)' : `calc(68px + max(8px, ${safeBottom}))`,
             left:   `max(8px, ${cssLandscapeActive ? safeTop : safeLeft})`,
             width:  'clamp(72px, 20vw, 110px)',
             aspectRatio: '4/3',
-            border: '2px solid rgba(251,191,36,0.5)',
+            border: '2px solid rgba(251,191,36,0.6)',
+            opacity: (adminCameraFading && !adminCameraStream) ? 0 : 1,
+            transition: 'opacity 0.35s ease',
           }}>
           <video ref={adminCameraVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-          <div className="absolute bottom-0 left-0 right-0 text-center text-[8px] text-yellow-300 py-0.5"
-            style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="absolute bottom-0 left-0 right-0 text-center text-[9px] font-semibold text-yellow-200 py-0.5"
+            style={{ background: 'rgba(0,0,0,0.8)' }}>
             ⚖️ Admin
           </div>
         </div>
@@ -1165,19 +1197,23 @@ export default function RoomPage() {
             <div className="w-3 h-3 border-2 border-yellow-500/30 border-t-yellow-400 rounded-full animate-spin flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-yellow-300 text-xs font-semibold leading-tight">
-                {lang === 'th' ? '⚖️ รอ Admin ตัดสิน — เปิดกล้องไว้' : '⚖️ Awaiting Admin Decision — keep cameras on'}
+                {adminWatching
+                  ? (lang === 'th' ? '⚖️ Admin กำลัง review การแข่ง...' : '⚖️ Admin is reviewing the match...')
+                  : (lang === 'th' ? '⚖️ รอ Admin ตัดสิน — เปิดกล้องไว้' : '⚖️ Awaiting Admin Decision — keep cameras on')}
               </p>
               {adminWatching && (
-                <p className="text-yellow-400 text-[10px] mt-0.5 font-medium animate-pulse">
+                <p className="text-green-400 text-[10px] mt-0.5 font-medium">
                   {lang === 'th' ? '● Admin อยู่ในห้องแล้ว' : '● Admin has joined the room'}
                 </p>
               )}
             </div>
-            {resultEscape && (
+            {resultEscape ? (
               <button onClick={goToTournament}
                 className="text-[10px] text-slate-600 hover:text-slate-400 underline transition flex-shrink-0 pointer-events-auto">
                 {lang === 'th' ? 'ออกจากห้อง' : 'Leave'}
               </button>
+            ) : escapeCountdown > 0 && (
+              <span className="text-[9px] text-slate-600 flex-shrink-0 tabular-nums">{escapeCountdown}s</span>
             )}
           </div>
         </div>

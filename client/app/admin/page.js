@@ -62,6 +62,9 @@ export default function AdminPage() {
   const spectateConnsRef   = useRef(new Map()); // userId → RTCPeerConnection
   // Decide match state
   const [decideMatch, setDecideMatch] = useState(null); // { roomId, players: [p1Id, p2Id], names: [n1, n2] }
+  // Stop Watching loading + toast
+  const [stopWatchingLoading, setStopWatchingLoading] = useState(false);
+  const [spectateToast, setSpectateToast] = useState('');
   // Admin camera state (optional — admin can talk to players during decision)
   const [adminCamOn,       setAdminCamOn]       = useState(false);
   const [adminMicOn,       setAdminMicOn]        = useState(true);
@@ -380,7 +383,7 @@ export default function AdminPage() {
       const socket = getSocket();
       const roomId = spectateRoomIdRef.current;
       if (!socket || !roomId) return;
-      for (const playerId of spectateConnsRef.current.keys()) {
+      const sendCameraOffer = async (playerId, attempt = 0) => {
         const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
         pc.onicecandidate = ({ candidate }) => {
@@ -391,7 +394,16 @@ export default function AdminPage() {
           await pc.setLocalDescription(offer);
           socket.emit('admin_camera_offer', { roomId, targetUserId: playerId, offer });
           adminCameraConnsRef.current.set(playerId, pc);
-        } catch (e) { console.warn('[admin camera] offer to', playerId, e.message); pc.close(); }
+        } catch (e) {
+          console.warn('[admin camera] offer to', playerId, e.message);
+          pc.close();
+          if (attempt === 0) {
+            setTimeout(() => sendCameraOffer(playerId, 1), 2000);
+          }
+        }
+      };
+      for (const playerId of spectateConnsRef.current.keys()) {
+        sendCameraOffer(playerId);
       }
     } catch (e) { console.warn('[admin camera] getUserMedia failed:', e.message); }
   };
@@ -425,6 +437,7 @@ export default function AdminPage() {
   };
 
   const stopSpectating = () => {
+    setStopWatchingLoading(true);
     const rid = spectateRoomIdRef.current;
     if (rid) getSocket()?.emit('admin_stop_watching', { roomId: rid });
     // Stop admin camera BEFORE clearing spectateRoomIdRef — stopAdminCamera reads it to emit admin_camera_stopped
@@ -441,6 +454,9 @@ export default function AdminPage() {
     setSpectateRoomId(null);
     setSpectatePlayer1('');
     setSpectatePlayer2('');
+    setStopWatchingLoading(false);
+    setSpectateToast(lang === 'th' ? 'หยุดดูแล้ว' : 'Stopped watching');
+    setTimeout(() => setSpectateToast(''), 3000);
   };
 
   const handleDecideMatch = (winnerId) => {
@@ -564,6 +580,13 @@ export default function AdminPage() {
       )}
 
       {/* ── Spectate modal ─────────────────────────────────────── */}
+      {spectateToast && (
+        <div className="fixed top-20 right-4 z-[60] px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+          style={{ background: 'rgba(74,222,128,0.9)', border: '1px solid rgba(74,222,128,0.5)', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(74,222,128,0.3)' }}>
+          ✓ {spectateToast}
+        </div>
+      )}
+
       {spectateRoomId && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)' }}>
@@ -574,9 +597,12 @@ export default function AdminPage() {
                 {t.watchingMatch}
               </h2>
               <button onClick={stopSpectating}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-red-400 transition hover:bg-red-500/10"
+                disabled={stopWatchingLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
                 style={{ border: '1px solid rgba(239,68,68,0.3)' }}>
-                <X size={14} /> {t.stopWatching}
+                {stopWatchingLoading
+                  ? <><span className="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" /> {lang === 'th' ? 'กำลังหยุด...' : 'Stopping...'}</>
+                  : <><X size={14} /> {t.stopWatching}</>}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-4">
