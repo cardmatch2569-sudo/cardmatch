@@ -18,18 +18,17 @@ export default function Navbar() {
   const [isLight, setIsLight] = useState(false);
 
   useEffect(() => {
-    const onResize = () => { if (window.innerWidth >= 768) setMobileOpen(false); };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  useEffect(() => {
     setIsLight(document.documentElement.classList.contains('light'));
   }, []);
 
   const toggleTheme = () => {
     const next = !isLight;
     document.documentElement.classList.toggle('light', next);
+    if (next) {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
     try { localStorage.setItem('cg_theme', next ? 'light' : 'dark'); } catch {}
     setIsLight(next);
   };
@@ -99,7 +98,7 @@ export default function Navbar() {
 
             {/* Online count / connecting status — desktop only */}
             {user && (
-              <div className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border bg-[var(--card)]"
+              <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border bg-[var(--card)]"
                 style={{ borderColor: connected ? 'var(--border)' : 'rgba(251,191,36,0.3)', color: connected ? '#64748b' : '#fbbf24' }}>
                 {connected ? (
                   <>
@@ -160,7 +159,7 @@ export default function Navbar() {
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-xs font-bold shadow-md">
                         {user.username[0].toUpperCase()}
                       </div>
-                      <span className="text-sm text-slate-300 hidden lg:block font-medium">{user.username}</span>
+                      <span className="text-sm text-slate-300 hidden md:block font-medium">{user.username}</span>
                     </Link>
                     <button onClick={handleLogout}
                       className="p-1.5 text-slate-500 hover:text-red-400 transition rounded-lg hover:bg-red-500/10">

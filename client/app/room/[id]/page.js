@@ -158,6 +158,7 @@ export default function RoomPage() {
   // Tournament match state
   const [isTournament,   setIsTournament]   = useState(false);
   const [tourneyPhase,   setTourneyPhase]   = useState('playing'); // playing | result_reporting | admin_decision | done
+  const [resultEscape,   setResultEscape]   = useState(false);     // show "leave room" escape after 30s
   const [myResult,       setMyResult]       = useState(null);      // 'win' | 'lose' | null
   const [pendingResult,  setPendingResult]  = useState(null);      // 'win' | 'lose' — awaiting user confirm
   const [opponentResult, setOpponentResult] = useState(null);
@@ -184,6 +185,15 @@ export default function RoomPage() {
       if (isTn) setTournamentId(sessionStorage.getItem('cg_tournament_id') || '');
     }
   }, []);
+
+  // Show escape button after 30s if stuck in result/admin_decision overlay
+  useEffect(() => {
+    setResultEscape(false);
+    if (tourneyPhase === 'result_reporting' || tourneyPhase === 'admin_decision') {
+      const t = setTimeout(() => setResultEscape(true), 30000);
+      return () => clearTimeout(t);
+    }
+  }, [tourneyPhase]);
 
   useEffect(() => {
     chatOpenRef.current = chatOpen;
@@ -816,7 +826,7 @@ export default function RoomPage() {
                     {lang === 'th' ? 'คู่แข่งออกจากการแข่งแล้ว' : 'Opponent left the match'}
                   </p>
                   <p className="text-slate-500 text-xs mt-1">
-                    {lang === 'th' ? 'ต้องการเล่นต่อไหม?' : 'Want to keep playing?'}
+                    {lang === 'th' ? 'หากเป็นปัญหาเครือข่ายชั่วคราว อาจกลับมาเองในไม่ช้า' : 'If it was a brief network issue, they may reconnect shortly'}
                   </p>
                 </div>
               </>
@@ -1142,6 +1152,12 @@ export default function RoomPage() {
                       className="text-xs text-slate-600 hover:text-slate-400 underline transition">
                       📣 {lang === 'th' ? 'เรียก Admin' : 'Call Admin'}
                     </button>
+                    {resultEscape && (
+                      <button onClick={goToTournament}
+                        className="mt-1 text-xs text-slate-700 hover:text-slate-500 underline transition">
+                        {lang === 'th' ? 'ออกจากห้อง →' : 'Leave room →'}
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -1160,6 +1176,12 @@ export default function RoomPage() {
                 <div className="flex justify-center">
                   <div className="w-8 h-8 border-2 border-yellow-600/30 border-t-yellow-500 rounded-full animate-spin" />
                 </div>
+                {resultEscape && (
+                  <button onClick={goToTournament}
+                    className="mt-4 text-xs text-slate-600 hover:text-slate-400 underline transition">
+                    {lang === 'th' ? 'ออกจากห้อง →' : 'Leave room →'}
+                  </button>
+                )}
               </>
             )}
 

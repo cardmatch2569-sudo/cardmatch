@@ -160,7 +160,12 @@ export default function LobbyPage() {
     const qid = restoredQueueRef.current;
     if (!qid || !games.length || selectedGame) return;
     const game = games.find(g => g._id === qid);
-    if (!game) return;
+    if (!game) {
+      setQueue(false);
+      sessionStorage.removeItem('cg_queue_game');
+      showToast(langRef.current === 'th' ? 'การค้นหาถูกยกเลิก กรุณาเริ่มใหม่' : 'Search cancelled — please start again', 'error');
+      return;
+    }
     setSelectedGame(game);
     setQueueGame(game._id); // re-persist so subsequent refreshes also see the queue state
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,6 +192,11 @@ export default function LobbyPage() {
     const id = setInterval(() => setPidCountdown(p => p > 0 ? p - 1 : 0), 1000);
     return () => clearInterval(id);
   }, [pidPending]);
+
+  // Auto-dismiss pidPending indicator when countdown reaches 0
+  useEffect(() => {
+    if (pidCountdown === 0 && pidPending) setPidPending(null);
+  }, [pidCountdown, pidPending]);
 
   const setQueue = (val) => {
     inQueueRef.current = val;
@@ -339,8 +349,8 @@ export default function LobbyPage() {
             </p>
             <p className="text-slate-400 text-xs leading-relaxed">
               {lang === 'th'
-                ? 'ระบบ Beta ในช่วงนี้มีค่าใช้จ่าย Server จำกัดจำนวนผู้เล่นพร้อมกันไว้ที่ 200 คน ขณะนี้ทุกที่นั่งถูกใช้งานอยู่'
-                : 'During Beta, server costs limit us to 200 concurrent players. All slots are currently in use.'}
+                ? 'ระบบ Beta จำกัดผู้เล่นพร้อมกันสูงสุด 1,000 คน ขณะนี้ทุกที่นั่งถูกใช้งานอยู่'
+                : 'Beta server is at capacity (1,000 concurrent players). All slots are currently in use.'}
             </p>
           </div>
 
@@ -372,7 +382,7 @@ export default function LobbyPage() {
               {lang === 'th' ? '🔄 Refresh อีกครั้ง' : '🔄 Refresh'}
             </button>
             <p className="flex-1 flex items-center justify-center text-[11px] text-slate-600">
-              {lang === 'th' ? 'สมัครบัญชีได้ตลอดเวลา' : 'Registration always open'}
+              {lang === 'th' ? 'ลองใหม่อีกสักครู่' : 'Try again in a moment'}
             </p>
           </div>
         </div>
@@ -434,12 +444,12 @@ export default function LobbyPage() {
         const steps = lang === 'th' ? [
           { icon: '🃏', title: 'เลือกเกม',        desc: 'เลือกประเภทเกมการ์ดที่ต้องการเล่น' },
           { icon: '🔀', title: 'จับคู่',           desc: 'กด "จับคู่สุ่ม" หรือท้าเพื่อนด้วย Player ID' },
-          { icon: '📷', title: 'ทดสอบกล้อง',      desc: 'ตรวจสอบกล้องและไมค์ก่อนเข้าเกม' },
+          { icon: '📷', title: 'ทดสอบกล้อง',      desc: 'popup ตรวจสอบกล้อง/ไมค์จะเปิดขึ้น ข้ามได้ถ้าไม่มีกล้อง' },
           { icon: '🎮', title: 'เริ่มเล่น',        desc: 'เล่นการ์ดจริงผ่านวิดีโอสดกับคู่แข่ง' },
         ] : [
           { icon: '🃏', title: 'Pick a Game',    desc: 'Select the card game type you want to play' },
           { icon: '🔀', title: 'Match Up',       desc: 'Quick Match or challenge via Player ID' },
-          { icon: '📷', title: 'Check Camera',   desc: 'Test your camera & mic before entering' },
+          { icon: '📷', title: 'Check Camera',   desc: 'A device check popup opens — skippable if no camera' },
           { icon: '🎮', title: 'Play Live',      desc: 'Play physical cards via live video call' },
         ];
         return (
@@ -464,6 +474,13 @@ export default function LobbyPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="flex justify-end mt-2">
+              <Link href="/donate"
+                className="flex items-center gap-1 text-xs text-pink-500/60 hover:text-pink-400 transition">
+                <Heart size={10} fill="currentColor" />
+                {lang === 'th' ? 'สนับสนุนโครงการ' : 'Support project'}
+              </Link>
             </div>
           </div>
         );
@@ -612,6 +629,18 @@ export default function LobbyPage() {
                 <><Shuffle size={16} />{t.quickMatch}</>
               )}
             </button>
+
+            {/* Persistent queue status bar */}
+            {inQueue && (
+              <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl"
+                style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse flex-shrink-0" />
+                <p className="text-purple-300 text-xs flex-1">
+                  {lang === 'th' ? 'กำลังค้นหาคู่แข่ง — รอสักครู่...' : 'Searching for opponent — please wait...'}
+                </p>
+                <span className="font-mono text-purple-400 text-xs font-semibold">{fmtTime(queueTime)}</span>
+              </div>
+            )}
           </div>
 
           {/* Find Player */}
@@ -705,8 +734,8 @@ export default function LobbyPage() {
 
             <p className="text-[11px] text-slate-700 mt-2 text-center">
               {lang === 'th'
-                ? 'Player ID ของคุณอยู่ที่หน้าโปรไฟล์'
-                : 'Your Player ID is on your profile page'}
+                ? 'Player ID ของคุณอยู่ที่หน้าโปรไฟล์ — แชร์เฉพาะกับคนที่ต้องการท้า'
+                : 'Your Player ID is on your profile — share only with players you want to challenge'}
             </p>
 
             {/* Pending challenge indicator */}

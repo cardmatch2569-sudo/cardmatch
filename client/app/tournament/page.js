@@ -244,7 +244,9 @@ export default function TournamentListPage() {
             {lang === 'th' ? 'ยังไม่มีทัวร์นาเมนต์ที่เปิดรับ' : 'No open tournaments right now'}
           </p>
           <p className="text-slate-700 text-sm mt-1">
-            {lang === 'th' ? 'Admin จะเปิดทัวร์นาเมนต์เมื่อพร้อม' : 'Admin will open one when ready'}
+            {lang === 'th'
+              ? 'Admin จะเปิดทัวร์นาเมนต์เร็วๆ นี้ — กดปุ่ม Refresh หรือตรวจสอบใหม่อีกสักครู่'
+              : 'Admin will open one soon — tap Refresh or check back later'}
           </p>
         </div>
       ) : (

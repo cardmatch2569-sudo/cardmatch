@@ -169,6 +169,14 @@ export default function AdminPage() {
     socket.on('admin_peer_ice',      onSpectateIce);
     socket.on('spectate_ended',      onSpectateEnded);
 
+    const handleBeforeUnload = () => {
+      spectateConnsRef.current.forEach(pc => { try { pc.close(); } catch {} });
+      if (spectateRoomIdRef.current) {
+        try { socket.emit('admin_stop_watching', { roomId: spectateRoomIdRef.current }); } catch {}
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       socket.off('admin_match_alert',   onAlert);
       socket.off('tournament_created',  onCreated);
@@ -181,6 +189,7 @@ export default function AdminPage() {
       socket.off('admin_peer_offer',    onSpectateOffer);
       socket.off('admin_peer_ice',      onSpectateIce);
       socket.off('spectate_ended',      onSpectateEnded);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, getSocket]);
@@ -413,12 +422,15 @@ export default function AdminPage() {
               </p>
             </div>
 
-            {user?.googleId && !user?.password ? (
+            {!user?.hasPassword ? (
               <div className="mb-5 px-3 py-3 rounded-xl text-xs"
                 style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', color: '#fbbf24' }}>
-                ⚠️ {lang === 'th'
+                <p>⚠️ {lang === 'th'
                   ? 'บัญชี Admin Google ไม่รองรับการลบผู้ใช้ กรุณาล็อกอินด้วยบัญชี Admin ที่มีรหัสผ่าน'
-                  : 'Google-only Admin accounts cannot delete users. Please log in with a password-enabled Admin account.'}
+                  : 'Google-only Admin accounts cannot delete users. Please log in with a password-enabled Admin account.'}</p>
+                <p className="mt-1 text-yellow-600">
+                  💡 {lang === 'th' ? 'เพิ่มรหัสผ่านได้ที่หน้าโปรไฟล์' : 'You can add a password on your profile page'}
+                </p>
               </div>
             ) : (
               <div className="mb-5">
@@ -448,7 +460,7 @@ export default function AdminPage() {
                 {t.cancel}
               </button>
               <button onClick={handleDeleteUser}
-                disabled={(user?.googleId && !user?.password) || !deletePassword || deleting}
+                disabled={!user?.hasPassword || !deletePassword || deleting}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
                 {deleting
@@ -587,7 +599,14 @@ export default function AdminPage() {
                         defaultValue={form.color}
                         maxLength={7}
                         placeholder="#7c3aed"
-                        onChange={e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) setForm({ ...form, color: e.target.value }); }}
+                        onChange={e => {
+                          if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) {
+                            setForm({ ...form, color: e.target.value });
+                            e.target.style.color = '';
+                          } else {
+                            e.target.style.color = '#f87171';
+                          }
+                        }}
                         className="flex-1 bg-transparent outline-none font-mono text-slate-400 min-w-0"
                       />
                     </div>

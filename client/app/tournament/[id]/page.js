@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
 import { api } from '../../../lib/api';
-import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel } from 'lucide-react';
+import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel, RefreshCw } from 'lucide-react';
 import translations from '../../../lib/translations';
 
 function useCountdown(targetDate, lang) {
@@ -258,7 +258,7 @@ export default function TournamentWaitingRoom() {
     };
   }, [authLoading, user, tournamentId, router, getSocket, socketReady, load]);
 
-  // Re-join tournament room when socket reconnects (handles mobile screen-sleep disconnect)
+  // Re-join and reload data when socket reconnects (handles mobile screen-sleep disconnect)
   useEffect(() => {
     if (!connected || !hasJoinedRef.current || authLoading || !user) return;
     const socket = getSocket();
@@ -268,6 +268,8 @@ export default function TournamentWaitingRoom() {
     } else {
       socket.emit('join_tournament', { tournamentId });
     }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, tournamentId, user, authLoading, getSocket]);
 
   const handleLeave = () => {
@@ -472,11 +474,18 @@ export default function TournamentWaitingRoom() {
               {' · '}{players.length} {tl.players}
             </p>
           </div>
-          <button onClick={handleLeave}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs text-red-400 flex-shrink-0 transition hover:bg-red-500/10"
-            style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
-            <LogOut size={13} /> {tl.leaveBtn}
-          </button>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button onClick={() => load()}
+              className="p-2 rounded-xl text-slate-600 hover:text-slate-400 hover:bg-white/5 transition"
+              title={lang === 'th' ? 'รีเฟรช' : 'Refresh'}>
+              <RefreshCw size={13} />
+            </button>
+            <button onClick={handleLeave}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs text-red-400 flex-shrink-0 transition hover:bg-red-500/10"
+              style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+              <LogOut size={13} /> {tl.leaveBtn}
+            </button>
+          </div>
         </div>
 
         {/* Status banner */}
@@ -519,12 +528,19 @@ export default function TournamentWaitingRoom() {
         )}
 
         {status === 'bye' && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+          <div className="flex items-start gap-2 px-4 py-3 rounded-xl"
             style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
-            <span className="text-lg">😴</span>
-            <p className="text-sm text-yellow-300">
-              {tl.byeTxt.replace('{n}', currentRound)}
-            </p>
+            <span className="text-lg flex-shrink-0 mt-0.5">😴</span>
+            <div>
+              <p className="text-sm text-yellow-300">
+                {tl.byeTxt.replace('{n}', currentRound)}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {lang === 'th'
+                  ? 'คุณผ่านเข้ารอบถัดไปอัตโนมัติโดยไม่ต้องแข่ง รอ Admin เริ่มรอบต่อไป'
+                  : 'You advance automatically this round — wait for Admin to start the next round'}
+              </p>
+            </div>
           </div>
         )}
       </div>

@@ -21,6 +21,7 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
   const [camError,      setCamError]      = useState('');
   const [facingMode,    setFacingMode]    = useState('user');
   const [hasFlipCamera, setHasFlipCamera] = useState(false);
+  const [flipping,      setFlipping]      = useState(false);
 
   useEffect(() => {
     navigator.mediaDevices.enumerateDevices()
@@ -169,15 +170,20 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
             {/* Flip camera button */}
             {hasFlipCamera && !loading && (
               <button
-                onClick={() => {
+                disabled={flipping}
+                onClick={async () => {
                   const next = facingMode === 'user' ? 'environment' : 'user';
                   setFacingMode(next);
-                  startMedia(next);
+                  setFlipping(true);
+                  await startMedia(next);
+                  setFlipping(false);
                 }}
                 title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
-                className="absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95"
+                className="absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-50"
                 style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.2)' }}>
-                <SwitchCamera size={14} className="text-white" />
+                {flipping
+                  ? <span className="w-3.5 h-3.5 border border-white/30 border-t-white rounded-full animate-spin" />
+                  : <SwitchCamera size={14} className="text-white" />}
               </button>
             )}
 
@@ -191,9 +197,13 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
             )}
           </div>
 
-          {/* Camera error (non-blocking) */}
+          {/* Camera error (non-blocking info) */}
           {camError && (
-            <p className="text-xs text-yellow-500 text-center">{camError}</p>
+            <div className="flex items-start gap-2 px-3 py-2 rounded-xl"
+              style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)' }}>
+              <span className="text-blue-400 text-xs flex-shrink-0 mt-0.5">ℹ</span>
+              <p className="text-xs text-blue-300">{camError}</p>
+            </div>
           )}
 
           {/* Mic meter */}

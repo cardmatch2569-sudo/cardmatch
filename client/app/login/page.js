@@ -17,7 +17,10 @@ export default function LoginPage() {
   const [mode, setMode]         = useState('login');
   const [showPass, setShowPass] = useState(false);
   const [showConf, setShowConf] = useState(false);
-  const [form, setForm]         = useState({ username: '', email: '', password: '', confirm: '' });
+  const [form, setForm]         = useState(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('cg_login_email') || '' : '';
+    return { username: '', email: saved, password: '', confirm: '' };
+  });
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -79,6 +82,16 @@ export default function LoginPage() {
       await api.post('/api/auth/forgot-password', { email: resetEmail.trim() });
       setMode('reset');
       setSuccess(lang === 'th' ? `ส่ง OTP ไปยัง ${resetEmail} แล้ว` : `OTP sent to ${resetEmail}`);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  const handleResendOtp = async () => {
+    if (!resetEmail.trim() || loading) return;
+    setLoading(true); setError('');
+    try {
+      await api.post('/api/auth/forgot-password', { email: resetEmail.trim() });
+      setSuccess(lang === 'th' ? `ส่ง OTP ใหม่ไปยัง ${resetEmail} แล้ว` : `New OTP sent to ${resetEmail}`);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -282,7 +295,7 @@ export default function LoginPage() {
                 {loading ? <span className="flex items-center justify-center"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /></span>
                   : <><KeyRound size={14} /> {lang === 'th' ? 'ตั้งรหัสผ่านใหม่' : 'Set New Password'}</>}
               </button>
-              <button type="button" onClick={() => { setResetCode(''); handleForgotSubmit({ preventDefault: () => {} }); }}
+              <button type="button" onClick={handleResendOtp}
                 disabled={loading}
                 className="w-full text-xs text-slate-600 hover:text-slate-400 transition py-2 disabled:opacity-40 disabled:cursor-not-allowed">
                 {loading ? (lang === 'th' ? 'กำลังส่ง...' : 'Sending...') : (lang === 'th' ? 'ส่ง OTP ใหม่อีกครั้ง' : 'Resend OTP')}
@@ -334,7 +347,7 @@ export default function LoginPage() {
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
               <input type="email" required placeholder={t.email}
-                value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                value={form.email} onChange={e => { const v = e.target.value; setForm({ ...form, email: v }); try { sessionStorage.setItem('cg_login_email', v); } catch {} }}
                 className="input-base pl-9 text-sm"
                 autoComplete={mode === 'login' ? 'email' : 'new-email'}
                 onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
@@ -387,11 +400,11 @@ export default function LoginPage() {
                   <span className="text-xs text-slate-500 leading-relaxed pt-0.5 break-words">
                     {lang === 'th' ? 'ฉันยอมรับ ' : 'I agree to the '}
                     {/* FIX #9: links with padding for tap area */}
-                    <a href="/terms" target="_blank" className="text-purple-400 hover:text-purple-300 underline py-1 px-0.5">
+                    <a href="/terms" target="_blank" className="text-purple-400 hover:text-purple-300 underline py-2 px-1">
                       {lang === 'th' ? 'ข้อกำหนดการใช้งาน' : 'Terms'}
                     </a>
                     {lang === 'th' ? ' และ ' : ' & '}
-                    <a href="/privacy" target="_blank" className="text-purple-400 hover:text-purple-300 underline py-1 px-0.5">
+                    <a href="/privacy" target="_blank" className="text-purple-400 hover:text-purple-300 underline py-2 px-1">
                       {lang === 'th' ? 'นโยบายความเป็นส่วนตัว' : 'Privacy Policy'}
                     </a>
                   </span>

@@ -33,6 +33,8 @@ export default function ProfilePage() {
   const [pwSaving,     setPwSaving]     = useState(false);
   // Prevent retrying if the endpoint is not yet available
   const pidTriedRef = useRef(false);
+  const [pidGenError, setPidGenError] = useState(false);
+  const [hideOpponents, setHideOpponents] = useState(false);
 
   const copyPlayerId = () => {
     if (!user.playerId) return;
@@ -80,7 +82,7 @@ export default function ProfilePage() {
     try {
       const { user: fresh } = await api.post('/api/users/generate-player-id', {});
       if (fresh?._id && setUser) { pidTriedRef.current = true; setUser(fresh); }
-    } catch {}
+    } catch { setPidGenError(true); }
     setRefreshing(false);
   };
 
@@ -147,12 +149,14 @@ export default function ProfilePage() {
               <p className="text-[10px] text-slate-500 mb-0.5">
                 {t.myPlayerId}
                 <span className="ml-1 text-slate-700">
-                  {lang === 'th' ? '— ใช้ท้าด้วย ID' : '— used to challenge by ID'}
+                  {lang === 'th' ? '— แชร์เฉพาะกับคนที่ต้องการท้า' : '— share only with players you want to challenge'}
                 </span>
               </p>
               {user.playerId
                 ? <p className="text-purple-300 font-mono font-bold tracking-widest text-base">{user.playerId}</p>
-                : <p className="text-slate-600 text-xs">{lang === 'th' ? 'กำลังสร้าง ID...' : 'Generating ID...'}</p>
+                : pidGenError
+                  ? <p className="text-red-400 text-xs">{lang === 'th' ? 'สร้าง ID ล้มเหลว — ลองใหม่' : 'Failed to generate — tap Retry'}</p>
+                  : <p className="text-slate-600 text-xs">{lang === 'th' ? 'กำลังสร้าง ID...' : 'Generating ID...'}</p>
               }
             </div>
             {user.playerId ? (
@@ -163,12 +167,12 @@ export default function ProfilePage() {
                 {copied ? t.copied : lang === 'th' ? 'คัดลอก' : 'Copy'}
               </button>
             ) : (
-              <button onClick={refreshUser} disabled={refreshing}
+              <button onClick={() => { setPidGenError(false); pidTriedRef.current = false; refreshUser(); }} disabled={refreshing}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95 flex-shrink-0 disabled:opacity-50"
-                style={{ background: 'rgba(124,58,237,0.15)', color: '#a78bfa' }}>
+                style={{ background: pidGenError ? 'rgba(239,68,68,0.15)' : 'rgba(124,58,237,0.15)', color: pidGenError ? '#f87171' : '#a78bfa' }}>
                 {refreshing
                   ? <span className="w-3 h-3 border border-purple-400/40 border-t-purple-400 rounded-full animate-spin" />
-                  : <span>{lang === 'th' ? 'รีเฟรช' : 'Refresh'}</span>}
+                  : <span>{pidGenError ? (lang === 'th' ? 'ลองใหม่' : 'Retry') : (lang === 'th' ? 'รีเฟรช' : 'Refresh')}</span>}
               </button>
             )}
           </div>
@@ -294,9 +298,16 @@ export default function ProfilePage() {
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-4">
           <Swords size={15} className="text-purple-400" />
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest flex-1">
             {lang === 'th' ? 'ประวัติการแข่ง' : 'Match History'}
           </h2>
+          {matchHistory.length > 0 && (
+            <button onClick={() => setHideOpponents(p => !p)}
+              className="text-xs text-slate-600 hover:text-slate-400 transition px-2 py-1 rounded-lg hover:bg-white/5"
+              title={hideOpponents ? (lang === 'th' ? 'แสดงชื่อคู่แข่ง' : 'Show opponents') : (lang === 'th' ? 'ซ่อนชื่อคู่แข่ง' : 'Hide opponents')}>
+              {hideOpponents ? '👁' : '🙈'} {lang === 'th' ? (hideOpponents ? 'แสดง' : 'ซ่อน') : (hideOpponents ? 'Show' : 'Hide')}
+            </button>
+          )}
         </div>
         {historyError ? (
           <p className="text-red-400 text-sm text-center py-4">{t.failedToLoad}</p>
@@ -321,7 +332,7 @@ export default function ProfilePage() {
                       {lang === 'th' ? (m.game_name_th || m.game_name || '?') : (m.game_name || '?')}
                     </div>
                     <div className="text-xs text-slate-500 truncate">
-                      {lang === 'th' ? 'vs ' : 'vs '}{m.opponent_username || '—'}
+                      vs {hideOpponents ? '???' : (m.opponent_username || '—')}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

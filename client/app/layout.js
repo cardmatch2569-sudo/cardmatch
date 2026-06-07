@@ -50,7 +50,7 @@ export default function RootLayout({ children }) {
     <html lang="th" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         {/* Restore theme + lang before first paint to avoid flash */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('cg_theme')==='light')document.documentElement.classList.add('light');document.documentElement.lang=localStorage.getItem('cg_lang')||'th';}catch(e){}})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('cg_theme');if(t==='light'){document.documentElement.classList.add('light');}else if(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches){document.documentElement.classList.add('light');}else if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}document.documentElement.lang=localStorage.getItem('cg_lang')||'th';}catch(e){}})();` }} />
       </head>
       <body>
         <Providers>

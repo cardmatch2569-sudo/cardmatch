@@ -121,9 +121,9 @@ export default function PublicChat({ lang, user, messages, onSend }) {
                 <Send size={14} />
               </button>
             </div>
-            {input.length > 200 && (
+            {input.length > 0 && (
               <p className="text-[10px] text-right mt-1"
-                style={{ color: input.length >= 300 ? '#f87171' : '#94a3b8' }}>
+                style={{ color: input.length >= 300 ? '#f87171' : input.length > 200 ? '#94a3b8' : '#475569' }}>
                 {input.length}/300
               </p>
             )}

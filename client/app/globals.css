@@ -33,6 +33,33 @@
   --navbar-h: calc(4rem + var(--safe-top));
 }
 
+/* ── System dark-mode baseline (when no explicit theme stored) ── */
+@media (prefers-color-scheme: light) {
+  html:not(.light):not([data-theme]) {
+    --bg:        #f4f4f8;
+    --bg-2:      #eaeaf2;
+    --card:      #ffffff;
+    --card-2:    #f4f4f8;
+    --border:    #dcdce8;
+    --border-2:  #c8c8d8;
+    --text:      #0f0f1e;
+    --text-2:    #3c3c5a;
+    --text-3:    #7a7a9a;
+  }
+  html:not(.light):not([data-theme]) body { background: var(--bg); color: var(--text); }
+  html:not(.light):not([data-theme]) .glass {
+    background: rgba(255,255,255,0.75);
+    border-color: rgba(0,0,0,0.08);
+  }
+  html:not(.light):not([data-theme]) .card { box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  html:not(.light):not([data-theme]) .input-base {
+    background: rgba(0,0,0,0.03);
+    color: var(--text);
+  }
+  html:not(.light):not([data-theme]) .btn-ghost { background: rgba(0,0,0,0.04); }
+  html:not(.light):not([data-theme]) .btn-ghost:hover { background: rgba(0,0,0,0.08); }
+}
+
 /* ── Light mode overrides (html.light) ────────────────────────── */
 html.light {
   --bg:        #f4f4f8;
