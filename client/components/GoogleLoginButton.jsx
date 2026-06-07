@@ -5,12 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import OTPModal from './OTPModal';
 
-// Google OAuth only works on proper domains (localhost or real domain).
-// IP addresses are blocked by Google — detect and handle gracefully.
+// Google OAuth is blocked by Google on raw IP addresses.
+// Allow any proper domain (localhost, vercel, custom) — block only bare IPs.
 function isGoogleOAuthAllowed() {
   if (typeof window === 'undefined') return false;
   const h = window.location.hostname;
-  return h === 'localhost' || h === '127.0.0.1';
+  return !/^(\d{1,3}\.){3}\d{1,3}$/.test(h);
 }
 
 export default function GoogleLoginButton({ lang }) {
