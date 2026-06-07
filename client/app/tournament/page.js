@@ -166,19 +166,23 @@ export default function TournamentListPage() {
     const onClosed  = ({ tournamentId }) => setTournaments(p => p.filter(x => x.id !== tournamentId));
     const onCount   = ({ tournamentId, playerCount }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, playerCount } : x));
-    const onStarted = ({ tournamentId }) =>
+    const onStarted  = ({ tournamentId }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'active' } : x));
+    const onUpdated  = ({ id, status }) =>
+      setTournaments(p => p.map(x => x.id === id ? { ...x, status } : x));
 
     socket.on('tournament_created',      onCreated);
     socket.on('tournament_closed',       onClosed);
     socket.on('tournament_player_count', onCount);
     socket.on('round_started',           onStarted);
+    socket.on('tournament_updated',      onUpdated);
 
     return () => {
       socket.off('tournament_created',      onCreated);
       socket.off('tournament_closed',       onClosed);
       socket.off('tournament_player_count', onCount);
       socket.off('round_started',           onStarted);
+      socket.off('tournament_updated',      onUpdated);
     };
   }, [getSocket]);
 
