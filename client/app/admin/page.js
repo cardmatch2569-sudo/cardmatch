@@ -132,9 +132,11 @@ export default function AdminPage() {
           { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
         ],
       });
+      // Capture slot index NOW (when offer arrives) — not inside ontrack which fires
+      // after ICE negotiation when spectateConnsRef may already have both entries.
+      const slot = spectateConnsRef.current.size;
       pc.ontrack = ({ streams }) => {
-        const existing = spectateConnsRef.current.size;
-        if (existing === 0) {
+        if (slot === 0) {
           if (spectateVideo1Ref.current) spectateVideo1Ref.current.srcObject = streams[0];
           setSpectatePlayer1(fromUsername);
         } else {
