@@ -317,7 +317,7 @@ export default function RoomPage() {
     const socket = getSocket();
     if (!socket) return;
 
-    const isAdminSpectate = spectateMode && !!user?.isAdmin;
+    const isAdminSpectate = !!user?.isAdmin;
 
     let aborted = false;
     const init = async () => {
@@ -621,7 +621,7 @@ export default function RoomPage() {
   );
 
   // ── Admin Spectate UI ────────────────────────────────────────────
-  if (spectateMode && user.isAdmin) {
+  if (user?.isAdmin) {
     const backUrl = spectatorTid ? `/tournament/${spectatorTid}` : '/tournament';
     return (
       <div className="fixed inset-0 bg-black flex flex-col"
