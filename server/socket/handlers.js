@@ -417,11 +417,23 @@ const setupSocketHandlers = (io) => {
     // ── LEAVE ROOM ────────────────────────────────────────────────
     socket.on('leave_room', async ({ roomId }) => {
       socket.leave(roomId);
-      socket.to(roomId).emit('partner_disconnected');
+      const tm = tourneyMatches.get(roomId);
+      if (tm && tm.phase !== 'done') {
+        // Tournament match: leaving = forfeit → remaining player wins immediately
+        clearTimeout(tm.timer);
+        clearTimeout(tm.adminDecisionTimer);
+        const winnerId = tm.players.find(p => p !== userId);
+        if (winnerId) {
+          finalizeMatch(io, roomId, tm, winnerId, 'opponent_disconnected').catch(() => {});
+        } else {
+          tourneyMatches.delete(roomId);
+        }
+      } else {
+        socket.to(roomId).emit('partner_disconnected');
+        if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
+      }
       try { await Room.updateStatus(roomId, 'ended'); } catch {}
       activeRooms.delete(roomId);
-      const tm = tourneyMatches.get(roomId);
-      if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
       const aw = adminWatching.get(roomId);
       if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
     });
@@ -851,11 +863,23 @@ const setupSocketHandlers = (io) => {
       });
       for (const [roomId, room] of activeRooms) {
         if (room.players.includes(userId)) {
-          socket.to(roomId).emit('partner_disconnected');
+          const tm = tourneyMatches.get(roomId);
+          if (tm && tm.phase !== 'done') {
+            // Tournament match: disconnecting = forfeit → remaining player wins immediately
+            clearTimeout(tm.timer);
+            clearTimeout(tm.adminDecisionTimer);
+            const winnerId = tm.players.find(p => p !== userId);
+            if (winnerId) {
+              finalizeMatch(io, roomId, tm, winnerId, 'opponent_disconnected').catch(() => {});
+            } else {
+              tourneyMatches.delete(roomId);
+            }
+          } else {
+            socket.to(roomId).emit('partner_disconnected');
+            if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
+          }
           try { await Room.updateStatus(roomId, 'ended'); } catch {}
           activeRooms.delete(roomId);
-          const tm = tourneyMatches.get(roomId);
-          if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
           const aw = adminWatching.get(roomId);
           if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
         }
