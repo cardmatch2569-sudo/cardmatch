@@ -10,6 +10,7 @@ import {
   Shield, Users, Gamepad2, Radio, Plus, Pencil, Trash2, X, Save,
   ToggleLeft, ToggleRight, Search, RefreshCw, Crown, UserX,
   Activity, Clock, CheckCircle, XCircle, Loader2, Trophy, Play, Eye, Gavel, Bell,
+  Video, VideoOff, Mic, MicOff,
 } from 'lucide-react';
 
 const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
@@ -61,6 +62,12 @@ export default function AdminPage() {
   const spectateConnsRef   = useRef(new Map()); // userId → RTCPeerConnection
   // Decide match state
   const [decideMatch, setDecideMatch] = useState(null); // { roomId, players: [p1Id, p2Id], names: [n1, n2] }
+  // Admin camera state (optional — admin can talk to players during decision)
+  const [adminCamOn,       setAdminCamOn]       = useState(false);
+  const [adminMicOn,       setAdminMicOn]        = useState(true);
+  const adminLocalStreamRef  = useRef(null);
+  const adminLocalVideoRef   = useRef(null);
+  const adminCameraConnsRef  = useRef(new Map()); // targetUserId → RTCPeerConnection
 
   // Bug fix: debounce ref for user search
   const searchTimer = useRef(null);
@@ -124,14 +131,14 @@ export default function AdminPage() {
       setTournaments(p => p.map(x => x.id === id ? { ...x, status, ...(currentRound != null && { currentRound }), ...(activeMatchCount != null && { activeMatchCount }) } : x));
 
     // Admin spectate WebRTC
+    const SPECTATE_ICE = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+    ];
     const onSpectateOffer = async ({ from, fromUsername, offer, roomId }) => {
       if (roomId !== spectateRoomIdRef.current) return;
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
-        ],
-      });
+      const pc = new RTCPeerConnection({ iceServers: SPECTATE_ICE });
       // Capture slot index NOW (when offer arrives) — not inside ontrack which fires
       // after ICE negotiation when spectateConnsRef may already have both entries.
       const slot = spectateConnsRef.current.size;
@@ -154,9 +161,32 @@ export default function AdminPage() {
         socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
       } catch {}
       spectateConnsRef.current.set(from, pc);
+      // If admin camera already running when player connects late — send stream to them too
+      if (adminLocalStreamRef.current) {
+        const cpc = new RTCPeerConnection({ iceServers: SPECTATE_ICE });
+        adminLocalStreamRef.current.getTracks().forEach(tk => cpc.addTrack(tk, adminLocalStreamRef.current));
+        cpc.onicecandidate = ({ candidate }) => {
+          if (candidate) socket.emit('admin_camera_ice', { roomId, targetUserId: from, candidate });
+        };
+        try {
+          const o2 = await cpc.createOffer();
+          await cpc.setLocalDescription(o2);
+          socket.emit('admin_camera_offer', { roomId, targetUserId: from, offer: o2 });
+          adminCameraConnsRef.current.set(from, cpc);
+        } catch (e) { console.warn('[admin camera late]', e.message); cpc.close(); }
+      }
     };
     const onSpectateIce = ({ candidate, from }) => {
       const pc = spectateConnsRef.current.get(from);
+      try { pc?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
+    // Admin camera answer/ICE from players
+    const onAdminCameraAnswer = ({ answer, from }) => {
+      const pc = adminCameraConnsRef.current.get(from);
+      pc?.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
+    };
+    const onAdminCameraIce = ({ candidate, from }) => {
+      const pc = adminCameraConnsRef.current.get(from);
       try { pc?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
     };
     const onSpectateEnded = () => stopSpectating();
@@ -172,6 +202,8 @@ export default function AdminPage() {
     socket.on('admin_peer_offer',    onSpectateOffer);
     socket.on('admin_peer_ice',      onSpectateIce);
     socket.on('spectate_ended',      onSpectateEnded);
+    socket.on('admin_camera_answer', onAdminCameraAnswer);
+    socket.on('admin_camera_ice',    onAdminCameraIce);
 
     const handleBeforeUnload = () => {
       spectateConnsRef.current.forEach(pc => { try { pc.close(); } catch {} });
@@ -193,6 +225,8 @@ export default function AdminPage() {
       socket.off('admin_peer_offer',    onSpectateOffer);
       socket.off('admin_peer_ice',      onSpectateIce);
       socket.off('spectate_ended',      onSpectateEnded);
+      socket.off('admin_camera_answer', onAdminCameraAnswer);
+      socket.off('admin_camera_ice',    onAdminCameraIce);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,6 +364,52 @@ export default function AdminPage() {
     getSocket()?.emit('close_tournament', { tournamentId });
   };
 
+  const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+  ];
+
+  const startAdminCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      adminLocalStreamRef.current = stream;
+      if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = stream;
+      setAdminCamOn(true);
+      // Send stream offer to all currently connected players
+      const socket = getSocket();
+      const roomId = spectateRoomIdRef.current;
+      if (!socket || !roomId) return;
+      for (const playerId of spectateConnsRef.current.keys()) {
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) socket.emit('admin_camera_ice', { roomId, targetUserId: playerId, candidate });
+        };
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('admin_camera_offer', { roomId, targetUserId: playerId, offer });
+          adminCameraConnsRef.current.set(playerId, pc);
+        } catch (e) { console.warn('[admin camera] offer to', playerId, e.message); pc.close(); }
+      }
+    } catch (e) { console.warn('[admin camera] getUserMedia failed:', e.message); }
+  };
+
+  const stopAdminCamera = () => {
+    adminLocalStreamRef.current?.getTracks().forEach(tk => tk.stop());
+    adminLocalStreamRef.current = null;
+    if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = null;
+    adminCameraConnsRef.current.forEach(pc => { try { pc.close(); } catch {} });
+    adminCameraConnsRef.current = new Map();
+    setAdminCamOn(false);
+  };
+
+  const toggleAdminMic = () => {
+    const track = adminLocalStreamRef.current?.getAudioTracks()[0];
+    if (track) { track.enabled = !track.enabled; setAdminMicOn(track.enabled); }
+  };
+
   const startSpectating = (roomId) => {
     spectateRoomIdRef.current = roomId;
     setSpectateRoomId(roomId);
@@ -354,6 +434,8 @@ export default function AdminPage() {
         ref.current.srcObject = null;
       }
     });
+    // Cleanup admin camera
+    stopAdminCamera();
     setSpectateRoomId(null);
     setSpectatePlayer1('');
     setSpectatePlayer2('');
@@ -515,8 +597,49 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+            {/* Admin camera controls */}
+            <div className="mt-3 p-3 rounded-xl flex items-center gap-3"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">
+                  {lang === 'th' ? 'กล้อง Admin (ไม่บังคับ)' : 'Admin Camera (optional)'}
+                </p>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  {lang === 'th' ? 'เปิดเพื่อพูดคุยกับผู้เล่นก่อนตัดสิน' : 'Turn on to talk with players before deciding'}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {adminCamOn && (
+                  <button onClick={toggleAdminMic}
+                    className="w-9 h-9 rounded-full flex items-center justify-center transition"
+                    style={adminMicOn
+                      ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+                      : { background: 'rgba(239,68,68,0.7)', color: 'white' }}>
+                    {adminMicOn ? <Mic size={14} /> : <MicOff size={14} />}
+                  </button>
+                )}
+                <button onClick={adminCamOn ? stopAdminCamera : startAdminCamera}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition active:scale-95"
+                  style={adminCamOn
+                    ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                    : { background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                  {adminCamOn ? <><VideoOff size={12} /> {lang === 'th' ? 'ปิดกล้อง' : 'Stop'}</> : <><Video size={12} /> {lang === 'th' ? 'เปิดกล้อง' : 'Start'}</>}
+                </button>
+              </div>
+            </div>
+            {adminCamOn && (
+              <div className="mt-2 flex justify-center">
+                <div className="rounded-xl overflow-hidden bg-black"
+                  style={{ width: '140px', aspectRatio: '4/3', border: '1px solid rgba(251,191,36,0.3)' }}>
+                  <video ref={adminLocalVideoRef} autoPlay playsInline muted
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }} />
+                </div>
+              </div>
+            )}
+
             {decideMatch && (
-              <div className="mt-4 card p-4 text-center" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
+              <div className="mt-3 card p-4 text-center" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
                 <p className="text-yellow-300 font-semibold text-sm mb-3">
                   {t.conflictChooseWinner}
                 </p>

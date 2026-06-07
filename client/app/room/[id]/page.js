@@ -122,7 +122,8 @@ export default function RoomPage() {
   const leftRef              = useRef(false);
   const tournamentRedirectRef = useRef(false);
   const chatOpenRef          = useRef(false);
-  const adminPeerRef   = useRef(null); // WebRTC connection to admin spectate
+  const adminPeerRef       = useRef(null); // WebRTC connection to admin spectate
+  const adminCameraPeerRef = useRef(null); // WebRTC connection to receive admin's camera
 
   const [messages,      setMessages]      = useState([]);
   const [msgInput,      setMsgInput]      = useState('');
@@ -164,8 +165,10 @@ export default function RoomPage() {
   const [opponentResult, setOpponentResult] = useState(null);
   const [matchResult,    setMatchResult]    = useState(null);      // { winnerId, loserId, method }
   const [timeoutAt,      setTimeoutAt]      = useState(null);
-  const [adminWatching,  setAdminWatching]  = useState(false);
-  const [adminCalledMsg, setAdminCalledMsg] = useState('');
+  const [adminWatching,    setAdminWatching]    = useState(false);
+  const [adminCalledMsg,   setAdminCalledMsg]   = useState('');
+  const [adminCameraStream, setAdminCameraStream] = useState(null);
+  const adminCameraVideoRef = useRef(null);
 
   // Admin spectate mode (admin entering room to watch before deciding)
   const [spectateMode] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('spectate') === 'admin');
@@ -450,6 +453,35 @@ export default function RoomPage() {
       setAdminWatching(false);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
+      adminCameraPeerRef.current?.close();
+      adminCameraPeerRef.current = null;
+      setAdminCameraStream(null);
+    };
+
+    // Admin sends their camera stream to this player — create answer + show admin video
+    const onAdminCameraOffer = async ({ offer, roomId: rid }) => {
+      if (rid !== roomId || isAdminSpectate) return;
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+      });
+      pc.ontrack = ({ streams }) => { setAdminCameraStream(streams[0]); };
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) getSocket()?.emit('admin_camera_ice', { roomId, candidate });
+      };
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        getSocket()?.emit('admin_camera_answer', { roomId, answer });
+      } catch (e) { console.warn('[admin camera] answer failed:', e.message); }
+      adminCameraPeerRef.current = pc;
+    };
+    const onAdminCameraIce = ({ candidate }) => {
+      try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
     };
 
     socket.on('result_phase_started', onResultPhaseStarted);
@@ -461,6 +493,8 @@ export default function RoomPage() {
     socket.on('admin_peer_answer',    onAdminPeerAnswer);
     socket.on('admin_peer_ice',       onAdminPeerIce);
     socket.on('admin_left',           onAdminLeft);
+    socket.on('admin_camera_offer',   onAdminCameraOffer);
+    socket.on('admin_camera_ice',     onAdminCameraIce);
     if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
@@ -498,12 +532,16 @@ export default function RoomPage() {
       socket.off('admin_peer_answer',    onAdminPeerAnswer);
       socket.off('admin_peer_ice',       onAdminPeerIce);
       socket.off('admin_left',           onAdminLeft);
+      socket.off('admin_camera_offer',   onAdminCameraOffer);
+      socket.off('admin_camera_ice',     onAdminCameraIce);
       socket.off('admin_called',   onAdminCalled);
       socket.off('error',          onAdminError);
       socket.off('spectate_ended', onSpectateEnded);
       if (isAdminSpectate) socket.off('admin_peer_offer', onAdminPeerOfferReceived);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
+      adminCameraPeerRef.current?.close();
+      adminCameraPeerRef.current = null;
       Object.values(adminPeersRef.current).forEach(pc => { try { pc.close(); } catch {} });
       adminPeersRef.current = {};
       Object.values(adminStreamRefs.current).forEach(vid => {
@@ -561,6 +599,13 @@ export default function RoomPage() {
       if (vid && vid.srcObject !== stream) vid.srcObject = stream;
     }
   }, [adminStreamsMap, adminPlayers]);
+
+  // Sync admin camera stream to video element
+  useEffect(() => {
+    if (adminCameraVideoRef.current && adminCameraStream) {
+      adminCameraVideoRef.current.srcObject = adminCameraStream;
+    }
+  }, [adminCameraStream]);
 
   const handleAdminDecide = useCallback((winnerId) => {
     const s = getSocket();
@@ -1057,14 +1102,32 @@ export default function RoomPage() {
         </button>
       </div>
 
-      {/* ── Admin watching indicator ── */}
-      {adminWatching && (
+      {/* ── Admin watching indicator — hidden during admin_decision (banner takes over) ── */}
+      {adminWatching && tourneyPhase !== 'admin_decision' && (
         <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none flex justify-center"
           style={{ paddingTop: `calc(52px + max(0px, ${safeTop}))` }}>
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px]"
             style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
             {lang === 'th' ? 'Admin กำลังดูอยู่' : 'Admin is watching'}
+          </div>
+        </div>
+      )}
+
+      {/* ── Admin camera PiP — bottom-left, shown when admin turns on their camera ── */}
+      {adminCameraStream && (
+        <div className="absolute z-[21] rounded-xl overflow-hidden shadow-2xl"
+          style={{
+            bottom: cssLandscapeActive ? 'calc(68px + 8px)' : `calc(68px + max(8px, ${safeBottom}))`,
+            left:   `max(8px, ${cssLandscapeActive ? safeTop : safeLeft})`,
+            width:  'clamp(72px, 20vw, 110px)',
+            aspectRatio: '4/3',
+            border: '2px solid rgba(251,191,36,0.5)',
+          }}>
+          <video ref={adminCameraVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+          <div className="absolute bottom-0 left-0 right-0 text-center text-[8px] text-yellow-300 py-0.5"
+            style={{ background: 'rgba(0,0,0,0.7)' }}>
+            ⚖️ Admin
           </div>
         </div>
       )}
@@ -1080,8 +1143,35 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* ── Tournament Result Overlay ── */}
-      {isTournament && tourneyPhase !== 'playing' && (
+      {/* ── Admin decision — non-blocking banner, cameras stay visible ── */}
+      {isTournament && tourneyPhase === 'admin_decision' && (
+        <div className="absolute left-0 right-0 z-30 px-3 pointer-events-none"
+          style={{ top: `calc(52px + max(0px, ${safeTop}))` }}>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.3)', backdropFilter: 'blur(4px)' }}>
+            <div className="w-3 h-3 border-2 border-yellow-500/30 border-t-yellow-400 rounded-full animate-spin flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-yellow-300 text-xs font-semibold leading-tight">
+                {lang === 'th' ? '⚖️ รอ Admin ตัดสิน — เปิดกล้องไว้' : '⚖️ Awaiting Admin Decision — keep cameras on'}
+              </p>
+              {adminWatching && (
+                <p className="text-yellow-400 text-[10px] mt-0.5 font-medium animate-pulse">
+                  {lang === 'th' ? '● Admin อยู่ในห้องแล้ว' : '● Admin has joined the room'}
+                </p>
+              )}
+            </div>
+            {resultEscape && (
+              <button onClick={goToTournament}
+                className="text-[10px] text-slate-600 hover:text-slate-400 underline transition flex-shrink-0 pointer-events-auto">
+                {lang === 'th' ? 'ออกจากห้อง' : 'Leave'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tournament Result Overlay (result_reporting + done only) ── */}
+      {isTournament && (tourneyPhase === 'result_reporting' || tourneyPhase === 'done') && (
         <div className="absolute inset-0 z-40 flex items-center justify-center p-6"
           style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(14px)' }}>
           <div className="card w-full max-w-sm p-6 text-center anim-scale-in"
@@ -1156,28 +1246,6 @@ export default function RoomPage() {
                       </button>
                     )}
                   </div>
-                )}
-              </>
-            )}
-
-            {/* Admin decision phase */}
-            {tourneyPhase === 'admin_decision' && (
-              <>
-                <div className="text-4xl mb-3">⚖️</div>
-                <h2 className="text-white font-bold text-lg mb-2">
-                  {lang === 'th' ? 'รอ Admin ตัดสิน' : 'Awaiting Admin Decision'}
-                </h2>
-                <p className="text-slate-500 text-sm mb-4">
-                  {lang === 'th' ? 'Admin กำลังพิจารณาผลการแข่ง' : 'Admin is reviewing the match result'}
-                </p>
-                <div className="flex justify-center">
-                  <div className="w-8 h-8 border-2 border-yellow-600/30 border-t-yellow-500 rounded-full animate-spin" />
-                </div>
-                {resultEscape && (
-                  <button onClick={goToTournament}
-                    className="mt-4 text-xs text-slate-600 hover:text-slate-400 underline transition">
-                    {lang === 'th' ? 'ออกจากห้อง →' : 'Leave room →'}
-                  </button>
                 )}
               </>
             )}

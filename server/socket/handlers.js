@@ -855,6 +855,38 @@ const setupSocketHandlers = (io) => {
       }
     });
 
+    // ── ADMIN CAMERA STREAM (admin → players, optional) ──────────
+    // Admin sends their own camera stream offer to a specific player
+    socket.on('admin_camera_offer', ({ roomId, targetUserId, offer }) => {
+      if (!user.isAdmin) return;
+      const playerInfo = onlineUsers.get(targetUserId);
+      if (playerInfo) io.to(playerInfo.socketId).emit('admin_camera_offer', { offer, roomId });
+    });
+
+    // Player answers admin's camera offer
+    socket.on('admin_camera_answer', ({ roomId, answer }) => {
+      const aw = adminWatching.get(roomId);
+      if (!aw) return;
+      if (!activeRooms.get(roomId)?.players.includes(userId)) return;
+      io.to(aw.adminSocketId).emit('admin_camera_answer', { answer, from: userId, roomId });
+    });
+
+    // ICE candidates for admin camera stream (both directions)
+    socket.on('admin_camera_ice', ({ roomId, targetUserId, candidate }) => {
+      if (targetUserId) {
+        // Admin → player
+        if (!user.isAdmin) return;
+        const playerInfo = onlineUsers.get(targetUserId);
+        if (playerInfo) io.to(playerInfo.socketId).emit('admin_camera_ice', { candidate, roomId });
+      } else {
+        // Player → admin
+        const aw = adminWatching.get(roomId);
+        if (!aw) return;
+        if (!activeRooms.get(roomId)?.players.includes(userId)) return;
+        io.to(aw.adminSocketId).emit('admin_camera_ice', { candidate, from: userId, roomId });
+      }
+    });
+
     // ── DISCONNECT ────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       onlineUsers.delete(userId);
