@@ -427,6 +427,8 @@ export default function AdminPage() {
   const stopSpectating = () => {
     const rid = spectateRoomIdRef.current;
     if (rid) getSocket()?.emit('admin_stop_watching', { roomId: rid });
+    // Stop admin camera BEFORE clearing spectateRoomIdRef — stopAdminCamera reads it to emit admin_camera_stopped
+    stopAdminCamera();
     spectateRoomIdRef.current = null;
     spectateConnsRef.current.forEach(pc => pc.close());
     spectateConnsRef.current = new Map();
@@ -436,8 +438,6 @@ export default function AdminPage() {
         ref.current.srcObject = null;
       }
     });
-    // Cleanup admin camera
-    stopAdminCamera();
     setSpectateRoomId(null);
     setSpectatePlayer1('');
     setSpectatePlayer2('');
