@@ -5,7 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart, Sun, Moon } from 'lucide-react';
+import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart } from 'lucide-react';
 
 export default function Navbar() {
   const { user, lang, loading, isAdminMode, viewMode, toggleViewMode, logout, toggleLang } = useAuth();
@@ -15,11 +15,6 @@ export default function Navbar() {
   const t = translations[lang];
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isLight, setIsLight] = useState(false);
-
-  useEffect(() => {
-    setIsLight(document.documentElement.classList.contains('light'));
-  }, []);
 
   useEffect(() => {
     const onResize = () => {
@@ -28,18 +23,6 @@ export default function Navbar() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-  const toggleTheme = () => {
-    const next = !isLight;
-    document.documentElement.classList.toggle('light', next);
-    if (next) {
-      document.documentElement.removeAttribute('data-theme');
-    } else {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    }
-    try { localStorage.setItem('cg_theme', next ? 'light' : 'dark'); } catch {}
-    setIsLight(next);
-  };
 
   // Room page has its own full-screen UI — hide Navbar completely
   if (pathname?.startsWith('/room/')) return null;
@@ -142,13 +125,6 @@ export default function Navbar() {
               <Heart size={12} fill="currentColor" />
               {t.donate}
             </Link>
-
-            {/* Theme toggle (UX-5) */}
-            <button onClick={toggleTheme}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-white transition px-2 py-1.5 rounded-lg hover:bg-white/5"
-              title={isLight ? (lang === 'th' ? 'เปลี่ยนเป็น Dark' : 'Switch to Dark') : (lang === 'th' ? 'เปลี่ยนเป็น Light' : 'Switch to Light')}>
-              {isLight ? <Moon size={13} /> : <Sun size={13} />}
-            </button>
 
             {/* Language toggle */}
             <button onClick={toggleLang}
