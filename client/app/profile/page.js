@@ -76,11 +76,10 @@ export default function ProfilePage() {
 
   const refreshUser = async () => {
     if (pidTriedRef.current) return;
-    pidTriedRef.current = true;
     setRefreshing(true);
     try {
       const { user: fresh } = await api.post('/api/users/generate-player-id', {});
-      if (fresh?._id && setUser) setUser(fresh);
+      if (fresh?._id && setUser) { pidTriedRef.current = true; setUser(fresh); }
     } catch {}
     setRefreshing(false);
   };
@@ -348,7 +347,7 @@ export default function ProfilePage() {
 
       {/* ── Change Password ─────────────────────────────────────── */}
       {user.hasPassword && (
-        <div className="max-w-2xl mx-auto px-4 pb-4">
+        <div className="pb-4">
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -420,7 +419,7 @@ export default function ProfilePage() {
       )}
 
       {/* Danger zone */}
-      <div className="max-w-2xl mx-auto px-4 pb-10">
+      <div className="pb-10">
         <div className="card p-5" style={{ borderColor: 'rgba(239,68,68,0.2)' }}>
           <h3 className="text-sm font-bold text-red-400 mb-1">
             {lang === 'th' ? '⚠️ โซนอันตราย' : '⚠️ Danger Zone'}
