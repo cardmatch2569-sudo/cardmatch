@@ -397,6 +397,8 @@ export default function AdminPage() {
   };
 
   const stopAdminCamera = () => {
+    const roomId = spectateRoomIdRef.current;
+    if (roomId) getSocket()?.emit('admin_camera_stopped', { roomId });
     adminLocalStreamRef.current?.getTracks().forEach(tk => tk.stop());
     adminLocalStreamRef.current = null;
     if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = null;

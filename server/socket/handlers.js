@@ -871,6 +871,12 @@ const setupSocketHandlers = (io) => {
       io.to(aw.adminSocketId).emit('admin_camera_answer', { answer, from: userId, roomId });
     });
 
+    // Admin signals players that their camera stream has stopped
+    socket.on('admin_camera_stopped', ({ roomId }) => {
+      if (!user.isAdmin) return;
+      socket.to(roomId).emit('admin_camera_stopped', { roomId });
+    });
+
     // ICE candidates for admin camera stream (both directions)
     socket.on('admin_camera_ice', ({ roomId, targetUserId, candidate }) => {
       if (targetUserId) {

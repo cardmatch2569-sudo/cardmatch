@@ -469,6 +469,12 @@ export default function RoomPage() {
         ],
       });
       pc.ontrack = ({ streams }) => { setAdminCameraStream(streams[0]); };
+      pc.onconnectionstatechange = () => {
+        if (['closed', 'failed', 'disconnected'].includes(pc.connectionState)) {
+          setAdminCameraStream(null);
+          adminCameraPeerRef.current = null;
+        }
+      };
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) getSocket()?.emit('admin_camera_ice', { roomId, candidate });
       };
@@ -483,6 +489,11 @@ export default function RoomPage() {
     const onAdminCameraIce = ({ candidate }) => {
       try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
     };
+    const onAdminCameraStopped = () => {
+      adminCameraPeerRef.current?.close();
+      adminCameraPeerRef.current = null;
+      setAdminCameraStream(null);
+    };
 
     socket.on('result_phase_started', onResultPhaseStarted);
     socket.on('opponent_declared',    onOpponentDeclared);
@@ -495,6 +506,7 @@ export default function RoomPage() {
     socket.on('admin_left',           onAdminLeft);
     socket.on('admin_camera_offer',   onAdminCameraOffer);
     socket.on('admin_camera_ice',     onAdminCameraIce);
+    socket.on('admin_camera_stopped', onAdminCameraStopped);
     if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
@@ -534,6 +546,7 @@ export default function RoomPage() {
       socket.off('admin_left',           onAdminLeft);
       socket.off('admin_camera_offer',   onAdminCameraOffer);
       socket.off('admin_camera_ice',     onAdminCameraIce);
+      socket.off('admin_camera_stopped', onAdminCameraStopped);
       socket.off('admin_called',   onAdminCalled);
       socket.off('error',          onAdminError);
       socket.off('spectate_ended', onSpectateEnded);
