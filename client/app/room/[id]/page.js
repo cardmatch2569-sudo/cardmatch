@@ -758,15 +758,7 @@ export default function RoomPage() {
   // So we swap safe-area-insets: paddingLeft=safeTop, paddingRight=safeBottom
   return (
     <>
-    {/* UX-1: Emergency escape — fixed independently of game UI rotation, always accessible */}
-    <a href="/lobby"
-      className="fixed top-3 left-3 z-[100] flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.45)' }}
-      onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.9)'}
-      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.45)'}>
-      ← {lang === 'th' ? 'ล็อบบี้' : 'Lobby'}
-    </a>
-    <div className="z-50 bg-black overflow-hidden"
+<div className="z-50 bg-black overflow-hidden"
       style={cssLandscapeActive ? {
         position: 'fixed',
         width: '100vh',
