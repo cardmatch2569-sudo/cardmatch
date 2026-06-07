@@ -588,7 +588,7 @@ export default function TournamentWaitingRoom() {
                     </div>
                     <span className="text-sm font-medium text-white flex-1 truncate">{p.username}</span>
                     {isMe && <span className="text-xs text-purple-400 flex-shrink-0">{tl.youParens}</span>}
-                    <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${p.isOnline ? 'bg-green-400' : 'bg-gray-600'}`} />
                   </div>
                 );
               })}
