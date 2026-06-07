@@ -93,6 +93,7 @@ export function SocketProvider({ children }) {
     socket.on('challenge_declined', (...a) => lobbyCallbacksRef.current.onChallengeDeclined?.(...a));
     socket.on('challenge_id_sent',   (...a) => lobbyCallbacksRef.current.onChallengeIdSent?.(...a));
     socket.on('challenge_id_error',  (...a) => lobbyCallbacksRef.current.onChallengeIdError?.(...a));
+    socket.on('challenge_expired',   (...a) => lobbyCallbacksRef.current.onChallengeExpired?.(...a));
     socket.on('public_message',      (...a) => lobbyCallbacksRef.current.onPublicMessage?.(...a));
     socket.on('public_chat_history', (...a) => lobbyCallbacksRef.current.onPublicChatHistory?.(...a));
     socket.on('announcement',        (...a) => lobbyCallbacksRef.current.onAnnouncement?.(...a));

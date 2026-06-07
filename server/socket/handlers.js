@@ -323,7 +323,14 @@ const setupSocketHandlers = (io) => {
       const challengeId = uuidv4();
       const gameType    = await GameType.findById(gameTypeId);
       pendingChallenges.set(challengeId, { from: userId, to: targetUser._id, gameTypeId });
-      setTimeout(() => pendingChallenges.delete(challengeId), 30000);
+      setTimeout(() => {
+        if (pendingChallenges.has(challengeId)) {
+          const ch = pendingChallenges.get(challengeId);
+          const toInfo = onlineUsers.get(ch.to);
+          if (toInfo) io.to(toInfo.socketId).emit('challenge_expired', { challengeId });
+          pendingChallenges.delete(challengeId);
+        }
+      }, 10000);
       io.to(target.socketId).emit('challenge_received', {
         challengeId,
         from: { _id: userId, username: user.username, avatar: user.avatar },
@@ -344,7 +351,14 @@ const setupSocketHandlers = (io) => {
       const challengeId = uuidv4();
       const gameType    = await GameType.findById(gameTypeId);
       pendingChallenges.set(challengeId, { from: userId, to: targetUserId, gameTypeId });
-      setTimeout(() => pendingChallenges.delete(challengeId), 30000);
+      setTimeout(() => {
+        if (pendingChallenges.has(challengeId)) {
+          const ch = pendingChallenges.get(challengeId);
+          const toInfo = onlineUsers.get(ch.to);
+          if (toInfo) io.to(toInfo.socketId).emit('challenge_expired', { challengeId });
+          pendingChallenges.delete(challengeId);
+        }
+      }, 10000);
 
       io.to(target.socketId).emit('challenge_received', {
         challengeId,

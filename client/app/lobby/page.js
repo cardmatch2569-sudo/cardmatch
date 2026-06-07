@@ -72,6 +72,10 @@ export default function LobbyPage() {
       clearTimeout(pidTimeoutRef.current);
       showToast(message, 'error');
     },
+    onChallengeExpired:   () => {
+      setChallenge(null);
+      showToast(langRef.current === 'th' ? 'คำท้าหมดอายุแล้ว' : 'Challenge expired', 'error');
+    },
     onPublicMessage:     (msg)     => { setChatMessages(p => [...p.slice(-49), msg]); },
     onPublicChatHistory: (history) => { setChatMessages(history || []); },
     onAnnouncement:      (data)    => { setAnnouncement(data); },

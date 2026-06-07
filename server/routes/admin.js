@@ -107,6 +107,7 @@ router.delete('/users/:id', protect, adminOnly, async (req, res) => {
 
     const pool = getPool();
     // Cascade-delete all user data
+    await pool.query('DELETE FROM TournamentPlayers WHERE user_id=$1', [req.params.id]);
     await pool.query('DELETE FROM RoomPlayers WHERE user_id=$1', [req.params.id]);
     await pool.query('DELETE FROM EmailVerifications WHERE email=$1', [target.email]);
     await pool.query('DELETE FROM Users WHERE id=$1', [req.params.id]);
