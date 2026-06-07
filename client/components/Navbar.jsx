@@ -193,7 +193,7 @@ export default function Navbar() {
 
       {/* ── Mobile menu overlay ───────────────────────────────── */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" style={{ top: 0 }} onClick={close}>
+        <div className="fixed inset-0 z-40" style={{ top: 0 }} onClick={close}>
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
