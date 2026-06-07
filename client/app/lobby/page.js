@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Shuffle, Search, X, Swords, CheckCircle, XCircle, Loader2, Users, Settings, Hash, Heart } from 'lucide-react';
+import { Shuffle, Search, X, Swords, Loader2, Users, Settings, Hash, Heart } from 'lucide-react';
 import Link from 'next/link';
 import PreMatchModal from '../../components/PreMatchModal';
 import PublicChat from '../../components/PublicChat';
@@ -33,7 +33,6 @@ export default function LobbyPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching]       = useState(false);
   const [toast, setToast]               = useState(null);
-  const [challenge, setChallenge]         = useState(null);
   const [showPreMatch, setShowPreMatch]   = useState(false);
   const [pidInput, setPidInput]           = useState('');
   const [pidLoading, setPidLoading]       = useState(false);
@@ -59,7 +58,6 @@ export default function LobbyPage() {
   setLobbyCallbacks({
     onMatchFound:        ({ roomId, gameType, opponent }) => { showToast(`${langRef.current === 'th' ? 'พบคู่ต่อสู้!' : 'Match found!'} ${opponent.username}`, 'success'); setQueue(false); if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); setTimeout(() => router.push(`/room/${roomId}`), 600); },
     onQueueLeft:         () => setQueue(false),
-    onChallengeReceived: (data) => setChallenge(data),
     onChallengeAccepted: ({ roomId, gameType }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id); router.push(`/room/${roomId}`); },
     onChallengeDeclined:  ({ by }) => { setPidPending(null); clearTimeout(pidTimeoutRef.current); showToast(`${by} ${translations[langRef.current].challengeDeclined}`, 'error'); },
     onChallengeIdSent:    ({ to }) => {
@@ -258,8 +256,6 @@ export default function LobbyPage() {
     showToast(t.challengeSent, 'info');
   };
 
-  const handleChallengeResponse = (accepted) => { getSocket()?.emit('challenge_response', { challengeId: challenge.challengeId, accepted }); setChallenge(null); };
-
   const sendPublicMessage = (text) => {
     if (!text?.trim()) return;
     safeEmit('public_message', { message: text.trim() });
@@ -307,35 +303,6 @@ export default function LobbyPage() {
             toast.type === 'error' ? 'bg-red-950 border border-red-700/50 text-red-300' :
             'bg-purple-950 border border-purple-700/50 text-purple-300'}`}>
           {toast.msg}
-        </div>
-      )}
-
-      {/* Incoming challenge modal */}
-      {challenge && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
-          <div className="anim-scale-in card w-full max-w-sm p-6 md:p-8 text-center" style={{ borderColor: 'rgba(124,58,237,0.3)' }}>
-            <div className="text-4xl md:text-5xl mb-4">⚔️</div>
-            <h2 className="text-xl font-bold text-white mb-2">{lang === 'th' ? 'ได้รับคำท้า!' : 'Challenge Received!'}</h2>
-            <p className="text-slate-400 text-sm mb-1">
-              <span className="text-purple-300 font-bold">{challenge.from.username}</span>{' '}
-              {lang === 'th' ? 'ท้าคุณเล่น' : 'challenges you to'}
-            </p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl mb-5 text-sm font-bold"
-              style={{ background: `${challenge.gameType?.color||'#7c3aed'}15`, color: challenge.gameType?.color||'#a78bfa', border: `1px solid ${challenge.gameType?.color||'#7c3aed'}30` }}>
-              🃏 {lang === 'th' ? challenge.gameType?.nameTh : challenge.gameType?.name}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => handleChallengeResponse(true)} className="btn-primary flex-1 py-3 rounded-xl text-sm gap-1.5">
-                <CheckCircle size={15} /> {lang === 'th' ? 'ยอมรับ' : 'Accept'}
-              </button>
-              <button onClick={() => handleChallengeResponse(false)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-1.5"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}>
-                <XCircle size={15} /> {lang === 'th' ? 'ปฏิเสธ' : 'Decline'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

@@ -3,6 +3,7 @@ import Providers from '../components/Providers';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import ViewportHeight from '../components/ViewportHeight';
+import GlobalChallengeModal from '../components/GlobalChallengeModal';
 
 export const metadata = {
   title: 'CardMatch - หาเพื่อนเล่นการ์ดเกมส์',
@@ -56,6 +57,7 @@ export default function RootLayout({ children }) {
         <Providers>
           <ViewportHeight />
           <Navbar />
+          <GlobalChallengeModal />
           <main className="pt-16 w-full overflow-x-hidden" style={{ minHeight: 'calc(var(--vh, 1vh) * 100)' }}>
             {children}
           </main>

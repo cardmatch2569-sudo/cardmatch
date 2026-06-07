@@ -22,6 +22,13 @@ export function SocketProvider({ children }) {
     lobbyCallbacksRef.current = cbs || {};
   }, []);
 
+  // Global challenge callbacks — always active regardless of which page is open.
+  // Handles challenge_received/expired/accepted for the TARGET player.
+  const globalChallengeCallbacksRef = useRef({});
+  const setGlobalChallengeCallbacks = useCallback((cbs) => {
+    globalChallengeCallbacksRef.current = cbs || {};
+  }, []);
+
   useEffect(() => {
     if (!user) {
       if (socketRef.current) {
@@ -88,12 +95,14 @@ export function SocketProvider({ children }) {
     // ever touching socket.on/off (zero React timing risk).
     socket.on('match_found',        (...a) => lobbyCallbacksRef.current.onMatchFound?.(...a));
     socket.on('queue_left',         (...a) => lobbyCallbacksRef.current.onQueueLeft?.(...a));
-    socket.on('challenge_received', (...a) => lobbyCallbacksRef.current.onChallengeReceived?.(...a));
-    socket.on('challenge_accepted', (...a) => lobbyCallbacksRef.current.onChallengeAccepted?.(...a));
+    // challenge_received/expired/accepted route through globalChallengeCallbacksRef so they
+    // work on any page, not just lobby. Lobby-specific events (id_sent/error/declined) stay in lobbyCallbacksRef.
+    socket.on('challenge_received', (...a) => globalChallengeCallbacksRef.current.onChallengeReceived?.(...a));
+    socket.on('challenge_accepted', (...a) => { globalChallengeCallbacksRef.current.onChallengeAccepted?.(...a); lobbyCallbacksRef.current.onChallengeAccepted?.(...a); });
+    socket.on('challenge_expired',  (...a) => { globalChallengeCallbacksRef.current.onChallengeExpired?.(...a);  lobbyCallbacksRef.current.onChallengeExpired?.(...a); });
     socket.on('challenge_declined', (...a) => lobbyCallbacksRef.current.onChallengeDeclined?.(...a));
     socket.on('challenge_id_sent',   (...a) => lobbyCallbacksRef.current.onChallengeIdSent?.(...a));
     socket.on('challenge_id_error',  (...a) => lobbyCallbacksRef.current.onChallengeIdError?.(...a));
-    socket.on('challenge_expired',   (...a) => lobbyCallbacksRef.current.onChallengeExpired?.(...a));
     socket.on('public_message',      (...a) => lobbyCallbacksRef.current.onPublicMessage?.(...a));
     socket.on('public_chat_history', (...a) => lobbyCallbacksRef.current.onPublicChatHistory?.(...a));
     socket.on('announcement',        (...a) => lobbyCallbacksRef.current.onAnnouncement?.(...a));
@@ -137,7 +146,7 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
-      getSocket, safeEmit, setQueueGame, setLobbyCallbacks,
+      getSocket, safeEmit, setQueueGame, setLobbyCallbacks, setGlobalChallengeCallbacks,
       onlineCount, connected, socketReady, serverFull,
     }}>
       {children}
