@@ -380,10 +380,17 @@ export default function RoomPage() {
     const onMatchNeedsAdmin = () => setTourneyPhase('admin_decision');
 
     // Admin spectate
-    const onAdminWatching = () => {
+    const onAdminWatching = async () => {
       setAdminWatching(true);
       const s = getSocket();
-      if (!s || !localStreamRef.current) return;
+      if (!s) return;
+      // Refresh camera if tracks are dead — happens on iOS when browser goes to background
+      const videoTracks = localStreamRef.current?.getVideoTracks() || [];
+      const needsRefresh = !localStreamRef.current || videoTracks.length === 0 || videoTracks.some(t => t.readyState === 'ended');
+      if (needsRefresh) {
+        try { await startMedia(); } catch {}
+      }
+      if (!localStreamRef.current) return;
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -394,13 +401,11 @@ export default function RoomPage() {
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) s.emit('admin_peer_ice', { roomId, candidate });
       };
-      (async () => {
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          s.emit('admin_peer_offer', { roomId, offer });
-        } catch (e) { console.warn('[admin spectate] offer failed:', e.message); }
-      })();
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        s.emit('admin_peer_offer', { roomId, offer });
+      } catch (e) { console.warn('[admin spectate] offer failed:', e.message); }
       adminPeerRef.current = pc;
     };
     const onAdminPeerAnswer = ({ answer }) => {
