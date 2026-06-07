@@ -325,7 +325,7 @@ export default function RoomPage() {
         socket.emit('admin_watch_room', { roomId });
         return;
       }
-      if (!user?.isAdmin) await startMedia();
+      await startMedia();
       if (!aborted) socket.emit('join_room', { roomId });
     };
     const onPeerJoined = () => createPeer(true, localStreamRef.current);
@@ -449,6 +449,22 @@ export default function RoomPage() {
     if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
+    const onAdminError = ({ message }) => {
+      if (!isAdminSpectate) return;
+      setAdminCalledMsg(message || (langRef.current === 'th' ? 'ห้องนี้ไม่พบ' : 'Room not found'));
+      leftRef.current = true;
+      setTimeout(() => router.back(), 2500);
+    };
+    const onSpectateEnded = ({ reason }) => {
+      const msg = reason === 'replaced'
+        ? (langRef.current === 'th' ? 'ถูกแทนที่โดย Admin อีกคน' : 'Replaced by another admin')
+        : (langRef.current === 'th' ? 'แมตช์นี้จบแล้ว' : 'Match has ended');
+      setAdminCalledMsg(msg);
+      leftRef.current = true;
+      setTimeout(() => router.back(), 2500);
+    };
+    socket.on('error',          onAdminError);
+    socket.on('spectate_ended', onSpectateEnded);
 
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
     socket.on('ice_candidate', onIce); socket.on('message_received', onMessage); socket.on('partner_disconnected', onPartnerLeft);
@@ -467,7 +483,9 @@ export default function RoomPage() {
       socket.off('admin_peer_answer',    onAdminPeerAnswer);
       socket.off('admin_peer_ice',       onAdminPeerIce);
       socket.off('admin_left',           onAdminLeft);
-      socket.off('admin_called', onAdminCalled);
+      socket.off('admin_called',   onAdminCalled);
+      socket.off('error',          onAdminError);
+      socket.off('spectate_ended', onSpectateEnded);
       if (isAdminSpectate) socket.off('admin_peer_offer', onAdminPeerOfferReceived);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
