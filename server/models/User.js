@@ -149,7 +149,7 @@ const User = {
   toPublic(user) {
     if (!user) return null;
     const { password, ...pub } = user;
-    return pub;
+    return { ...pub, hasPassword: !!password };
   },
 };
 

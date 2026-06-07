@@ -67,7 +67,7 @@ export default function ProfilePage() {
       sessionStorage.removeItem('cg_token');
       router.push('/');
     } catch (err) {
-      const isGoogle = user.googleId && !user.password;
+      const isGoogle = !user.hasPassword;
       setDeleteError(err.message || (lang === 'th'
         ? (isGoogle ? 'อีเมลไม่ถูกต้อง' : 'รหัสผ่านไม่ถูกต้อง')
         : (isGoogle ? 'Wrong email' : 'Wrong password')));
@@ -347,7 +347,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Change Password ─────────────────────────────────────── */}
-      {!user.googleId && (
+      {user.hasPassword && (
         <div className="max-w-2xl mx-auto px-4 pb-4">
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
@@ -459,14 +459,14 @@ export default function ProfilePage() {
             <div className="mb-4">
               <label className="text-xs text-slate-400 block mb-2">
                 {lang === 'th'
-                  ? user.googleId && !user.password
+                  ? !user.hasPassword
                     ? '📧 ยืนยันด้วยอีเมลของคุณ'
                     : '🔐 ยืนยันด้วยรหัสผ่านของคุณ'
-                  : user.googleId && !user.password
+                  : !user.hasPassword
                     ? '📧 Confirm with your email address'
                     : '🔐 Confirm with your password'}
               </label>
-              {user.googleId && !user.password ? (
+              {!user.hasPassword ? (
                 <div className="relative">
                   <input type="email"
                     value={deletePass}
