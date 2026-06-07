@@ -179,7 +179,7 @@ export default function LobbyPage() {
   // Countdown timer for pending challenge-by-ID
   useEffect(() => {
     if (!pidPending) { setPidCountdown(0); return; }
-    setPidCountdown(30);
+    setPidCountdown(10);
     const id = setInterval(() => setPidCountdown(p => p > 0 ? p - 1 : 0), 1000);
     return () => clearInterval(id);
   }, [pidPending]);

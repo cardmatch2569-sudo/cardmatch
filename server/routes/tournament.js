@@ -76,6 +76,7 @@ router.get('/:id', protect, async (req, res) => {
         username: info?.username || t.playerNames?.get(id) || '?', // BUG-07
         avatar:   info?.avatar  || '',
         points:   (t.points && t.points.get(id)) || 0,
+        isOnline: !!info,
       };
     }).sort((a, b) => b.points - a.points);
 

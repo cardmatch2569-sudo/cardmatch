@@ -473,6 +473,11 @@ export default function RoomPage() {
       adminPeerRef.current = null;
       Object.values(adminPeersRef.current).forEach(pc => { try { pc.close(); } catch {} });
       adminPeersRef.current = {};
+      Object.values(adminStreamRefs.current).forEach(vid => {
+        if (vid?.srcObject) { vid.srcObject.getTracks().forEach(tk => tk.stop()); vid.srcObject = null; }
+      });
+      adminStreamRefs.current = {};
+      setAdminStreamsMap({});
 
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);

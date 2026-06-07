@@ -217,6 +217,11 @@ export default function TournamentWaitingRoom() {
       socket.on('admin_match_alert', onAdminAlert);
     }
 
+    const onTournamentUpdated = (info) => {
+      if (!mounted || info.id !== tournamentId) return;
+      setTournament(prev => prev ? { ...prev, ...info } : info);
+    };
+
     socket.on('tournament_joined_ok',    onJoinedOk);
     socket.on('tournament_player_update', onPlayerUpdate);
     socket.on('round_started',           onRoundStarted);
@@ -226,6 +231,7 @@ export default function TournamentWaitingRoom() {
     socket.on('match_found',             onMatchFound);
     socket.on('tournament_bye',          onBye);
     socket.on('tournament_error',        onError);
+    socket.on('tournament_updated',      onTournamentUpdated);
 
     init();
 
@@ -235,6 +241,7 @@ export default function TournamentWaitingRoom() {
       alertTimers.forEach(clearTimeout);
       socket.off('tournament_joined_ok',    onJoinedOk);
       socket.off('tournament_player_update', onPlayerUpdate);
+      socket.off('tournament_updated',      onTournamentUpdated);
       socket.off('round_started',           onRoundStarted);
       socket.off('round_complete',          onRoundComplete);
       socket.off('tournament_complete',     onTournamentComplete);

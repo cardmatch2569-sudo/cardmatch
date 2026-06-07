@@ -542,6 +542,18 @@ const setupSocketHandlers = (io) => {
         createdMatches.push({ matchId, roomId, player1Id: p1Id, player2Id: p2Id });
       }
 
+      // Rollback if every Room.create call failed (no match rooms could be created)
+      if (createdMatches.length === 0 && pairs.length > 0) {
+        t.currentRound--;
+        t.status = t.currentRound === 0 ? 'waiting' : 'round_complete';
+        t.activeMatchCount = 0;
+        t._roundEndFired = true;
+        pairs.forEach(([p1, p2]) => t.playedPairs.delete([p1, p2].sort().join('_')));
+        log.error({ event: 'start_round', step: 'all_rooms_failed_rollback', tournamentId });
+        socket.emit('tournament_error', { message: 'ไม่สามารถสร้างห้องแข่งได้ ลองอีกครั้ง' });
+        return;
+      }
+
       if (bye) {
         const byeInfo = onlineUsers.get(bye);
         log.info({ event: 'start_round', step: 'bye_player', tournamentId, byeUserId: bye, byeOnline: !!byeInfo });
@@ -593,7 +605,7 @@ const setupSocketHandlers = (io) => {
       const standings = buildStandings(t);
       const playersInfo = [...t.players].map(id => {
         const info = onlineUsers.get(id);
-        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '', points: t.points.get(id) || 0 };
+        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '', points: t.points.get(id) || 0, isOnline: !!info };
       });
       socket.emit('tournament_joined_ok', { tournamentId, playersInfo, tournament: getTournamentPublic(t), standings });
     });
@@ -654,7 +666,7 @@ const setupSocketHandlers = (io) => {
 
       const playersInfo = [...t.players].map(id => {
         const info = onlineUsers.get(id);
-        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
+        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '', isOnline: !!info };
       });
 
       io.to(`tournament:${tournamentId}`).emit('tournament_player_update', { tournamentId, playersInfo, playerCount: t.players.size });
@@ -679,7 +691,7 @@ const setupSocketHandlers = (io) => {
 
       const playersInfo = [...t.players].map(id => {
         const info = onlineUsers.get(id);
-        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
+        return { userId: id, username: info?.username || '?', avatar: info?.avatar || '', isOnline: !!info };
       });
 
       io.to(`tournament:${tournamentId}`).emit('tournament_player_update', { tournamentId, playersInfo, playerCount: t.players.size });
@@ -841,7 +853,7 @@ const setupSocketHandlers = (io) => {
           try { await getPool().query('DELETE FROM TournamentPlayers WHERE tournament_id=$1 AND user_id=$2', [t.id, userId]); } catch {}
           const playersInfo = [...t.players].map(id => {
             const info = onlineUsers.get(id);
-            return { userId: id, username: info?.username || '?', avatar: info?.avatar || '' };
+            return { userId: id, username: info?.username || '?', avatar: info?.avatar || '', isOnline: !!info };
           });
           io.to(`tournament:${t.id}`).emit('tournament_player_update', { tournamentId: t.id, playersInfo, playerCount: t.players.size });
           io.emit('tournament_player_count', { tournamentId: t.id, playerCount: t.players.size });
