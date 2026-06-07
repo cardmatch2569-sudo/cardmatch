@@ -698,6 +698,11 @@ export default function LobbyPage() {
               </button>
             </div>
 
+            {pidInput.length === 6 && !selectedGame && (
+              <p className="text-[11px] text-yellow-500 mt-2 text-center">
+                {lang === 'th' ? '⚠ เลือกประเภทเกมด้านบนก่อนส่งคำท้า' : '⚠ Select a game type above before sending'}
+              </p>
+            )}
             <p className="text-[11px] text-slate-700 mt-2 text-center">
               {lang === 'th'
                 ? 'Player ID ของคุณอยู่ที่หน้าโปรไฟล์ — แชร์เฉพาะกับคนที่ต้องการท้า'
