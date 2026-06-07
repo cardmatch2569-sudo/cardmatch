@@ -118,9 +118,11 @@ export default function AdminPage() {
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'round_complete', currentRound: roundNumber, activeMatchCount: 0 } : x));
     const onTournamentComplete = ({ tournamentId }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'ended' } : x));
+    const onUpdated = ({ id, status, currentRound, activeMatchCount }) =>
+      setTournaments(p => p.map(x => x.id === id ? { ...x, status, ...(currentRound != null && { currentRound }), ...(activeMatchCount != null && { activeMatchCount }) } : x));
 
     // Admin spectate WebRTC
-    const onSpectateOffer = ({ from, fromUsername, offer, roomId }) => {
+    const onSpectateOffer = async ({ from, fromUsername, offer, roomId }) => {
       if (roomId !== spectateRoomIdRef.current) return;
       const pc = new RTCPeerConnection({
         iceServers: [
@@ -141,11 +143,12 @@ export default function AdminPage() {
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) socket.emit('admin_peer_ice', { roomId, targetUserId: from, candidate });
       };
-      pc.setRemoteDescription(new RTCSessionDescription(offer));
-      pc.createAnswer().then(answer => {
-        pc.setLocalDescription(answer);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
         socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
-      }).catch(() => {});
+      } catch {}
       spectateConnsRef.current.set(from, pc);
     };
     const onSpectateIce = ({ candidate, from }) => {
@@ -161,6 +164,7 @@ export default function AdminPage() {
     socket.on('round_started',       onRoundStarted);
     socket.on('round_complete',      onRoundComplete);
     socket.on('tournament_complete', onTournamentComplete);
+    socket.on('tournament_updated',  onUpdated);
     socket.on('admin_peer_offer',    onSpectateOffer);
     socket.on('admin_peer_ice',      onSpectateIce);
     socket.on('spectate_ended',      onSpectateEnded);
@@ -173,6 +177,7 @@ export default function AdminPage() {
       socket.off('round_started',       onRoundStarted);
       socket.off('round_complete',      onRoundComplete);
       socket.off('tournament_complete', onTournamentComplete);
+      socket.off('tournament_updated',  onUpdated);
       socket.off('admin_peer_offer',    onSpectateOffer);
       socket.off('admin_peer_ice',      onSpectateIce);
       socket.off('spectate_ended',      onSpectateEnded);
@@ -330,6 +335,12 @@ export default function AdminPage() {
     spectateRoomIdRef.current = null;
     spectateConnsRef.current.forEach(pc => pc.close());
     spectateConnsRef.current = new Map();
+    [spectateVideo1Ref, spectateVideo2Ref].forEach(ref => {
+      if (ref.current?.srcObject) {
+        ref.current.srcObject.getTracks().forEach(tk => tk.stop());
+        ref.current.srcObject = null;
+      }
+    });
     setSpectateRoomId(null);
     setSpectatePlayer1('');
     setSpectatePlayer2('');
