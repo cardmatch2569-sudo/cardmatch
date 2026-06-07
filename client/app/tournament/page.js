@@ -24,7 +24,7 @@ function useCountdown(targetDate, lang) {
   return `${m}:${String(s).padStart(2,'0')}${isTh ? ' น.' : ''}`;
 }
 
-function TournamentCard({ t, lang, onJoin, joining }) {
+function TournamentCard({ t, lang, onJoin, joining, user }) {
   const tl = translations[lang];
   const countdown = useCountdown(t.scheduledAt, lang);
   const isFull  = t.playerCount >= t.maxPlayers;
@@ -116,9 +116,18 @@ function TournamentCard({ t, lang, onJoin, joining }) {
         </button>
       )}
       {t.status !== 'waiting' && !t.isJoined && (
-        <span className="text-xs text-slate-500 px-4 py-2 flex-shrink-0">
-          {lang === 'th' ? 'ไม่สามารถเข้าร่วม' : 'In progress'}
-        </span>
+        user?.isAdmin ? (
+          <button
+            onClick={() => onJoin(t)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold flex-shrink-0 transition active:scale-95"
+            style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
+            {lang === 'th' ? 'ดูการแข่ง' : 'Watch'}<ChevronRight size={14} />
+          </button>
+        ) : (
+          <span className="text-xs text-slate-500 px-4 py-2 flex-shrink-0">
+            {lang === 'th' ? 'ไม่สามารถเข้าร่วม' : 'In progress'}
+          </span>
+        )
       )}
     </div>
   );
@@ -242,7 +251,7 @@ export default function TournamentListPage() {
                 {lang === 'th' ? 'รับสมัครอยู่' : 'Open for Registration'}
               </p>
               {open.map(t => (
-                <TournamentCard key={t.id} t={t} lang={lang} onJoin={handleJoin} joining={joining} />
+                <TournamentCard key={t.id} t={t} lang={lang} onJoin={handleJoin} joining={joining} user={user} />
               ))}
             </>
           )}
@@ -252,7 +261,7 @@ export default function TournamentListPage() {
                 {lang === 'th' ? 'กำลังแข่งอยู่' : 'In Progress'}
               </p>
               {active.map(t => (
-                <TournamentCard key={t.id} t={t} lang={lang} onJoin={handleJoin} joining={joining} />
+                <TournamentCard key={t.id} t={t} lang={lang} onJoin={handleJoin} joining={joining} user={user} />
               ))}
             </>
           )}

@@ -325,7 +325,7 @@ export default function RoomPage() {
         socket.emit('admin_watch_room', { roomId });
         return;
       }
-      await startMedia();
+      if (!user?.isAdmin) await startMedia();
       if (!aborted) socket.emit('join_room', { roomId });
     };
     const onPeerJoined = () => createPeer(true, localStreamRef.current);
