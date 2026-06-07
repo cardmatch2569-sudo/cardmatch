@@ -71,7 +71,6 @@ export default function LobbyPage() {
       showToast(message, 'error');
     },
     onChallengeExpired:   () => {
-      setChallenge(null);
       showToast(langRef.current === 'th' ? 'คำท้าหมดอายุแล้ว' : 'Challenge expired', 'error');
     },
     onPublicMessage:     (msg)     => { setChatMessages(p => [...p.slice(-49), msg]); },
