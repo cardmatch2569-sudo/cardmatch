@@ -146,16 +146,18 @@ export default function AdminPage() {
       // Capture slot index NOW (when offer arrives) — not inside ontrack which fires
       // after ICE negotiation when spectateConnsRef may already have both entries.
       const slot = spectateConnsRef.current.size;
-      // Build stream per-track: streams[0] can be empty on macOS Safari/Chrome before
-      // all tracks are added, causing a permanently black video element.
+      // Per-track stream fallback for macOS Safari where streams[0] can be empty.
+      // Always re-assign srcObject so the element picks up newly-added tracks.
       const incomingStream = new MediaStream();
-      pc.ontrack = ({ track }) => {
+      pc.ontrack = ({ track, streams }) => {
         incomingStream.addTrack(track);
         const videoRef = slot === 0 ? spectateVideo1Ref : spectateVideo2Ref;
-        if (videoRef.current) {
-          if (videoRef.current.srcObject !== incomingStream) videoRef.current.srcObject = incomingStream;
-          videoRef.current.play().catch(() => {});
-        }
+        if (!videoRef.current) return;
+        // Prefer sender-associated stream (works on all non-Safari browsers);
+        // fall back to manually-built stream for macOS Safari edge case.
+        const stream = (streams && streams.length > 0) ? streams[0] : incomingStream;
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
         if (track.kind === 'video') {
           if (slot === 0) setSpectatePlayer1(fromUsername);
           else setSpectatePlayer2(fromUsername);
