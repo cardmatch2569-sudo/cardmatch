@@ -223,6 +223,14 @@ export default function RoomPage() {
     return () => clearInterval(escapeTimerRef.current);
   }, [tourneyPhase]);
 
+  // Set admin local preview srcObject after element renders (adminCamOn toggles visibility)
+  useEffect(() => {
+    if (adminCamOn && adminLocalVideoRef.current && adminLocalStreamRef.current) {
+      adminLocalVideoRef.current.srcObject = adminLocalStreamRef.current;
+      adminLocalVideoRef.current.play().catch(() => {});
+    }
+  }, [adminCamOn]);
+
   useEffect(() => {
     chatOpenRef.current = chatOpen;
     if (chatOpen) {
