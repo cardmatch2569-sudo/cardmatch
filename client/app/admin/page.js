@@ -10,7 +10,7 @@ import {
   Shield, Users, Gamepad2, Radio, Plus, Pencil, Trash2, X, Save,
   ToggleLeft, ToggleRight, Search, RefreshCw, Crown, UserX,
   Activity, Clock, CheckCircle, XCircle, Loader2, Trophy, Play, Eye, Gavel, Bell,
-  Video, VideoOff, Mic, MicOff,
+  Video, VideoOff, Mic, MicOff, SwitchCamera,
 } from 'lucide-react';
 
 const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
@@ -68,6 +68,8 @@ export default function AdminPage() {
   // Admin camera state (optional — admin can talk to players during decision)
   const [adminCamOn,       setAdminCamOn]       = useState(false);
   const [adminMicOn,       setAdminMicOn]        = useState(true);
+  const [adminVideoOn,     setAdminVideoOn]      = useState(true);
+  const [adminFacingMode,  setAdminFacingMode]   = useState('user');
   const adminLocalStreamRef  = useRef(null);
   const adminLocalVideoRef   = useRef(null);
   const adminCameraConnsRef  = useRef(new Map()); // targetUserId → RTCPeerConnection
@@ -389,10 +391,13 @@ export default function AdminPage() {
 
   const startAdminCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
       adminLocalStreamRef.current = stream;
       if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = stream;
       setAdminCamOn(true);
+      setAdminVideoOn(true);
+      setAdminMicOn(true);
+      setAdminFacingMode('user');
       // Send stream offer to all currently connected players
       const socket = getSocket();
       const roomId = spectateRoomIdRef.current;
@@ -436,6 +441,29 @@ export default function AdminPage() {
   const toggleAdminMic = () => {
     const track = adminLocalStreamRef.current?.getAudioTracks()[0];
     if (track) { track.enabled = !track.enabled; setAdminMicOn(track.enabled); }
+  };
+
+  const toggleAdminVideo = () => {
+    const track = adminLocalStreamRef.current?.getVideoTracks()[0];
+    if (track) { track.enabled = !track.enabled; setAdminVideoOn(track.enabled); }
+  };
+
+  const flipAdminCamera = async () => {
+    const nextFacing = adminFacingMode === 'user' ? 'environment' : 'user';
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacing }, audio: false });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      const oldTrack = adminLocalStreamRef.current?.getVideoTracks()[0];
+      if (oldTrack) { adminLocalStreamRef.current.removeTrack(oldTrack); oldTrack.stop(); }
+      adminLocalStreamRef.current.addTrack(newVideoTrack);
+      // Replace track live in all player connections — no renegotiation needed
+      adminCameraConnsRef.current.forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
+      });
+      newVideoTrack.enabled = adminVideoOn;
+      setAdminFacingMode(nextFacing);
+    } catch (e) { console.warn('[admin camera flip]', e.message); }
   };
 
   const startSpectating = (roomId) => {
@@ -640,45 +668,74 @@ export default function AdminPage() {
               ))}
             </div>
             {/* Admin camera controls */}
-            <div className="mt-3 p-3 rounded-xl flex items-center gap-3"
+            <div className="mt-3 p-3 rounded-xl"
               style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">
-                  {lang === 'th' ? 'กล้อง Admin (ไม่บังคับ)' : 'Admin Camera (optional)'}
-                </p>
-                <p className="text-[11px] text-slate-600 mt-0.5">
-                  {lang === 'th' ? 'เปิดเพื่อพูดคุยกับผู้เล่นก่อนตัดสิน' : 'Turn on to talk with players before deciding'}
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {adminCamOn && (
-                  <button onClick={toggleAdminMic}
-                    className="w-9 h-9 rounded-full flex items-center justify-center transition"
-                    style={adminMicOn
-                      ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
-                      : { background: 'rgba(239,68,68,0.7)', color: 'white' }}>
-                    {adminMicOn ? <Mic size={14} /> : <MicOff size={14} />}
-                  </button>
-                )}
-                <button onClick={adminCamOn ? stopAdminCamera : startAdminCamera}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition active:scale-95"
-                  style={adminCamOn
-                    ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
-                    : { background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
-                  {adminCamOn ? <><VideoOff size={12} /> {lang === 'th' ? 'ปิดกล้อง' : 'Stop'}</> : <><Video size={12} /> {lang === 'th' ? 'เปิดกล้อง' : 'Start'}</>}
-                </button>
-              </div>
-            </div>
-            {adminCamOn && (
-              <div className="mt-2 flex justify-center">
-                <div className="rounded-xl overflow-hidden bg-black"
-                  style={{ width: '140px', aspectRatio: '4/3', border: '1px solid rgba(251,191,36,0.3)' }}>
-                  <video ref={adminLocalVideoRef} autoPlay playsInline muted
-                    className="w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }} />
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    {lang === 'th' ? 'กล้อง Admin (ไม่บังคับ)' : 'Admin Camera (optional)'}
+                  </p>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    {lang === 'th' ? 'เปิดเพื่อพูดคุยกับผู้เล่นก่อนตัดสิน' : 'Turn on to talk with players before deciding'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {adminCamOn ? (
+                    <>
+                      {/* Video toggle */}
+                      <button onClick={toggleAdminVideo} title={adminVideoOn ? (lang === 'th' ? 'ปิดภาพ' : 'Hide video') : (lang === 'th' ? 'เปิดภาพ' : 'Show video')}
+                        className="w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95"
+                        style={adminVideoOn
+                          ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+                          : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
+                        {adminVideoOn ? <Video size={14} /> : <VideoOff size={14} />}
+                      </button>
+                      {/* Mic toggle */}
+                      <button onClick={toggleAdminMic} title={adminMicOn ? (lang === 'th' ? 'ปิดไมค์' : 'Mute') : (lang === 'th' ? 'เปิดไมค์' : 'Unmute')}
+                        className="w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95"
+                        style={adminMicOn
+                          ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+                          : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
+                        {adminMicOn ? <Mic size={14} /> : <MicOff size={14} />}
+                      </button>
+                      {/* Flip camera */}
+                      <button onClick={flipAdminCamera} title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
+                        className="w-9 h-9 rounded-full flex items-center justify-center transition active:scale-95"
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+                        <SwitchCamera size={14} />
+                      </button>
+                      {/* Stop camera */}
+                      <button onClick={stopAdminCamera}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition active:scale-95"
+                        style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+                        <VideoOff size={12} /> {lang === 'th' ? 'ปิด' : 'Stop'}
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={startAdminCamera}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition active:scale-95"
+                      style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                      <Video size={12} /> {lang === 'th' ? 'เปิดกล้อง' : 'Start'}
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+              {adminCamOn && (
+                <div className="mt-2 flex justify-center">
+                  <div className="relative rounded-xl overflow-hidden bg-black"
+                    style={{ width: '140px', aspectRatio: '4/3', border: '1px solid rgba(251,191,36,0.3)' }}>
+                    <video ref={adminLocalVideoRef} autoPlay playsInline muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: adminFacingMode === 'user' ? 'scaleX(-1)' : 'none' }} />
+                    {!adminVideoOn && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black">
+                        <VideoOff size={20} className="text-slate-600" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {decideMatch && (
               <div className="mt-3 card p-4 text-center" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
