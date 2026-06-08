@@ -453,25 +453,41 @@ export default function RoomPage() {
     // Admin spectate: handle offer from each player
     const onAdminPeerOfferReceived = async ({ from, fromUsername, offer }) => {
       if (!isAdminSpectate) return;
+      if (adminPeersRef.current[from]) return;
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+          { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
         ],
+        iceCandidatePoolSize: 10,
       });
+      // Register real PC immediately so ICE candidates arriving during negotiation
+      // are applied to a live RTCPeerConnection instead of being silently dropped.
+      adminPeersRef.current[from] = pc;
+      const incomingStream = new MediaStream();
+      pc.ontrack = ({ track, streams }) => {
+        incomingStream.addTrack(track);
+        if (track.kind !== 'video') return;
+        // Prefer sender-associated stream; fall back to per-track build for Safari.
+        const stream = (streams && streams.length > 0) ? streams[0] : incomingStream;
+        setAdminStreamsMap(prev => ({ ...prev, [from]: stream }));
+        // Also set srcObject directly — the useEffect may skip if stream reference is same.
+        const vid = adminStreamRefs.current[from];
+        if (vid) { vid.srcObject = stream; vid.play().catch(() => {}); }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed') { try { pc.restartIce?.(); } catch {} }
+      };
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) socket.emit('admin_peer_ice', { roomId, targetUserId: from, candidate });
-      };
-      pc.ontrack = ({ streams }) => {
-        setAdminStreamsMap(prev => ({ ...prev, [from]: streams[0] }));
       };
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
-        adminPeersRef.current[from] = pc;
         setAdminPlayers(p => [...p.filter(x => x.userId !== from), { userId: from, username: fromUsername || '?' }]);
       } catch (e) { console.warn('[admin spectate] offer error:', e.message); }
     };
