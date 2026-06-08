@@ -142,19 +142,19 @@ export default function AdminPage() {
     ];
     const onSpectateOffer = async ({ from, fromUsername, offer, roomId }) => {
       if (roomId !== spectateRoomIdRef.current) return;
-      const pc = new RTCPeerConnection({ iceServers: SPECTATE_ICE, iceCandidatePoolSize: 10 });
-      // Capture slot index NOW (when offer arrives) — not inside ontrack which fires
-      // after ICE negotiation when spectateConnsRef may already have both entries.
+      if (spectateConnsRef.current.has(from)) return;
+      // Reserve slot BEFORE any await — both offers arrive near-simultaneously (server
+      // broadcasts admin_watching to the whole room at once). Without this reservation
+      // the second offer sees size=0 too (set() hasn't run yet) and collides to slot 0.
       const slot = spectateConnsRef.current.size;
-      // Per-track stream fallback for macOS Safari where streams[0] can be empty.
-      // Always re-assign srcObject so the element picks up newly-added tracks.
+      spectateConnsRef.current.set(from, null); // placeholder — replaced below after negotiation
+      const pc = new RTCPeerConnection({ iceServers: SPECTATE_ICE, iceCandidatePoolSize: 10 });
+      // Per-track fallback for macOS Safari where streams[0] can be empty on first ontrack.
       const incomingStream = new MediaStream();
       pc.ontrack = ({ track, streams }) => {
         incomingStream.addTrack(track);
         const videoRef = slot === 0 ? spectateVideo1Ref : spectateVideo2Ref;
         if (!videoRef.current) return;
-        // Prefer sender-associated stream (works on all non-Safari browsers);
-        // fall back to manually-built stream for macOS Safari edge case.
         const stream = (streams && streams.length > 0) ? streams[0] : incomingStream;
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
