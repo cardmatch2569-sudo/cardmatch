@@ -850,41 +850,49 @@ const setupSocketHandlers = (io) => {
       }
     });
 
-    // ── ADMIN CAMERA STREAM (admin → players, optional) ──────────
-    // Admin sends their own camera stream offer to a specific player
-    socket.on('admin_camera_offer', ({ roomId, targetUserId, offer }) => {
+    // ── ADMIN MIC (reverse: player initiates, admin sends audio) ────
+    // Admin signals room to initiate audio connections — uses io.to(roomId) which is proven to work
+    socket.on('admin_mic_start', ({ roomId }) => {
       if (!user.isAdmin) return;
       const roomSockets = io.sockets.adapter.rooms.get(roomId);
-      console.log('[admin_camera_offer] room:', roomId, 'sockets in room:', roomSockets?.size, 'targetUserId:', targetUserId, 'onlineUsers:', !!onlineUsers.get(targetUserId));
-      io.to(roomId).emit('admin_camera_offer', { offer, roomId, targetUserId });
+      console.log('[admin_mic_start] broadcasting to room:', roomId, 'sockets:', roomSockets?.size);
+      io.to(roomId).emit('admin_mic_start', { roomId });
     });
 
-    // Player answers admin's camera offer
-    socket.on('admin_camera_answer', ({ roomId, answer }) => {
+    // Player sends offer to admin (player→admin path is proven to work)
+    socket.on('admin_mic_offer', ({ roomId, offer }) => {
       const aw = adminWatching.get(roomId);
       if (!aw) return;
       if (!activeRooms.get(roomId)?.players.includes(userId)) return;
-      io.to(aw.adminSocketId).emit('admin_camera_answer', { answer, from: userId, roomId });
+      console.log('[admin_mic_offer] routing player offer to admin, from:', userId);
+      io.to(aw.adminSocketId).emit('admin_mic_offer', { from: userId, fromSocketId: socket.id, offer, roomId });
     });
 
-    // Admin signals players that their camera stream has stopped
+    // Admin answers with mic track — routes to player's specific socket ID (no onlineUsers lookup)
+    socket.on('admin_mic_answer', ({ roomId, targetSocketId, answer }) => {
+      if (!user.isAdmin) return;
+      console.log('[admin_mic_answer] routing answer to socket:', targetSocketId);
+      io.to(targetSocketId).emit('admin_mic_answer', { answer, roomId });
+    });
+
+    // Admin signals players that mic is stopped
     socket.on('admin_camera_stopped', ({ roomId }) => {
       if (!user.isAdmin) return;
-      socket.to(roomId).emit('admin_camera_stopped', { roomId });
+      io.to(roomId).emit('admin_camera_stopped', { roomId });
     });
 
-    // ICE candidates for admin camera stream (both directions)
-    socket.on('admin_camera_ice', ({ roomId, targetUserId, candidate }) => {
-      if (targetUserId) {
-        // Admin → player: broadcast to room, player filters by targetUserId
+    // ICE candidates for admin mic (both directions)
+    socket.on('admin_mic_ice', ({ roomId, targetSocketId, candidate }) => {
+      if (targetSocketId) {
+        // Admin → player (direct socket ID — no onlineUsers lookup)
         if (!user.isAdmin) return;
-        io.to(roomId).emit('admin_camera_ice', { candidate, roomId, targetUserId });
+        io.to(targetSocketId).emit('admin_mic_ice', { candidate, roomId });
       } else {
         // Player → admin
         const aw = adminWatching.get(roomId);
         if (!aw) return;
         if (!activeRooms.get(roomId)?.players.includes(userId)) return;
-        io.to(aw.adminSocketId).emit('admin_camera_ice', { candidate, from: userId, roomId });
+        io.to(aw.adminSocketId).emit('admin_mic_ice', { candidate, from: userId, roomId });
       }
     });
 

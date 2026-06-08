@@ -501,64 +501,93 @@ export default function RoomPage() {
       adminCameraPeerRef.current = null;
     };
 
-    // Player side: receive admin mic-only audio stream
-    const onAdminCameraOffer = async ({ offer, roomId: rid, targetUserId }) => {
-      console.log('[player] onAdminCameraOffer received, rid:', rid, 'targetUserId:', targetUserId, 'myId:', user?._id, 'isAdminSpectate:', isAdminSpectate);
-      if (rid !== roomId || isAdminSpectate) { console.log('[player] offer ignored (room/admin check)'); return; }
-      if (targetUserId && targetUserId !== user?._id) { console.log('[player] offer not for me'); return; }
-      adminCameraPeerRef.current?.close();
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
-        ],
-        iceCandidatePoolSize: 10,
-      });
-      pc.ontrack = ({ streams, track }) => {
-        console.log('[player] ontrack fired, streams:', streams?.length, 'track:', track?.kind);
-        const stream = streams?.[0];
-        const el = adminMicAudioRef.current;
-        console.log('[player] audio el:', !!el, 'stream:', !!stream);
-        if (!el) return;
-        el.srcObject = stream || (() => { const s = new MediaStream(); s.addTrack(track); return s; })();
-        el.play().catch(err => console.warn('[player] audio play failed:', err.message));
-      };
-      pc.onconnectionstatechange = () => console.log('[player] adminCameraPeer state →', pc.connectionState);
-      pc.onconnectionstatechange = () => {
-        if (['closed','failed','disconnected'].includes(pc.connectionState)) adminCameraPeerRef.current = null;
-      };
-      pc.onicecandidate = ({ candidate }) => {
-        if (candidate) getSocket()?.emit('admin_camera_ice', { roomId, candidate });
-      };
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        getSocket()?.emit('admin_camera_answer', { roomId, answer });
-      } catch (e) { console.warn('[admin mic recv]', e.message); }
-      adminCameraPeerRef.current = pc;
-    };
     const onAdminCameraStopped = () => {
       adminCameraPeerRef.current?.close();
       adminCameraPeerRef.current = null;
       if (adminMicAudioRef.current) { adminMicAudioRef.current.srcObject = null; }
     };
-    // Admin side: receive answer from player after sending mic offer
-    const onAdminCameraAnswerFromPlayer = ({ answer, from }) => {
-      console.log('[admin mic] answer received from player:', from, 'pc exists:', !!adminMicConnsRef.current[from]);
-      adminMicConnsRef.current[from]?.setRemoteDescription(new RTCSessionDescription(answer)).catch(e => console.warn('[admin mic] setRemoteDesc failed:', e.message));
+
+    // ── Admin mic: REVERSE approach — player initiates, admin sends audio ──
+
+    // PLAYER side: admin signals they want to send audio → player creates offer
+    const onAdminMicStart = async ({ roomId: rid }) => {
+      console.log('[player] onAdminMicStart received, rid:', rid, 'isAdminSpectate:', isAdminSpectate);
+      if (rid !== roomId || isAdminSpectate) return;
+      const s = getSocket();
+      if (!s) return;
+      adminCameraPeerRef.current?.close();
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+          { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+        iceCandidatePoolSize: 10,
+      });
+      pc.addTransceiver('audio', { direction: 'recvonly' }); // player wants to receive audio from admin
+      pc.ontrack = ({ streams, track }) => {
+        console.log('[player] admin mic ontrack fired, track:', track?.kind);
+        const el = adminMicAudioRef.current;
+        if (!el) return;
+        el.srcObject = streams?.[0] || (() => { const ms = new MediaStream(); ms.addTrack(track); return ms; })();
+        el.play().catch(err => console.warn('[player] audio play failed:', err.message));
+      };
+      pc.onconnectionstatechange = () => console.log('[player] adminMicPeer state →', pc.connectionState);
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) s.emit('admin_mic_ice', { roomId, candidate });
+      };
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        s.emit('admin_mic_offer', { roomId, offer });
+        adminCameraPeerRef.current = pc;
+        console.log('[player] admin_mic_offer sent to admin');
+      } catch (e) { console.warn('[player] admin mic offer failed:', e.message); pc.close(); }
     };
-    // ICE exchange for mic — bidirectional via same event
-    const onAdminCameraIce = ({ candidate, from, targetUserId }) => {
-      if (isAdminSpectate && from) {
-        // Admin side: ICE from player
-        try { adminMicConnsRef.current[from]?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
-      } else {
-        // Player side: ICE from admin — filter by targetUserId
-        if (targetUserId && targetUserId !== user?._id) return;
-        try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
-      }
+
+    // PLAYER side: receive admin's answer with mic track
+    const onAdminMicAnswer = async ({ answer }) => {
+      console.log('[player] onAdminMicAnswer received');
+      if (isAdminSpectate) return;
+      try {
+        await adminCameraPeerRef.current?.setRemoteDescription(new RTCSessionDescription(answer));
+      } catch (e) { console.warn('[player] admin mic answer setRemote failed:', e.message); }
+    };
+
+    // PLAYER side: ICE from admin
+    const onAdminMicIceFromAdmin = ({ candidate }) => {
+      if (isAdminSpectate) return;
+      try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
+
+    // ADMIN side: receive offer from player, answer with mic track
+    const onAdminMicOfferFromPlayer = async ({ from, fromSocketId, offer }) => {
+      if (!isAdminSpectate) return;
+      const stream = adminMicStreamRef.current;
+      if (!stream) { console.warn('[admin mic] received offer but mic not active'); return; }
+      console.log('[admin mic] offer received from player:', from);
+      const s = getSocket();
+      const pc = new RTCPeerConnection({ iceServers: SPECTATE_CAMERA_ICE });
+      stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) s.emit('admin_mic_ice', { roomId, targetSocketId: fromSocketId, candidate });
+      };
+      pc.onconnectionstatechange = () => console.log('[admin mic] pc state →', pc.connectionState, 'player:', from);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        s.emit('admin_mic_answer', { roomId, targetSocketId: fromSocketId, answer });
+        adminMicConnsRef.current[from] = pc;
+        console.log('[admin mic] answer sent to player:', from);
+      } catch (e) { console.warn('[admin mic] answer failed:', e.message); pc.close(); }
+    };
+
+    // ADMIN side: ICE from player
+    const onAdminMicIceFromPlayer = ({ candidate, from }) => {
+      if (!isAdminSpectate) return;
+      try { adminMicConnsRef.current[from]?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
     };
 
 
@@ -571,10 +600,12 @@ export default function RoomPage() {
     socket.on('admin_peer_answer',    onAdminPeerAnswer);
     socket.on('admin_peer_ice',       onAdminPeerIce);
     socket.on('admin_left',           onAdminLeft);
-    socket.on('admin_camera_offer',   onAdminCameraOffer);
-    socket.on('admin_camera_ice',     onAdminCameraIce);
     socket.on('admin_camera_stopped', onAdminCameraStopped);
-    if (isAdminSpectate) socket.on('admin_camera_answer', onAdminCameraAnswerFromPlayer);
+    socket.on('admin_mic_start',      onAdminMicStart);
+    socket.on('admin_mic_answer',     onAdminMicAnswer);
+    socket.on('admin_mic_ice',        onAdminMicIceFromAdmin);
+    if (isAdminSpectate) socket.on('admin_mic_offer',  onAdminMicOfferFromPlayer);
+    if (isAdminSpectate) socket.on('admin_mic_ice',    onAdminMicIceFromPlayer);
     if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
@@ -615,10 +646,12 @@ export default function RoomPage() {
       socket.off('admin_called',   onAdminCalled);
       socket.off('error',          onAdminError);
       socket.off('spectate_ended', onSpectateEnded);
-      socket.off('admin_camera_offer',   onAdminCameraOffer);
-      socket.off('admin_camera_ice',     onAdminCameraIce);
       socket.off('admin_camera_stopped', onAdminCameraStopped);
-      if (isAdminSpectate) socket.off('admin_camera_answer', onAdminCameraAnswerFromPlayer);
+      socket.off('admin_mic_start',      onAdminMicStart);
+      socket.off('admin_mic_answer',     onAdminMicAnswer);
+      socket.off('admin_mic_ice',        onAdminMicIceFromAdmin);
+      if (isAdminSpectate) socket.off('admin_mic_offer',  onAdminMicOfferFromPlayer);
+      if (isAdminSpectate) socket.off('admin_mic_ice',    onAdminMicIceFromPlayer);
       if (isAdminSpectate) socket.off('admin_peer_offer', onAdminPeerOfferReceived);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
@@ -701,23 +734,8 @@ export default function RoomPage() {
       adminMicStreamRef.current = stream;
       setAdminMicActive(true);
       const socket = getSocket();
-      const playerIds = Object.keys(adminPeersRef.current);
-      console.log('[admin mic] startAdminMic — players:', playerIds, 'roomId:', roomId);
-      for (const playerId of playerIds) {
-        const pc = new RTCPeerConnection({ iceServers: SPECTATE_CAMERA_ICE });
-        stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
-        pc.onicecandidate = ({ candidate }) => {
-          if (candidate) socket.emit('admin_camera_ice', { roomId, targetUserId: playerId, candidate });
-        };
-        pc.onconnectionstatechange = () => console.log('[admin mic] pc state →', pc.connectionState, 'player:', playerId);
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit('admin_camera_offer', { roomId, targetUserId: playerId, offer });
-          adminMicConnsRef.current[playerId] = pc;
-          console.log('[admin mic] offer sent to', playerId);
-        } catch (e) { console.warn('[admin mic] offer failed:', e.message); pc.close(); }
-      }
+      console.log('[admin mic] startAdminMic — signaling room:', roomId);
+      socket.emit('admin_mic_start', { roomId });
     } catch (e) { console.warn('[admin mic] getUserMedia failed:', e.message); }
   };
 
