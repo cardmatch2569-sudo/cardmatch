@@ -187,6 +187,8 @@ export default function RoomPage() {
   const [adminMicOn,      setAdminMicOn]       = useState(true);
   const [adminVideoOn,    setAdminVideoOn]     = useState(true);
   const [adminFacingMode, setAdminFacingMode]  = useState('user');
+  const [adminMicOnly,    setAdminMicOnly]     = useState(false);
+  const [playerRotations, setPlayerRotations]  = useState({});
   const adminLocalStreamRef     = useRef(null);
   const adminLocalVideoRef      = useRef(null);
   const adminSendCameraConnsRef = useRef({});
@@ -711,7 +713,7 @@ export default function RoomPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
       adminLocalStreamRef.current = stream;
       if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = stream;
-      setAdminCamOn(true); setAdminVideoOn(true); setAdminMicOn(true); setAdminFacingMode('user');
+      setAdminCamOn(true); setAdminVideoOn(true); setAdminMicOn(true); setAdminFacingMode('user'); setAdminMicOnly(false);
       const socket = getSocket();
       const sendOffer = async (playerId, attempt = 0) => {
         const pc = new RTCPeerConnection({ iceServers: SPECTATE_CAMERA_ICE });
@@ -730,6 +732,29 @@ export default function RoomPage() {
     } catch (e) { console.warn('[admin camera] start failed:', e.message); }
   };
 
+  const startAdminSelfMicOnly = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      adminLocalStreamRef.current = stream;
+      setAdminCamOn(true); setAdminVideoOn(false); setAdminMicOn(true); setAdminMicOnly(true);
+      const socket = getSocket();
+      const sendOffer = async (playerId, attempt = 0) => {
+        const pc = new RTCPeerConnection({ iceServers: SPECTATE_CAMERA_ICE });
+        stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) socket.emit('admin_camera_ice', { roomId, targetUserId: playerId, candidate });
+        };
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('admin_camera_offer', { roomId, targetUserId: playerId, offer });
+          adminSendCameraConnsRef.current[playerId] = pc;
+        } catch (e) { pc.close(); if (attempt === 0) setTimeout(() => sendOffer(playerId, 1), 2000); }
+      };
+      for (const playerId of Object.keys(adminPeersRef.current)) sendOffer(playerId);
+    } catch (e) { console.warn('[admin mic] start failed:', e.message); }
+  };
+
   const stopAdminSelfCamera = () => {
     getSocket()?.emit('admin_camera_stopped', { roomId });
     adminLocalStreamRef.current?.getTracks().forEach(tk => tk.stop());
@@ -738,6 +763,7 @@ export default function RoomPage() {
     Object.values(adminSendCameraConnsRef.current).forEach(pc => { try { pc.close(); } catch {} });
     adminSendCameraConnsRef.current = {};
     setAdminCamOn(false);
+    setAdminMicOnly(false);
   };
 
   const toggleAdminSelfMic = () => {
@@ -901,6 +927,7 @@ export default function RoomPage() {
                 ref={el => { adminStreamRefs.current[player.userId] = el; }}
                 autoPlay playsInline
                 className="w-full h-full object-cover"
+                style={{ transform: `rotate(${playerRotations[player.userId] || 0}deg)` }}
               />
               {!adminStreamsMap[player.userId] && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
@@ -910,6 +937,14 @@ export default function RoomPage() {
                   </div>
                 </div>
               )}
+              {/* Rotate player video button */}
+              <button
+                onClick={() => setPlayerRotations(prev => ({ ...prev, [player.userId]: ((prev[player.userId] || 0) + 90) % 360 }))}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
+                style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.15)' }}
+                title={lang === 'th' ? 'หมุนภาพ' : 'Rotate video'}>
+                <RotateCw size={14} />
+              </button>
               <div className="absolute bottom-0 left-0 right-0 px-3 py-2"
                 style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}>
                 <p className="text-white text-sm font-semibold drop-shadow">{player.username}</p>
@@ -939,14 +974,16 @@ export default function RoomPage() {
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {adminCamOn ? (
                 <>
-                  <button onClick={toggleAdminSelfVideo}
-                    title={adminVideoOn ? (lang === 'th' ? 'ปิดภาพ' : 'Hide video') : (lang === 'th' ? 'เปิดภาพ' : 'Show video')}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
-                    style={adminVideoOn
-                      ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
-                      : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
-                    {adminVideoOn ? <Video size={13} /> : <VideoOff size={13} />}
-                  </button>
+                  {!adminMicOnly && (
+                    <button onClick={toggleAdminSelfVideo}
+                      title={adminVideoOn ? (lang === 'th' ? 'ปิดภาพ' : 'Hide video') : (lang === 'th' ? 'เปิดภาพ' : 'Show video')}
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
+                      style={adminVideoOn
+                        ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+                        : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
+                      {adminVideoOn ? <Video size={13} /> : <VideoOff size={13} />}
+                    </button>
+                  )}
                   <button onClick={toggleAdminSelfMic}
                     title={adminMicOn ? (lang === 'th' ? 'ปิดไมค์' : 'Mute') : (lang === 'th' ? 'เปิดไมค์' : 'Unmute')}
                     className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
@@ -955,28 +992,37 @@ export default function RoomPage() {
                       : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
                     {adminMicOn ? <Mic size={13} /> : <MicOff size={13} />}
                   </button>
-                  <button onClick={flipAdminSelfCamera}
-                    title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
-                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
-                    <SwitchCamera size={13} />
-                  </button>
+                  {!adminMicOnly && (
+                    <button onClick={flipAdminSelfCamera}
+                      title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
+                      style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+                      <SwitchCamera size={13} />
+                    </button>
+                  )}
                   <button onClick={stopAdminSelfCamera}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
                     style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
-                    <VideoOff size={11} /> {lang === 'th' ? 'ปิด' : 'Stop'}
+                    {adminMicOnly ? <><MicOff size={11} /> {lang === 'th' ? 'ปิด' : 'Stop'}</> : <><VideoOff size={11} /> {lang === 'th' ? 'ปิด' : 'Stop'}</>}
                   </button>
                 </>
               ) : (
-                <button onClick={startAdminSelfCamera}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
-                  style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
-                  <Video size={11} /> {lang === 'th' ? 'เปิดกล้อง' : 'Start'}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={startAdminSelfCamera}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
+                    style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                    <Video size={11} /> {lang === 'th' ? 'เปิดกล้อง' : 'Camera'}
+                  </button>
+                  <button onClick={startAdminSelfMicOnly}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
+                    style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)' }}>
+                    <Mic size={11} /> {lang === 'th' ? 'ไมค์เท่านั้น' : 'Mic only'}
+                  </button>
+                </div>
               )}
             </div>
           </div>
-          {adminCamOn && (
+          {adminCamOn && !adminMicOnly && (
             <div className="mt-1.5 flex justify-center">
               <div className="relative rounded-xl overflow-hidden bg-black"
                 style={{ width: '120px', aspectRatio: '4/3', border: '1px solid rgba(251,191,36,0.3)' }}>
@@ -988,6 +1034,17 @@ export default function RoomPage() {
                     <VideoOff size={16} className="text-slate-600" />
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {adminCamOn && adminMicOnly && (
+            <div className="mt-1.5 flex justify-center">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
+                style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                <span className="text-[11px] text-indigo-300 font-medium">
+                  {lang === 'th' ? 'ไมค์เปิดอยู่' : 'Mic active'}
+                </span>
               </div>
             </div>
           )}
