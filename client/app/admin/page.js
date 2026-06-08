@@ -132,6 +132,14 @@ export default function AdminPage() {
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'round_complete', currentRound: roundNumber, activeMatchCount: 0 } : x));
     const onTournamentComplete = ({ tournamentId }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'ended' } : x));
+    const onPlayoffReady = ({ tournamentId, qualifiers, bracket }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'playoff_ready', phase: 'playoff', playoffBracket: bracket, qualifiers } : x));
+    const onPlayoffSemisStarted = ({ tournamentId, bracket }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'playoff_sf', playoffBracket: bracket } : x));
+    const onPlayoffFinalsStarted = ({ tournamentId, bracket }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'playoff_final', playoffBracket: bracket } : x));
+    const onPlayoffBracketUpdated = ({ tournamentId, bracket }) =>
+      setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, playoffBracket: bracket } : x));
     const onUpdated = ({ id, status, currentRound, activeMatchCount }) =>
       setTournaments(p => p.map(x => x.id === id ? { ...x, status, ...(currentRound != null && { currentRound }), ...(activeMatchCount != null && { activeMatchCount }) } : x));
 
@@ -214,10 +222,14 @@ export default function AdminPage() {
     socket.on('tournament_created',  onCreated);
     socket.on('tournament_closed',   onClosed);
     socket.on('tournament_player_count', onCount);
-    socket.on('round_started',       onRoundStarted);
-    socket.on('round_complete',      onRoundComplete);
-    socket.on('tournament_complete', onTournamentComplete);
-    socket.on('tournament_updated',  onUpdated);
+    socket.on('round_started',            onRoundStarted);
+    socket.on('round_complete',           onRoundComplete);
+    socket.on('tournament_complete',      onTournamentComplete);
+    socket.on('tournament_updated',       onUpdated);
+    socket.on('playoff_ready',            onPlayoffReady);
+    socket.on('playoff_semis_started',    onPlayoffSemisStarted);
+    socket.on('playoff_finals_started',   onPlayoffFinalsStarted);
+    socket.on('playoff_bracket_updated',  onPlayoffBracketUpdated);
     socket.on('admin_peer_offer',    onSpectateOffer);
     socket.on('admin_peer_ice',      onSpectateIce);
     socket.on('spectate_ended',      onSpectateEnded);
@@ -237,10 +249,14 @@ export default function AdminPage() {
       socket.off('tournament_created',  onCreated);
       socket.off('tournament_closed',   onClosed);
       socket.off('tournament_player_count', onCount);
-      socket.off('round_started',       onRoundStarted);
-      socket.off('round_complete',      onRoundComplete);
-      socket.off('tournament_complete', onTournamentComplete);
-      socket.off('tournament_updated',  onUpdated);
+      socket.off('round_started',           onRoundStarted);
+      socket.off('round_complete',          onRoundComplete);
+      socket.off('tournament_complete',     onTournamentComplete);
+      socket.off('tournament_updated',      onUpdated);
+      socket.off('playoff_ready',           onPlayoffReady);
+      socket.off('playoff_semis_started',   onPlayoffSemisStarted);
+      socket.off('playoff_finals_started',  onPlayoffFinalsStarted);
+      socket.off('playoff_bracket_updated', onPlayoffBracketUpdated);
       socket.off('admin_peer_offer',    onSpectateOffer);
       socket.off('admin_peer_ice',      onSpectateIce);
       socket.off('spectate_ended',      onSpectateEnded);
@@ -376,6 +392,10 @@ export default function AdminPage() {
 
   const handleStartRound = (tournamentId) => {
     getSocket()?.emit('start_round', { tournamentId });
+  };
+
+  const handleStartPlayoff = (tournamentId) => {
+    getSocket()?.emit('start_playoff', { tournamentId });
   };
 
   const handleCloseTourney = (tournamentId) => {
@@ -1376,13 +1396,26 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-white truncate">{tourney.name}</h4>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs font-semibold ${tourney.status === 'active' ? 'text-yellow-400' : tourney.status === 'round_complete' ? 'text-purple-400' : 'text-green-400'}`}>
-                            {tourney.status === 'active'
-                              ? t.tourneyStatusActive
-                              : tourney.status === 'round_complete'
-                                ? t.tourneyStatusBetween
-                                : t.tourneyStatusOpen}
+                          <span className={`text-xs font-semibold ${
+                            tourney.status === 'active'         ? 'text-yellow-400' :
+                            tourney.status === 'round_complete' ? 'text-purple-400' :
+                            tourney.status === 'playoff_ready'  ? 'text-orange-400' :
+                            tourney.status === 'playoff_sf'     ? 'text-orange-300' :
+                            tourney.status === 'playoff_final'  ? 'text-red-400'    :
+                            'text-green-400'
+                          }`}>
+                            {tourney.status === 'active'         ? t.tourneyStatusActive :
+                             tourney.status === 'round_complete' ? t.tourneyStatusBetween :
+                             tourney.status === 'playoff_ready'  ? (lang === 'th' ? 'รอบ Playoff พร้อมแล้ว' : 'Playoff Ready') :
+                             tourney.status === 'playoff_sf'     ? (lang === 'th' ? 'รอบรองชนะเลิศ' : 'Semifinals') :
+                             tourney.status === 'playoff_final'  ? (lang === 'th' ? 'รอบชิงชนะเลิศ' : 'Finals') :
+                             t.tourneyStatusOpen}
                           </span>
+                          {tourney.phase === 'group' && (
+                            <span className="text-xs text-slate-500">
+                              {lang === 'th' ? 'รอบแบ่งกลุ่ม' : 'Group Stage'} {tourney.currentRound || 0}/{tourney.totalRounds || 3}
+                            </span>
+                          )}
                           <span className="text-xs text-slate-600">
                             <Users size={10} className="inline mr-0.5" />
                             {tourney.playerCount}/{tourney.maxPlayers}
@@ -1400,6 +1433,15 @@ export default function AdminPage() {
                             {`${t.startRound} ${(tourney.currentRound || 0) + 1}/${tourney.totalRounds || 3}`}
                           </button>
                         )}
+                        {tourney.status === 'playoff_ready' && (
+                          <button
+                            onClick={() => handleStartPlayoff(tourney.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                            style={{ background: 'rgba(251,146,60,0.15)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.3)' }}>
+                            <Play size={11} />
+                            {lang === 'th' ? 'เริ่ม Playoff' : 'Start Playoff'}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleCloseTourney(tourney.id)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
@@ -1413,6 +1455,21 @@ export default function AdminPage() {
                       <p className="text-xs text-slate-600 mt-1">
                         {t.needMorePlayers}
                       </p>
+                    )}
+
+                    {tourney.status === 'playoff_ready' && tourney.qualifiers && (
+                      <div className="mt-2 p-2 rounded-lg text-xs" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.2)' }}>
+                        <p className="text-orange-400 font-semibold mb-1">{lang === 'th' ? 'ผู้ผ่านเข้ารอบ Playoff' : 'Playoff Qualifiers'}</p>
+                        {tourney.qualifiers.map((q, i) => (
+                          <div key={q.userId} className="flex justify-between text-slate-300">
+                            <span>{i + 1}. {q.username}</span>
+                            <span className="text-slate-500">{q.points} pts</span>
+                          </div>
+                        ))}
+                        <p className="text-slate-500 mt-1 text-[10px]">
+                          {lang === 'th' ? 'คู่ที่ 1: อันดับ 1 vs 4 | คู่ที่ 2: อันดับ 2 vs 3' : 'SF1: Seed 1 vs 4 | SF2: Seed 2 vs 3'}
+                        </p>
+                      </div>
                     )}
                   </div>
                 ))}

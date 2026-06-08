@@ -86,6 +86,7 @@ router.get('/:id', protect, async (req, res) => {
         name:             t.name,
         gameTypeId:       t.gameTypeId,
         status:           t.status,
+        phase:            t.phase || 'group',
         maxPlayers:       t.maxPlayers,
         totalRounds:      t.totalRounds,
         currentRound:     t.currentRound,
@@ -96,6 +97,7 @@ router.get('/:id', protect, async (req, res) => {
         matches:          matchesOut,
         scheduledAt:      t.scheduledAt || null,
         scheduledEnd:     t.scheduledEnd || null,
+        playoffBracket:   t.playoffBracket || null,
       },
     });
   } catch (err) { res.status(500).json({ message: err.message }); }

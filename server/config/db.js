@@ -138,6 +138,9 @@ const initTables = async () => {
     await p.query(`ALTER TABLE TournamentPlayers ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0`).catch(() => {});
     await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP NULL`).catch(() => {});
     await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS scheduled_end TIMESTAMP NULL`).catch(() => {});
+    await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS phase VARCHAR(20) DEFAULT 'group'`).catch(() => {});
+    await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS playoff_bracket JSONB`).catch(() => {});
+    await p.query(`ALTER TABLE TournamentMatches ADD COLUMN IF NOT EXISTS match_type VARCHAR(20) DEFAULT 'group'`).catch(() => {});
     console.log('[DB] Tournament tables ready');
   } catch (e) {
     console.error('[DB] Tournament tables warning:', e.message);

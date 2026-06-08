@@ -14,8 +14,8 @@ const pendingChallenges = new Map(); // challengeId → { from, to, gameTypeId }
 const publicChatBuffer = [];         // last 50 public lobby messages
 
 // Tournament in-memory state
-const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, maxPlayers, totalRounds, currentRound, activeMatchCount, playedPairs: Set, points: Map, createdBy, players: Set<userId> }
-const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map, phase, timer }
+const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, phase, maxPlayers, totalRounds, currentRound, activeMatchCount, playedPairs: Set, points: Map, h2h: Map, playoffBracket, createdBy, players: Set<userId> }
+const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map, phase, timer, matchType }
 const adminWatching  = new Map();    // roomId → { adminUserId, adminSocketId }
 
 // ── Pairing: random, no-repeat (greedy with fallback) ─────────────────
@@ -69,6 +69,7 @@ const getTournamentPublic = (t) => ({
   name:             t.name,
   gameTypeId:       t.gameTypeId,
   status:           t.status,
+  phase:            t.phase || 'group',
   maxPlayers:       t.maxPlayers,
   totalRounds:      t.totalRounds,
   currentRound:     t.currentRound,
@@ -76,6 +77,7 @@ const getTournamentPublic = (t) => ({
   playerCount:      t.players.size,
   scheduledAt:      t.scheduledAt || null,
   scheduledEnd:     t.scheduledEnd || null,
+  playoffBracket:   t.playoffBracket || null,
 });
 
 const isLockedInTournament = (userId) => {
@@ -106,20 +108,27 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
   const loserId = match.players.find(p => p !== winnerId);
   if (!loserId) return;
 
-  // Update tournament points (+3 for winner)
   const t = tournaments.get(match.tournamentId);
+  const isPlayoff = match.matchType && match.matchType !== 'group';
+
   if (t) {
-    t.points.set(winnerId, (t.points.get(winnerId) || 0) + 3);
+    // Track h2h for group stage only (used for tiebreaking)
+    if (!isPlayoff) {
+      if (!t.h2h) t.h2h = new Map();
+      const key = [winnerId, loserId].sort().join('_');
+      t.h2h.set(key, winnerId);
+      // Group stage: award points
+      t.points.set(winnerId, (t.points.get(winnerId) || 0) + 3);
+    }
     t.activeMatchCount = Math.max(0, (t.activeMatchCount || 1) - 1);
   }
-  // Atomically decide if THIS invocation triggers round-end (prevents double-fire when two matches finish simultaneously)
+
   const triggerRoundEnd = t ? (t.activeMatchCount === 0 && !t._roundEndFired) : false;
   if (triggerRoundEnd) t._roundEndFired = true;
 
-  // Build standings to include in result
   const standings = t ? buildStandings(t) : [];
 
-  io.to(roomId).emit('match_result_final', { winnerId, loserId, method, standings, tournamentId: match.tournamentId });
+  io.to(roomId).emit('match_result_final', { winnerId, loserId, method, standings, tournamentId: match.tournamentId, matchType: match.matchType });
 
   try {
     const pool = getPool();
@@ -129,48 +138,260 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
     );
     await pool.query('UPDATE Users SET wins=wins+1, total_games=total_games+1 WHERE id=$1', [winnerId]);
     await pool.query('UPDATE Users SET losses=losses+1, total_games=total_games+1 WHERE id=$1', [loserId]);
-    // Update tournament player points
-    await pool.query('UPDATE TournamentPlayers SET points=points+3, wins=wins+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, winnerId]).catch(() => {});
-    await pool.query('UPDATE TournamentPlayers SET losses=losses+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, loserId]).catch(() => {});
+    if (!isPlayoff) {
+      await pool.query('UPDATE TournamentPlayers SET points=points+3, wins=wins+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, winnerId]).catch(() => {});
+      await pool.query('UPDATE TournamentPlayers SET losses=losses+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, loserId]).catch(() => {});
+    }
   } catch (e) { console.error('[finalizeMatch]', e.message); }
 
-  // Check if round is complete — only the invocation that set triggerRoundEnd=true enters here
-  if (t && triggerRoundEnd) {
-    t._roundEndFired = false; // reset for next round
-    const info = getTournamentPublic(t);
-    if (t.currentRound >= t.totalRounds) {
-      // All rounds done → tournament complete
-      t.status = 'ended';
-      io.to(`tournament:${t.id}`).emit('tournament_complete', { tournamentId: t.id, standings });
-      io.emit('tournament_updated', info);
-      try { await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW() WHERE id=$1", [t.id]); } catch {}
-    } else {
-      // Round complete, more rounds remain
-      t.status = 'round_complete';
-      io.to(`tournament:${t.id}`).emit('round_complete', {
-        tournamentId: t.id,
-        roundNumber:  t.currentRound,
-        totalRounds:  t.totalRounds,
-        standings,
-      });
-      io.emit('tournament_updated', info);
-      notifyAdmins(io, 'round_complete', {
-        tournamentId: t.id,
-        roundNumber:  t.currentRound,
-        totalRounds:  t.totalRounds,
-      });
+  if (!t || !triggerRoundEnd) return;
+
+  t._roundEndFired = false;
+  const info = getTournamentPublic(t);
+
+  // ── PLAYOFF BRACKET ADVANCEMENT ───────────────────────────────────────────
+  if (isPlayoff) {
+    const b = t.playoffBracket;
+    if (!b) return;
+
+    if (match.matchType === 'sf1' || match.matchType === 'sf2') {
+      // Record semifinal result
+      b[match.matchType].winner = winnerId;
+      const loser = loserId;
+      const sf1Done = b.sf1.winner != null;
+      const sf2Done = b.sf2.winner != null;
+
+      if (sf1Done && sf2Done) {
+        // Both semis done: create final + 3rd place match
+        b.final.p1 = b.sf1.winner;
+        b.final.p2 = b.sf2.winner;
+        b.third.p1 = b.sf1.p1 === b.sf1.winner ? b.sf1.p2 : b.sf1.p1;
+        b.third.p2 = b.sf2.p1 === b.sf2.winner ? b.sf2.p2 : b.sf2.p1;
+        try { await getPool().query("UPDATE Tournaments SET playoff_bracket=$1 WHERE id=$2", [JSON.stringify(b), t.id]); } catch {}
+        io.to(`tournament:${t.id}`).emit('playoff_bracket_updated', { tournamentId: t.id, bracket: b, standings });
+        io.emit('tournament_updated', info);
+        await startPlayoffFinals(io, t);
+      } else {
+        try { await getPool().query("UPDATE Tournaments SET playoff_bracket=$1 WHERE id=$2", [JSON.stringify(b), t.id]); } catch {}
+        io.to(`tournament:${t.id}`).emit('playoff_bracket_updated', { tournamentId: t.id, bracket: b, standings });
+      }
+      return;
+    }
+
+    if (match.matchType === 'final' || match.matchType === 'third') {
+      b[match.matchType].winner = winnerId;
+      const finalDone = b.final.winner != null;
+      const thirdDone = b.third.winner != null;
+
+      if (finalDone && thirdDone) {
+        // Tournament over
+        const first  = b.final.winner;
+        const second = b.final.p1 === first ? b.final.p2 : b.final.p1;
+        const third  = b.third.winner;
+        t.status = 'ended';
+        try {
+          await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW(), playoff_bracket=$1 WHERE id=$2", [JSON.stringify(b), t.id]);
+        } catch {}
+        io.to(`tournament:${t.id}`).emit('tournament_complete', {
+          tournamentId: t.id,
+          standings,
+          results: { first, second, third },
+          bracket: b,
+        });
+        io.emit('tournament_updated', getTournamentPublic(t));
+      } else {
+        try { await getPool().query("UPDATE Tournaments SET playoff_bracket=$1 WHERE id=$2", [JSON.stringify(b), t.id]); } catch {}
+        io.to(`tournament:${t.id}`).emit('playoff_bracket_updated', { tournamentId: t.id, bracket: b, standings });
+      }
+      return;
     }
   }
+
+  // ── GROUP STAGE ROUND END ─────────────────────────────────────────────────
+  if (t.currentRound >= t.totalRounds) {
+    // All group rounds done → go to playoff
+    await transitionToPlayoff(io, t);
+  } else {
+    t.status = 'round_complete';
+    io.to(`tournament:${t.id}`).emit('round_complete', {
+      tournamentId: t.id,
+      roundNumber:  t.currentRound,
+      totalRounds:  t.totalRounds,
+      standings,
+    });
+    io.emit('tournament_updated', info);
+    notifyAdmins(io, 'round_complete', {
+      tournamentId: t.id,
+      roundNumber:  t.currentRound,
+      totalRounds:  t.totalRounds,
+    });
+  }
+};
+
+// Buchholz = sum of final points of opponents this player BEAT
+const calcBuchholz = (playerId, t) => {
+  let score = 0;
+  if (!t.h2h) return score;
+  for (const [key, winnerId] of t.h2h) {
+    if (winnerId !== playerId) continue;
+    const [a, b] = key.split('_');
+    const loserId = a === playerId ? b : a;
+    score += t.points.get(loserId) || 0;
+  }
+  return score;
 };
 
 const buildStandings = (t) => {
   return [...t.players]
     .map(id => ({
-      userId:   id,
-      username: onlineUsers.get(id)?.username || t.playerNames?.get(id) || '?', // BUG-07
-      points:   t.points.get(id) || 0,
+      userId:    id,
+      username:  onlineUsers.get(id)?.username || t.playerNames?.get(id) || '?',
+      points:    t.points.get(id) || 0,
+      buchholz:  calcBuchholz(id, t),
     }))
-    .sort((a, b) => b.points - a.points);
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+      const key = [a.userId, b.userId].sort().join('_');
+      const winner = t.h2h?.get(key);
+      if (winner === a.userId) return -1;
+      if (winner === b.userId) return 1;
+      return 0;
+    });
+};
+
+// Pick top N qualifiers using tiebreaker rules
+const getQualifiers = (t, count = 4) => {
+  const sorted = buildStandings(t);
+  return sorted.slice(0, Math.min(count, sorted.length));
+};
+
+// Create a playoff match room between two players
+const createPlayoffRoom = async (io, t, p1Id, p2Id, matchType) => {
+  const pool = getPool();
+  const roomId  = uuidv4();
+  const matchId = uuidv4();
+  let gameType = null;
+  try { gameType = await GameType.findById(t.gameTypeId); } catch {}
+  const gameInfo = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+  try { await Room.create({ roomId, gameTypeId: t.gameTypeId, players: [p1Id, p2Id] }); } catch (e) {
+    console.error('[playoff] room create failed:', e.message);
+    return null;
+  }
+  activeRooms.set(roomId, { players: [p1Id, p2Id], isTournament: true });
+  tourneyMatches.set(roomId, { matchId, tournamentId: t.id, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null, matchType });
+  try {
+    await pool.query(
+      `INSERT INTO TournamentMatches (id, tournament_id, room_id, player1_id, player2_id, status, round, match_type) VALUES ($1,$2,$3,$4,$5,'playing',$6,$7)`,
+      [matchId, t.id, roomId, p1Id, p2Id, t.currentRound, matchType]
+    );
+  } catch (e) { console.error('[playoff] match db insert failed:', e.message); }
+
+  const p1Info = onlineUsers.get(p1Id);
+  const p2Info = onlineUsers.get(p2Id);
+  if (p1Info) io.to(p1Info.socketId).emit('tournament_match_found', { roomId, opponentId: p2Id, opponentName: p2Info?.username || '?', gameInfo, matchType });
+  if (p2Info) io.to(p2Info.socketId).emit('tournament_match_found', { roomId, opponentId: p1Id, opponentName: p1Info?.username || '?', gameInfo, matchType });
+  return { roomId, matchId };
+};
+
+// Transition from group stage to playoff
+const transitionToPlayoff = async (io, t) => {
+  const qualifiers = getQualifiers(t, 4);
+  if (qualifiers.length < 2) return; // not enough players
+
+  const q = qualifiers.map(p => p.userId);
+  // Seed: 1 vs 4, 2 vs 3
+  const sf1 = { p1: q[0], p2: q[3] || null, winner: null, roomId: null, matchId: null };
+  const sf2 = { p1: q[1], p2: q[2] || null, winner: null, roomId: null, matchId: null };
+  const bracket = { sf1, sf2, final: { p1: null, p2: null, winner: null, roomId: null, matchId: null }, third: { p1: null, p2: null, winner: null, roomId: null, matchId: null } };
+
+  t.phase            = 'playoff';
+  t.status           = 'playoff_ready';
+  t.playoffBracket   = bracket;
+  t.playoffQualifiers = qualifiers;
+  t.activeMatchCount = 0;
+  t._roundEndFired   = false;
+
+  try {
+    await getPool().query(
+      "UPDATE Tournaments SET phase='playoff', status='playoff_ready', playoff_bracket=$1 WHERE id=$2",
+      [JSON.stringify(bracket), t.id]
+    );
+  } catch (e) { console.error('[playoff] db update failed:', e.message); }
+
+  const standings = buildStandings(t);
+  io.to(`tournament:${t.id}`).emit('playoff_ready', {
+    tournamentId: t.id,
+    qualifiers,
+    standings,
+    bracket,
+  });
+  io.emit('tournament_updated', getTournamentPublic(t));
+  console.log(`[playoff] ready — tournament ${t.id}, qualifiers: ${q.join(',')}`);
+};
+
+// Start playoff semifinals
+const startPlayoffSemis = async (io, t) => {
+  const b = t.playoffBracket;
+  if (!b || b.sf1.roomId || b.sf2.roomId) return; // already started
+
+  t.status = 'playoff_sf';
+  t.currentRound++;
+  t.activeMatchCount = 0;
+  t._roundEndFired = false;
+
+  let started = 0;
+  if (b.sf1.p1 && b.sf1.p2) {
+    const r = await createPlayoffRoom(io, t, b.sf1.p1, b.sf1.p2, 'sf1');
+    if (r) { b.sf1.roomId = r.roomId; b.sf1.matchId = r.matchId; started++; }
+  }
+  if (b.sf2.p1 && b.sf2.p2) {
+    const r = await createPlayoffRoom(io, t, b.sf2.p1, b.sf2.p2, 'sf2');
+    if (r) { b.sf2.roomId = r.roomId; b.sf2.matchId = r.matchId; started++; }
+  }
+  t.activeMatchCount = started;
+
+  try {
+    await getPool().query(
+      "UPDATE Tournaments SET status='playoff_sf', current_round=$1, playoff_bracket=$2 WHERE id=$3",
+      [t.currentRound, JSON.stringify(b), t.id]
+    );
+  } catch {}
+  io.to(`tournament:${t.id}`).emit('playoff_semis_started', { tournamentId: t.id, bracket: b });
+  io.emit('tournament_updated', getTournamentPublic(t));
+  console.log(`[playoff] semis started — ${started} matches`);
+};
+
+// Start final + 3rd place match
+const startPlayoffFinals = async (io, t) => {
+  const b = t.playoffBracket;
+  if (!b || b.final.roomId || b.third.roomId) return;
+
+  t.status = 'playoff_final';
+  t.currentRound++;
+  t.activeMatchCount = 0;
+  t._roundEndFired = false;
+
+  let started = 0;
+  if (b.final.p1 && b.final.p2) {
+    const r = await createPlayoffRoom(io, t, b.final.p1, b.final.p2, 'final');
+    if (r) { b.final.roomId = r.roomId; b.final.matchId = r.matchId; started++; }
+  }
+  if (b.third.p1 && b.third.p2) {
+    const r = await createPlayoffRoom(io, t, b.third.p1, b.third.p2, 'third');
+    if (r) { b.third.roomId = r.roomId; b.third.matchId = r.matchId; started++; }
+  }
+  t.activeMatchCount = started;
+
+  try {
+    await getPool().query(
+      "UPDATE Tournaments SET status='playoff_final', current_round=$1, playoff_bracket=$2 WHERE id=$3",
+      [t.currentRound, JSON.stringify(b), t.id]
+    );
+  } catch {}
+  io.to(`tournament:${t.id}`).emit('playoff_finals_started', { tournamentId: t.id, bracket: b });
+  io.emit('tournament_updated', getTournamentPublic(t));
+  console.log(`[playoff] finals started`);
 };
 
 const handleMatchTimeout = (io, roomId) => {
@@ -455,7 +676,10 @@ const setupSocketHandlers = (io) => {
         activeMatchCount: 0,
         playedPairs:      new Set(),
         points:           new Map(),
+        h2h:              new Map(),
         playerNames:      new Map(), // BUG-07: username cache so standings work when players offline
+        phase:            'group',
+        playoffBracket:   null,
         createdBy:        userId,
         players:          new Set(),
         scheduledAt:      scheduledAt ? new Date(scheduledAt) : null,
@@ -611,6 +835,20 @@ const setupSocketHandlers = (io) => {
       }
     });
 
+
+    // start_playoff: admin starts the semifinal matches (after playoff_ready)
+    socket.on('start_playoff', async ({ tournamentId }) => {
+      if (!user.isAdmin) { socket.emit('tournament_error', { message: 'ไม่มีสิทธิ์' }); return; }
+      const t = tournaments.get(tournamentId);
+      if (!t) { socket.emit('tournament_error', { message: 'ไม่พบทัวร์นาเมนต์' }); return; }
+      if (t.status !== 'playoff_ready') {
+        socket.emit('tournament_error', { message: `สถานะไม่ถูกต้อง: ${t.status}` }); return;
+      }
+      await startPlayoffSemis(io, t).catch(e => {
+        console.error('[start_playoff]', e.message);
+        socket.emit('tournament_error', { message: 'เกิดข้อผิดพลาดในการเริ่ม Playoff' });
+      });
+    });
 
     socket.on('close_tournament', async ({ tournamentId }) => {
       if (!user.isAdmin) return;
@@ -974,17 +1212,30 @@ const restoreTournamentsFromDB = async () => {
       const playerNames = new Map(playerRows.map(p => [p.user_id, p.username]));
 
       const { rows: matchRows } = await pool.query(
-        'SELECT id, room_id, player1_id, player2_id, status FROM TournamentMatches WHERE tournament_id=$1',
+        'SELECT id, room_id, player1_id, player2_id, winner_id, status, match_type FROM TournamentMatches WHERE tournament_id=$1',
         [row.id]
       );
 
       const playedPairs = new Set(
-        matchRows.map(m => [m.player1_id, m.player2_id].sort().join('_'))
+        matchRows.filter(m => m.match_type === 'group' || !m.match_type)
+                 .map(m => [m.player1_id, m.player2_id].sort().join('_'))
       );
 
-      const playingMatches      = matchRows.filter(m => m.status === 'playing');
+      // Rebuild h2h from completed group-stage matches
+      const h2h = new Map();
+      for (const m of matchRows) {
+        if ((m.match_type === 'group' || !m.match_type) && m.winner_id && m.status === 'done') {
+          const key = [m.player1_id, m.player2_id].sort().join('_');
+          h2h.set(key, m.winner_id);
+        }
+      }
+
+      const phase          = row.phase || 'group';
+      const playoffBracket = row.playoff_bracket || null;
+
+      const playingMatches       = matchRows.filter(m => m.status === 'playing');
       const adminDecisionMatches = matchRows.filter(m => m.status === 'admin_decision');
-      const activeMatchCount    = playingMatches.length + adminDecisionMatches.length;
+      const activeMatchCount     = playingMatches.length + adminDecisionMatches.length;
 
       // If active but all matches finished (no pending left), correct to round_complete
       let status = row.status;
@@ -995,12 +1246,15 @@ const restoreTournamentsFromDB = async () => {
         name:             row.name,
         gameTypeId:       row.game_type_id,
         status,
+        phase,
+        playoffBracket,
         maxPlayers:       row.max_players,
         totalRounds:      row.total_rounds || 3,
         currentRound:     row.current_round || 0,
         activeMatchCount,
         playedPairs,
         points,
+        h2h,
         playerNames,
         createdBy:        row.created_by,
         players,
@@ -1031,6 +1285,7 @@ const restoreTournamentsFromDB = async () => {
           phase:              'admin_decision',
           timer:              null,
           adminDecisionTimer: null,
+          matchType:          m.match_type || 'group',
         });
       }
       if (matchesToRestore.length > 0) {

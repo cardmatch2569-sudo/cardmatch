@@ -61,6 +61,53 @@ function Leaderboard({ standings, myId, tl }) {
   );
 }
 
+// ── PlayoffBracketView ────────────────────────────────────────────────
+function PlayoffBracketView({ bracket, myId, lang, playerNames }) {
+  if (!bracket) return null;
+  const isTh = lang !== 'en';
+  const nameMap = {};
+  if (playerNames) playerNames.forEach(p => { nameMap[p.userId] = p.username; });
+
+  const MatchSlot = ({ label, p1, p2, winner }) => {
+    const n1 = nameMap[p1] || (p1 ? p1.slice(0, 6) + '…' : '—');
+    const n2 = nameMap[p2] || (p2 ? p2.slice(0, 6) + '…' : '—');
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(251,146,60,0.2)', minWidth: '140px' }}>
+        <div className="px-2 py-1 text-[10px] font-bold text-orange-400" style={{ background: 'rgba(251,146,60,0.1)' }}>{label}</div>
+        {[{ id: p1, name: n1 }, { id: p2, name: n2 }].map((pl, i) => (
+          <div key={i} className={`flex items-center gap-2 px-2 py-1.5 text-xs ${winner === pl.id ? 'text-yellow-300 font-semibold' : 'text-slate-400'}`}
+            style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+            {winner === pl.id && <span className="text-xs">🏆</span>}
+            <span className="truncate">{pl.name}{pl.id === myId ? ' (คุณ)' : ''}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="card p-4 mb-4" style={{ borderColor: 'rgba(251,146,60,0.2)' }}>
+      <h3 className="text-sm font-bold text-orange-400 mb-3">
+        {isTh ? '🏆 สายการแข่ง Playoff' : '🏆 Playoff Bracket'}
+      </h3>
+      <div className="flex gap-3 overflow-x-auto pb-1">
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          <p className="text-[10px] text-slate-600 text-center">{isTh ? 'รอบรองชนะเลิศ' : 'Semifinals'}</p>
+          <MatchSlot label={isTh ? 'คู่ที่ 1' : 'SF 1'} p1={bracket.sf1?.p1} p2={bracket.sf1?.p2} winner={bracket.sf1?.winner} />
+          <MatchSlot label={isTh ? 'คู่ที่ 2' : 'SF 2'} p1={bracket.sf2?.p1} p2={bracket.sf2?.p2} winner={bracket.sf2?.winner} />
+        </div>
+        <div className="flex flex-col justify-center text-slate-600 flex-shrink-0">→</div>
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          <p className="text-[10px] text-slate-600 text-center">{isTh ? 'รอบชิงที่ 3' : '3rd Place'}</p>
+          <MatchSlot label={isTh ? 'ชิงที่ 3' : '3rd Place'} p1={bracket.third?.p1} p2={bracket.third?.p2} winner={bracket.third?.winner} />
+          <p className="text-[10px] text-slate-600 text-center mt-1">{isTh ? 'รอบชิงชนะเลิศ' : 'Final'}</p>
+          <MatchSlot label={isTh ? 'ชิงที่ 1-2' : 'Final'} p1={bracket.final?.p1} p2={bracket.final?.p2} winner={bracket.final?.winner} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TournamentWaitingRoom() {
   const { id: tournamentId } = useParams();
   const { user, loading: authLoading, lang } = useAuth();
@@ -72,9 +119,12 @@ export default function TournamentWaitingRoom() {
   const [standings,     setStandings]     = useState([]);
   const [pageLoading,   setPageLoading]   = useState(true);
   const [startingRound, setStartingRound] = useState(false);
-  // status: loading | waiting | round_in_progress | round_complete | bye | tournament_complete | error
-  const [status,      setStatus]      = useState('loading');
-  const [roundInfo,   setRoundInfo]   = useState(null); // { roundNumber, totalRounds }
+  // status: loading | waiting | round_in_progress | round_complete | bye | tournament_complete | playoff_ready | playoff_sf | playoff_final | error
+  const [status,        setStatus]        = useState('loading');
+  const [roundInfo,     setRoundInfo]     = useState(null); // { roundNumber, totalRounds }
+  const [playoffBracket, setPlayoffBracket] = useState(null);
+  const [playoffQualifiers, setPlayoffQualifiers] = useState([]);
+  const [tournamentResults, setTournamentResults] = useState(null); // { first, second, third }
   const [errorMsg,    setErrorMsg]    = useState('');
   const leftRef = useRef(false);
   const [alerts,      setAlerts]      = useState([]);
@@ -116,9 +166,15 @@ export default function TournamentWaitingRoom() {
 
       if (t.status === 'ended') { setStatus('tournament_complete'); return; }
 
+      // Restore playoff state from initial load
+      if (t.playoffBracket) setPlayoffBracket(t.playoffBracket);
+
       // Set initial status from API immediately (don't wait for socket)
       if      (t.status === 'active')         setStatus('round_in_progress');
       else if (t.status === 'round_complete') setStatus('round_complete');
+      else if (t.status === 'playoff_ready')  setStatus('playoff_ready');
+      else if (t.status === 'playoff_sf')     setStatus('playoff_sf');
+      else if (t.status === 'playoff_final')  setStatus('playoff_final');
       else                                    setStatus('waiting');
 
       if (user.isAdmin) {
@@ -137,10 +193,14 @@ export default function TournamentWaitingRoom() {
       if (s)          setStandings(s);
 
       const sts = td?.status || 'waiting';
-      if (sts === 'waiting')        setStatus('waiting');
-      else if (sts === 'active')    setStatus('round_in_progress');
+      if      (sts === 'waiting')        setStatus('waiting');
+      else if (sts === 'active')         setStatus('round_in_progress');
       else if (sts === 'round_complete') setStatus('round_complete');
-      else if (sts === 'ended')     setStatus('tournament_complete');
+      else if (sts === 'ended')          setStatus('tournament_complete');
+      else if (sts === 'playoff_ready')  setStatus('playoff_ready');
+      else if (sts === 'playoff_sf')     setStatus('playoff_sf');
+      else if (sts === 'playoff_final')  setStatus('playoff_final');
+      if (td?.playoffBracket) setPlayoffBracket(td.playoffBracket);
     };
 
     const onPlayerUpdate = ({ tournamentId: tid, playersInfo }) => {
@@ -164,10 +224,40 @@ export default function TournamentWaitingRoom() {
       setStatus('round_complete');
     };
 
-    const onTournamentComplete = ({ tournamentId: tid, standings: s }) => {
+    const onTournamentComplete = ({ tournamentId: tid, standings: s, results, bracket }) => {
       if (!mounted || tid !== tournamentId) return;
       if (s) setStandings(s);
+      if (results) setTournamentResults(results);
+      if (bracket) setPlayoffBracket(bracket);
       setStatus('tournament_complete');
+    };
+
+    const onPlayoffReady = ({ tournamentId: tid, qualifiers, bracket }) => {
+      if (!mounted || tid !== tournamentId) return;
+      if (qualifiers) setPlayoffQualifiers(qualifiers);
+      if (bracket) setPlayoffBracket(bracket);
+      setTournament(prev => prev ? { ...prev, status: 'playoff_ready', phase: 'playoff' } : prev);
+      setStatus('playoff_ready');
+    };
+
+    const onPlayoffSemisStarted = ({ tournamentId: tid, bracket }) => {
+      if (!mounted || tid !== tournamentId) return;
+      if (bracket) setPlayoffBracket(bracket);
+      setTournament(prev => prev ? { ...prev, status: 'playoff_sf' } : prev);
+      setStatus('playoff_sf');
+    };
+
+    const onPlayoffFinalsStarted = ({ tournamentId: tid, bracket }) => {
+      if (!mounted || tid !== tournamentId) return;
+      if (bracket) setPlayoffBracket(bracket);
+      setTournament(prev => prev ? { ...prev, status: 'playoff_final' } : prev);
+      setStatus('playoff_final');
+    };
+
+    const onPlayoffBracketUpdated = ({ tournamentId: tid, bracket, standings: s }) => {
+      if (!mounted || tid !== tournamentId) return;
+      if (bracket) setPlayoffBracket(bracket);
+      if (s) setStandings(s);
     };
 
     const onClosed = ({ tournamentId: tid }) => {
@@ -225,14 +315,18 @@ export default function TournamentWaitingRoom() {
 
     socket.on('tournament_joined_ok',    onJoinedOk);
     socket.on('tournament_player_update', onPlayerUpdate);
-    socket.on('round_started',           onRoundStarted);
-    socket.on('round_complete',          onRoundComplete);
-    socket.on('tournament_complete',     onTournamentComplete);
-    socket.on('tournament_closed',       onClosed);
-    socket.on('match_found',             onMatchFound);
-    socket.on('tournament_bye',          onBye);
-    socket.on('tournament_error',        onError);
-    socket.on('tournament_updated',      onTournamentUpdated);
+    socket.on('round_started',            onRoundStarted);
+    socket.on('round_complete',           onRoundComplete);
+    socket.on('tournament_complete',      onTournamentComplete);
+    socket.on('tournament_closed',        onClosed);
+    socket.on('match_found',              onMatchFound);
+    socket.on('tournament_bye',           onBye);
+    socket.on('tournament_error',         onError);
+    socket.on('tournament_updated',       onTournamentUpdated);
+    socket.on('playoff_ready',            onPlayoffReady);
+    socket.on('playoff_semis_started',    onPlayoffSemisStarted);
+    socket.on('playoff_finals_started',   onPlayoffFinalsStarted);
+    socket.on('playoff_bracket_updated',  onPlayoffBracketUpdated);
 
     init();
 
@@ -250,6 +344,10 @@ export default function TournamentWaitingRoom() {
       socket.off('match_found',             onMatchFound);
       socket.off('tournament_bye',          onBye);
       socket.off('tournament_error',        onError);
+      socket.off('playoff_ready',           onPlayoffReady);
+      socket.off('playoff_semis_started',   onPlayoffSemisStarted);
+      socket.off('playoff_finals_started',  onPlayoffFinalsStarted);
+      socket.off('playoff_bracket_updated', onPlayoffBracketUpdated);
       if (onAdminAlert) socket.off('admin_match_alert', onAdminAlert);
       if (user?.isAdmin) {
         socket.emit('admin_leave_tournament_watch', { tournamentId });
@@ -332,23 +430,53 @@ export default function TournamentWaitingRoom() {
     </div>
   );
 
-  if (status === 'tournament_complete') return (
-    <div className="max-w-lg mx-auto px-4 py-8">
-      <div className="card p-8 text-center mb-4" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
-        <div className="text-5xl mb-3">🏆</div>
-        <h1 className="text-white font-bold text-2xl mb-1">
-          {tl.tourneyComplete}
-        </h1>
-        <p className="text-slate-500 text-sm">
-          {tournament?.name} · {tournament?.totalRounds} {tl.roundsWord}
-        </p>
+  if (status === 'tournament_complete') {
+    const nameMap = {};
+    standings.forEach(p => { nameMap[p.userId] = p.username; });
+    const podium = tournamentResults ? [
+      { rank: 1, id: tournamentResults.first,  medal: '🥇', color: '#fbbf24' },
+      { rank: 2, id: tournamentResults.second, medal: '🥈', color: '#94a3b8' },
+      { rank: 3, id: tournamentResults.third,  medal: '🥉', color: '#d97706' },
+    ] : null;
+    return (
+      <div className="max-w-lg mx-auto px-4 py-8">
+        <div className="card p-8 text-center mb-4" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
+          <div className="text-5xl mb-3">🏆</div>
+          <h1 className="text-white font-bold text-2xl mb-1">{tl.tourneyComplete}</h1>
+          <p className="text-slate-500 text-sm">{tournament?.name}</p>
+        </div>
+        {podium && (
+          <div className="card p-5 mb-4" style={{ borderColor: 'rgba(251,191,36,0.2)' }}>
+            <h3 className="text-sm font-bold text-yellow-400 mb-4 text-center">
+              {lang === 'th' ? '🏆 ผลการแข่งขัน' : '🏆 Final Results'}
+            </h3>
+            <div className="space-y-2">
+              {podium.map(({ rank, id, medal, color }) => id && (
+                <div key={rank} className="flex items-center gap-3 py-2.5 px-4 rounded-xl"
+                  style={{ background: `rgba(${color === '#fbbf24' ? '251,191,36' : color === '#94a3b8' ? '148,163,184' : '217,119,6'},0.08)`, border: `1px solid rgba(${color === '#fbbf24' ? '251,191,36' : color === '#94a3b8' ? '148,163,184' : '217,119,6'},0.2)` }}>
+                  <span className="text-2xl">{medal}</span>
+                  <span className={`flex-1 font-bold text-white text-sm ${id === user?._id ? 'text-yellow-300' : ''}`}>
+                    {nameMap[id] || id.slice(0,8)}
+                    {id === user?._id && <span className="text-xs text-yellow-500 ml-1">({lang === 'th' ? 'คุณ' : 'You'})</span>}
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color }}>
+                    {rank === 1 ? (lang === 'th' ? 'แชมป์' : 'Champion') : rank === 2 ? (lang === 'th' ? 'รองแชมป์' : 'Runner-up') : (lang === 'th' ? 'อันดับ 3' : '3rd Place')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {playoffBracket && (
+          <PlayoffBracketView bracket={playoffBracket} myId={user?._id} lang={lang} playerNames={standings} />
+        )}
+        {!podium && <Leaderboard standings={standings} myId={user?._id} lang={lang} tl={tl} />}
+        <button onClick={() => router.push('/lobby')} className="btn-ghost w-full py-3 rounded-xl text-sm mt-4">
+          {tl.backToLobby}
+        </button>
       </div>
-      <Leaderboard standings={standings} myId={user?._id} lang={lang} tl={tl} />
-      <button onClick={() => router.push('/lobby')} className="btn-ghost w-full py-3 rounded-xl text-sm mt-4">
-        {tl.backToLobby}
-      </button>
-    </div>
-  );
+    );
+  }
 
   const t = tournament;
   const currentRound = roundInfo?.roundNumber ?? t?.currentRound ?? 0;
@@ -414,6 +542,15 @@ export default function TournamentWaitingRoom() {
                       ? <span className="w-3 h-3 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
                       : <Play size={11} />}
                     {`${tl.startRound} ${(t?.currentRound || 0) + 1}/${t?.totalRounds || 3}`}
+                  </button>
+                )}
+                {status === 'playoff_ready' && (
+                  <button
+                    onClick={() => getSocket()?.emit('start_playoff', { tournamentId })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                    style={{ background: 'rgba(251,146,60,0.15)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.3)' }}>
+                    <Play size={11} />
+                    {lang === 'th' ? 'เริ่ม Playoff' : 'Start Playoff'}
                   </button>
                 )}
                 <button
@@ -553,6 +690,41 @@ export default function TournamentWaitingRoom() {
             </div>
           </div>
         )}
+
+        {status === 'playoff_ready' && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+            style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)' }}>
+            <span className="text-lg flex-shrink-0">🥊</span>
+            <div>
+              <p className="text-sm text-orange-300 font-semibold">
+                {lang === 'th' ? 'รอบแบ่งกลุ่มจบแล้ว — เข้าสู่ Playoff!' : 'Group stage complete — Playoffs incoming!'}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {lang === 'th' ? 'รอ Admin เริ่มรอบรองชนะเลิศ' : 'Waiting for Admin to start Semifinals'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {(status === 'playoff_sf') && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+            style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)' }}>
+            <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse flex-shrink-0" />
+            <p className="text-sm text-orange-300">
+              {lang === 'th' ? 'รอบรองชนะเลิศกำลังแข่ง' : 'Semifinals in progress'}
+            </p>
+          </div>
+        )}
+
+        {(status === 'playoff_final') && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
+            <p className="text-sm text-red-300">
+              {lang === 'th' ? 'รอบชิงชนะเลิศกำลังแข่ง' : 'Finals in progress'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Round progress bar */}
@@ -580,9 +752,35 @@ export default function TournamentWaitingRoom() {
         </div>
       )}
 
-      {/* Leaderboard (shown once any round has happened) */}
-      {currentRound > 0 && standings.length > 0 && (
+      {/* Leaderboard (shown during group stage once any round has happened) */}
+      {currentRound > 0 && standings.length > 0 && !['playoff_ready','playoff_sf','playoff_final'].includes(status) && (
         <Leaderboard standings={standings} myId={user?._id} tl={tl} />
+      )}
+
+      {/* Playoff qualifiers (shown while waiting for semis to start) */}
+      {status === 'playoff_ready' && playoffQualifiers.length > 0 && (
+        <div className="card p-5 mb-4" style={{ borderColor: 'rgba(251,146,60,0.25)' }}>
+          <h3 className="text-sm font-bold text-orange-400 mb-3">
+            {lang === 'th' ? '🥊 ผู้ผ่านเข้ารอบ Playoff (Top 4)' : '🥊 Playoff Qualifiers (Top 4)'}
+          </h3>
+          <div className="space-y-1.5">
+            {playoffQualifiers.map((q, i) => (
+              <div key={q.userId} className="flex items-center gap-2 text-sm">
+                <span className="text-slate-500 w-5 text-right text-xs">{i + 1}.</span>
+                <span className={`flex-1 font-semibold ${q.userId === user?._id ? 'text-orange-300' : 'text-white'}`}>{q.username}</span>
+                <span className="text-xs text-slate-500">{q.points} pts</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-slate-600 mt-3">
+            {lang === 'th' ? 'คู่ที่ 1: อันดับ 1 vs 4 | คู่ที่ 2: อันดับ 2 vs 3' : 'SF1: Seed 1 vs 4 | SF2: Seed 2 vs 3'}
+          </p>
+        </div>
+      )}
+
+      {/* Playoff bracket (shown during/after playoff) */}
+      {playoffBracket && ['playoff_sf','playoff_final','tournament_complete'].includes(status) && (
+        <PlayoffBracketView bracket={playoffBracket} myId={user?._id} lang={lang} playerNames={standings} />
       )}
 
       {/* Players list (shown during waiting phase) */}
