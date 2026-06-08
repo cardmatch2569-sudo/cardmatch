@@ -512,6 +512,14 @@ export default function RoomPage() {
         ],
         iceCandidatePoolSize: 10,
       });
+      pc.ontrack = ({ streams }) => {
+        const stream = streams?.[0];
+        if (!stream) return;
+        const audio = new Audio();
+        audio.srcObject = stream;
+        audio.autoplay = true;
+        audio.play().catch(() => {});
+      };
       pc.onconnectionstatechange = () => {
         if (['closed','failed','disconnected'].includes(pc.connectionState)) adminCameraPeerRef.current = null;
       };
@@ -822,8 +830,8 @@ export default function RoomPage() {
           <span className="text-[10px] text-slate-600">{roomId.slice(0, 8)}…</span>
         </div>
 
-        {/* Two player video feeds */}
-        <div className="flex-1 flex gap-2 p-3 min-h-0">
+        {/* Two player video feeds — stacked vertically (landscape each) */}
+        <div className="flex-1 flex flex-col gap-2 p-3 min-h-0">
           {adminPlayers.length === 0 && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-3">
@@ -865,7 +873,7 @@ export default function RoomPage() {
           ))}
           {adminPlayers.length === 1 && (
             <div className="flex-1 flex items-center justify-center rounded-2xl"
-              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', minHeight: '80px' }}>
               <p className="text-slate-600 text-sm">{lang === 'th' ? 'รอกล้องผู้เล่น 2...' : 'Waiting P2 camera...'}</p>
             </div>
           )}
@@ -1193,8 +1201,8 @@ export default function RoomPage() {
           </button>
         )}
 
-        {/* Leave — hidden only while admin is deciding (prevent exit before verdict) */}
-        {!(isTournament && tourneyPhase === 'admin_decision') && (
+        {/* Leave — hidden in tournament (players exit via proper จบเกม flow) */}
+        {!isTournament && (
           <button onClick={handleLeave}
             className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
             style={{ background: 'rgba(239,68,68,0.85)', boxShadow: '0 4px 15px rgba(239,68,68,0.3)' }}>
