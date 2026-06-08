@@ -81,7 +81,6 @@ export default function TournamentWaitingRoom() {
   const [decideMatch, setDecideMatch] = useState(null);
   const [decidingMatch, setDecidingMatch] = useState(false);
   const [toast,       setToast]       = useState('');
-  const [leaveConfirm, setLeaveConfirm] = useState(false);
   const langRef     = useRef(lang);
   const hasJoinedRef = useRef(false);
   langRef.current = lang;
@@ -278,11 +277,6 @@ export default function TournamentWaitingRoom() {
 
   const handleLeave = () => {
     if (user?.isAdmin) { router.push('/tournament'); return; }
-    setLeaveConfirm(true);
-  };
-
-  const confirmLeave = () => {
-    setLeaveConfirm(false);
     leftRef.current = true;
     getSocket()?.emit('leave_tournament', { tournamentId });
     router.push('/tournament');
@@ -362,39 +356,6 @@ export default function TournamentWaitingRoom() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
-
-      {/* ── Leave confirmation modal ────────────────────────────── */}
-      {leaveConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
-          <div className="card w-full max-w-sm p-6 text-center space-y-4"
-            style={{ border: '1px solid rgba(239,68,68,0.3)' }}>
-            <div className="text-3xl">⚠️</div>
-            <div>
-              <p className="text-white font-semibold text-base">
-                {lang === 'th' ? 'ออกจากทัวร์นาเมนต์?' : 'Leave Tournament?'}
-              </p>
-              <p className="text-slate-400 text-sm mt-1">
-                {lang === 'th'
-                  ? 'ถ้าออกตอนนี้จะไม่สามารถกลับเข้ามาได้อีก'
-                  : 'If you leave now, you cannot rejoin this tournament.'}
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setLeaveConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition active:scale-95"
-                style={{ background: 'rgba(255,255,255,0.06)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}>
-                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
-              </button>
-              <button onClick={confirmLeave}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition active:scale-95"
-                style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
-                {lang === 'th' ? 'ออกเลย' : 'Leave'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Toast notification ──────────────────────────────────── */}
       {toast && (

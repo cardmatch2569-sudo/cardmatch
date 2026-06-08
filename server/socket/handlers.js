@@ -702,18 +702,13 @@ const setupSocketHandlers = (io) => {
       socket.emit('player_tournament_locked', { tournamentId });
     });
 
-    socket.on('leave_tournament', async ({ tournamentId }) => {
+    socket.on('leave_tournament', ({ tournamentId }) => {
       const t = tournaments.get(tournamentId);
       if (!t) return;
       t.players.delete(userId);
       socket.leave(`tournament:${tournamentId}`);
-
-      try {
-        await getPool().query(
-          `DELETE FROM TournamentPlayers WHERE tournament_id=$1 AND user_id=$2`,
-          [tournamentId, userId]
-        );
-      } catch {}
+      // Do NOT delete from TournamentPlayers DB — player keeps their participant
+      // record and can rejoin anytime. Only NEW players blocked after round 1 starts.
 
       const playersInfo = [...t.players].map(id => {
         const info = onlineUsers.get(id);
