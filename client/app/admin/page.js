@@ -138,20 +138,32 @@ export default function AdminPage() {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
     ];
     const onSpectateOffer = async ({ from, fromUsername, offer, roomId }) => {
       if (roomId !== spectateRoomIdRef.current) return;
-      const pc = new RTCPeerConnection({ iceServers: SPECTATE_ICE });
+      const pc = new RTCPeerConnection({ iceServers: SPECTATE_ICE, iceCandidatePoolSize: 10 });
       // Capture slot index NOW (when offer arrives) — not inside ontrack which fires
       // after ICE negotiation when spectateConnsRef may already have both entries.
       const slot = spectateConnsRef.current.size;
-      pc.ontrack = ({ streams }) => {
-        if (slot === 0) {
-          if (spectateVideo1Ref.current) spectateVideo1Ref.current.srcObject = streams[0];
-          setSpectatePlayer1(fromUsername);
-        } else {
-          if (spectateVideo2Ref.current) spectateVideo2Ref.current.srcObject = streams[0];
-          setSpectatePlayer2(fromUsername);
+      // Build stream per-track: streams[0] can be empty on macOS Safari/Chrome before
+      // all tracks are added, causing a permanently black video element.
+      const incomingStream = new MediaStream();
+      pc.ontrack = ({ track }) => {
+        incomingStream.addTrack(track);
+        const videoRef = slot === 0 ? spectateVideo1Ref : spectateVideo2Ref;
+        if (videoRef.current) {
+          if (videoRef.current.srcObject !== incomingStream) videoRef.current.srcObject = incomingStream;
+          videoRef.current.play().catch(() => {});
+        }
+        if (track.kind === 'video') {
+          if (slot === 0) setSpectatePlayer1(fromUsername);
+          else setSpectatePlayer2(fromUsername);
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed') {
+          try { pc.restartIce?.(); } catch {}
         }
       };
       pc.onicecandidate = ({ candidate }) => {
