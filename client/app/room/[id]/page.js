@@ -178,6 +178,9 @@ export default function RoomPage() {
   const [adminStreamsMap,  setAdminStreamsMap]  = useState({});
   const [adminDecided,    setAdminDecided]    = useState(false);
   const [adminMicActive,  setAdminMicActive]  = useState(false);
+  const [adminVideoLayout, setAdminVideoLayout] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 768 ? 'col' : 'row'
+  );
   const [playerRotations, setPlayerRotations]  = useState({});
   const adminMicStreamRef   = useRef(null);
   const adminMicSendersRef  = useRef({});  // { [playerId]: RTCRtpSender } — tracks in spectate PCs
@@ -820,11 +823,31 @@ export default function RoomPage() {
           <span className="flex-1 text-center text-sm font-semibold text-yellow-300">
             ⚖️ {lang === 'th' ? 'ดูห้องแข่ง — Admin' : 'Watching Match — Admin'}
           </span>
-          <span className="text-[10px] text-slate-600">{roomId.slice(0, 8)}…</span>
+          <div className="flex items-center gap-2">
+            {/* Layout toggle button */}
+            <button
+              onClick={() => setAdminVideoLayout(l => l === 'row' ? 'col' : 'row')}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition active:scale-95"
+              style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.08)' }}
+              title={lang === 'th' ? 'สลับรูปแบบวิดีโอ' : 'Toggle video layout'}>
+              {adminVideoLayout === 'row' ? (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <rect x="1" y="1" width="5.5" height="12" rx="1"/>
+                  <rect x="7.5" y="1" width="5.5" height="12" rx="1"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <rect x="1" y="1" width="12" height="5.5" rx="1"/>
+                  <rect x="1" y="7.5" width="12" height="5.5" rx="1"/>
+                </svg>
+              )}
+            </button>
+            <span className="text-[10px] text-slate-600">{roomId.slice(0, 8)}…</span>
+          </div>
         </div>
 
-        {/* Two player video feeds — stacked vertically (landscape each) */}
-        <div className="flex-1 flex flex-col gap-2 p-3 min-h-0">
+        {/* Two player video feeds */}
+        <div className={`flex-1 flex ${adminVideoLayout === 'row' ? 'flex-col' : 'flex-row'} gap-2 p-3 min-h-0`}>
           {adminPlayers.length === 0 && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-3">
