@@ -182,6 +182,14 @@ export default function RoomPage() {
   const [adminPlayers,    setAdminPlayers]    = useState([]);
   const [adminStreamsMap,  setAdminStreamsMap]  = useState({});
   const [adminDecided,    setAdminDecided]    = useState(false);
+  // Admin's own camera (sent to players during spectate)
+  const [adminCamOn,      setAdminCamOn]      = useState(false);
+  const [adminMicOn,      setAdminMicOn]       = useState(true);
+  const [adminVideoOn,    setAdminVideoOn]     = useState(true);
+  const [adminFacingMode, setAdminFacingMode]  = useState('user');
+  const adminLocalStreamRef     = useRef(null);
+  const adminLocalVideoRef      = useRef(null);
+  const adminSendCameraConnsRef = useRef({});
 
   // Detect tournament match from sessionStorage
   const [tournamentId, setTournamentId] = useState('');
@@ -528,8 +536,19 @@ export default function RoomPage() {
       } catch (e) { console.warn('[admin camera] answer failed:', e.message); }
       adminCameraPeerRef.current = pc;
     };
-    const onAdminCameraIce = ({ candidate }) => {
-      try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    const onAdminCameraIce = ({ candidate, from }) => {
+      if (isAdminSpectate && from) {
+        // Player → admin: ICE response to admin's own camera offer sent from this spectate view
+        const pc = adminSendCameraConnsRef.current[from];
+        try { pc?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      } else {
+        // Admin → player: ICE for receiving admin's camera stream
+        try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      }
+    };
+    const onAdminCameraAnswerFromPlayer = ({ answer, from }) => {
+      const pc = adminSendCameraConnsRef.current[from];
+      pc?.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
     };
     const onAdminCameraStopped = () => {
       adminCameraPeerRef.current?.close();
@@ -549,6 +568,7 @@ export default function RoomPage() {
     socket.on('admin_camera_offer',   onAdminCameraOffer);
     socket.on('admin_camera_ice',     onAdminCameraIce);
     socket.on('admin_camera_stopped', onAdminCameraStopped);
+    if (isAdminSpectate) socket.on('admin_camera_answer', onAdminCameraAnswerFromPlayer);
     if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
@@ -592,11 +612,16 @@ export default function RoomPage() {
       socket.off('admin_called',   onAdminCalled);
       socket.off('error',          onAdminError);
       socket.off('spectate_ended', onSpectateEnded);
+      if (isAdminSpectate) socket.off('admin_camera_answer', onAdminCameraAnswerFromPlayer);
       if (isAdminSpectate) socket.off('admin_peer_offer', onAdminPeerOfferReceived);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
       adminCameraPeerRef.current?.close();
       adminCameraPeerRef.current = null;
+      adminLocalStreamRef.current?.getTracks().forEach(tk => tk.stop());
+      adminLocalStreamRef.current = null;
+      Object.values(adminSendCameraConnsRef.current).forEach(pc => { try { pc.close(); } catch {} });
+      adminSendCameraConnsRef.current = {};
       Object.values(adminPeersRef.current).forEach(pc => { try { pc.close(); } catch {} });
       adminPeersRef.current = {};
       Object.values(adminStreamRefs.current).forEach(vid => {
@@ -674,11 +699,84 @@ export default function RoomPage() {
     return () => clearTimeout(adminCameraFadeTimer.current);
   }, [adminCameraStream]);
 
+  const SPECTATE_CAMERA_ICE = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  ];
+
+  const startAdminSelfCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+      adminLocalStreamRef.current = stream;
+      if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = stream;
+      setAdminCamOn(true); setAdminVideoOn(true); setAdminMicOn(true); setAdminFacingMode('user');
+      const socket = getSocket();
+      const sendOffer = async (playerId, attempt = 0) => {
+        const pc = new RTCPeerConnection({ iceServers: SPECTATE_CAMERA_ICE });
+        stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) socket.emit('admin_camera_ice', { roomId, targetUserId: playerId, candidate });
+        };
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('admin_camera_offer', { roomId, targetUserId: playerId, offer });
+          adminSendCameraConnsRef.current[playerId] = pc;
+        } catch (e) { pc.close(); if (attempt === 0) setTimeout(() => sendOffer(playerId, 1), 2000); }
+      };
+      for (const playerId of Object.keys(adminPeersRef.current)) sendOffer(playerId);
+    } catch (e) { console.warn('[admin camera] start failed:', e.message); }
+  };
+
+  const stopAdminSelfCamera = () => {
+    getSocket()?.emit('admin_camera_stopped', { roomId });
+    adminLocalStreamRef.current?.getTracks().forEach(tk => tk.stop());
+    adminLocalStreamRef.current = null;
+    if (adminLocalVideoRef.current) adminLocalVideoRef.current.srcObject = null;
+    Object.values(adminSendCameraConnsRef.current).forEach(pc => { try { pc.close(); } catch {} });
+    adminSendCameraConnsRef.current = {};
+    setAdminCamOn(false);
+  };
+
+  const toggleAdminSelfMic = () => {
+    const track = adminLocalStreamRef.current?.getAudioTracks()[0];
+    if (track) { track.enabled = !track.enabled; setAdminMicOn(track.enabled); }
+  };
+
+  const toggleAdminSelfVideo = () => {
+    const track = adminLocalStreamRef.current?.getVideoTracks()[0];
+    if (track) { track.enabled = !track.enabled; setAdminVideoOn(track.enabled); }
+  };
+
+  const flipAdminSelfCamera = async () => {
+    const nextFacing = adminFacingMode === 'user' ? 'environment' : 'user';
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nextFacing }, audio: false });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      const oldTrack = adminLocalStreamRef.current?.getVideoTracks()[0];
+      if (oldTrack) { adminLocalStreamRef.current.removeTrack(oldTrack); oldTrack.stop(); }
+      adminLocalStreamRef.current.addTrack(newVideoTrack);
+      Object.values(adminSendCameraConnsRef.current).forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
+      });
+      newVideoTrack.enabled = adminVideoOn;
+      setAdminFacingMode(nextFacing);
+    } catch (e) { console.warn('[admin camera flip]', e.message); }
+  };
+
   const handleAdminDecide = useCallback((winnerId) => {
     const s = getSocket();
     if (!s) return;
     s.emit('admin_decide_match', { roomId, winnerId });
     s.emit('admin_stop_watching', { roomId });
+    if (adminLocalStreamRef.current) {
+      s.emit('admin_camera_stopped', { roomId });
+      adminLocalStreamRef.current.getTracks().forEach(tk => tk.stop());
+      adminLocalStreamRef.current = null;
+    }
     setAdminDecided(true);
     leftRef.current = true;
     setTimeout(() => router.push(spectatorTid ? `/tournament/${spectatorTid}` : '/tournament'), 1500);
@@ -822,6 +920,75 @@ export default function RoomPage() {
             <div className="flex-1 flex items-center justify-center rounded-2xl"
               style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
               <p className="text-slate-600 text-sm">{lang === 'th' ? 'รอกล้องผู้เล่น 2...' : 'Waiting P2 camera...'}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Admin camera controls */}
+        <div className="px-3 pb-1">
+          <div className="p-2.5 rounded-xl flex items-center gap-2"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-white">
+                {lang === 'th' ? 'กล้อง Admin' : 'Admin Camera'}
+              </p>
+              <p className="text-[10px] text-slate-600 mt-0.5">
+                {lang === 'th' ? 'เปิดเพื่อพูดคุยกับผู้เล่น' : 'Turn on to talk with players'}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {adminCamOn ? (
+                <>
+                  <button onClick={toggleAdminSelfVideo}
+                    title={adminVideoOn ? (lang === 'th' ? 'ปิดภาพ' : 'Hide video') : (lang === 'th' ? 'เปิดภาพ' : 'Show video')}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
+                    style={adminVideoOn
+                      ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+                      : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
+                    {adminVideoOn ? <Video size={13} /> : <VideoOff size={13} />}
+                  </button>
+                  <button onClick={toggleAdminSelfMic}
+                    title={adminMicOn ? (lang === 'th' ? 'ปิดไมค์' : 'Mute') : (lang === 'th' ? 'เปิดไมค์' : 'Unmute')}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
+                    style={adminMicOn
+                      ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }
+                      : { background: 'rgba(239,68,68,0.75)', color: 'white', border: 'none' }}>
+                    {adminMicOn ? <Mic size={13} /> : <MicOff size={13} />}
+                  </button>
+                  <button onClick={flipAdminSelfCamera}
+                    title={lang === 'th' ? 'สลับกล้อง' : 'Flip camera'}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition active:scale-95"
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
+                    <SwitchCamera size={13} />
+                  </button>
+                  <button onClick={stopAdminSelfCamera}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+                    <VideoOff size={11} /> {lang === 'th' ? 'ปิด' : 'Stop'}
+                  </button>
+                </>
+              ) : (
+                <button onClick={startAdminSelfCamera}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition active:scale-95"
+                  style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
+                  <Video size={11} /> {lang === 'th' ? 'เปิดกล้อง' : 'Start'}
+                </button>
+              )}
+            </div>
+          </div>
+          {adminCamOn && (
+            <div className="mt-1.5 flex justify-center">
+              <div className="relative rounded-xl overflow-hidden bg-black"
+                style={{ width: '120px', aspectRatio: '4/3', border: '1px solid rgba(251,191,36,0.3)' }}>
+                <video ref={adminLocalVideoRef} autoPlay playsInline muted
+                  className="w-full h-full object-cover"
+                  style={{ transform: adminFacingMode === 'user' ? 'scaleX(-1)' : 'none' }} />
+                {!adminVideoOn && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black">
+                    <VideoOff size={16} className="text-slate-600" />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
