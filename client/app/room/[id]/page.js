@@ -464,10 +464,15 @@ export default function RoomPage() {
       }
     };
 
-    // Admin spectate: handle offer from each player
+    // Admin spectate: handle offer from each player (also handles reconnect)
     const onAdminPeerOfferReceived = async ({ from, fromUsername, offer }) => {
       if (!isAdminSpectate) return;
-      if (adminPeersRef.current[from]) return;
+      // Player reconnected — close old dead PC before creating a new one
+      if (adminPeersRef.current[from]) {
+        try { adminPeersRef.current[from].close(); } catch {}
+        delete adminPeersRef.current[from];
+        delete adminMicSendersRef.current[from];
+      }
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -477,17 +482,13 @@ export default function RoomPage() {
         ],
         iceCandidatePoolSize: 10,
       });
-      // Register real PC immediately so ICE candidates arriving during negotiation
-      // are applied to a live RTCPeerConnection instead of being silently dropped.
       adminPeersRef.current[from] = pc;
       const incomingStream = new MediaStream();
       pc.ontrack = ({ track, streams }) => {
         incomingStream.addTrack(track);
         if (track.kind !== 'video') return;
-        // Prefer sender-associated stream; fall back to per-track build for Safari.
         const stream = (streams && streams.length > 0) ? streams[0] : incomingStream;
         setAdminStreamsMap(prev => ({ ...prev, [from]: stream }));
-        // Also set srcObject directly — the useEffect may skip if stream reference is same.
         const vid = adminStreamRefs.current[from];
         if (vid) { vid.srcObject = stream; vid.play().catch(() => {}); }
       };
@@ -503,6 +504,18 @@ export default function RoomPage() {
         await pc.setLocalDescription(answer);
         socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
         setAdminPlayers(p => [...p.filter(x => x.userId !== from), { userId: from, username: fromUsername || '?' }]);
+        // If mic is active, renegotiate to add mic track to this (new) connection
+        const micStream = adminMicStreamRef.current;
+        const micTrack = micStream?.getAudioTracks()[0];
+        if (micTrack && micTrack.readyState !== 'ended') {
+          try {
+            const sender = pc.addTrack(micTrack, micStream);
+            adminMicSendersRef.current[from] = sender;
+            const micOffer = await pc.createOffer();
+            await pc.setLocalDescription(micOffer);
+            socket.emit('admin_mic_reoffer', { roomId, targetUserId: from, offer: micOffer });
+          } catch (e) { console.warn('[admin mic] reconnect reoffer failed:', e.message); }
+        }
       } catch (e) { console.warn('[admin spectate] offer error:', e.message); }
     };
     const onAdminLeft = () => {
