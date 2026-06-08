@@ -179,9 +179,10 @@ export default function RoomPage() {
   const [adminDecided,    setAdminDecided]    = useState(false);
   const [adminMicActive,  setAdminMicActive]  = useState(false);
   const [playerRotations, setPlayerRotations]  = useState({});
-  const adminMicStreamRef = useRef(null);
-  const adminMicConnsRef  = useRef({});
+  const adminMicStreamRef  = useRef(null);
+  const adminMicConnsRef   = useRef({});
   const adminCameraPeerRef = useRef(null);
+  const adminMicAudioRef   = useRef(null); // DOM <audio> to play admin's voice on player side
 
   // Detect tournament match from sessionStorage
   const [tournamentId, setTournamentId] = useState('');
@@ -512,13 +513,13 @@ export default function RoomPage() {
         ],
         iceCandidatePoolSize: 10,
       });
-      pc.ontrack = ({ streams }) => {
+      pc.ontrack = ({ streams, track }) => {
         const stream = streams?.[0];
-        if (!stream) return;
-        const audio = new Audio();
-        audio.srcObject = stream;
-        audio.autoplay = true;
-        audio.play().catch(() => {});
+        if (!stream && !track) return;
+        const el = adminMicAudioRef.current;
+        if (!el) return;
+        el.srcObject = stream || (() => { const s = new MediaStream(); s.addTrack(track); return s; })();
+        el.play().catch(() => {});
       };
       pc.onconnectionstatechange = () => {
         if (['closed','failed','disconnected'].includes(pc.connectionState)) adminCameraPeerRef.current = null;
@@ -534,7 +535,11 @@ export default function RoomPage() {
       } catch (e) { console.warn('[admin mic recv]', e.message); }
       adminCameraPeerRef.current = pc;
     };
-    const onAdminCameraStopped = () => { adminCameraPeerRef.current?.close(); adminCameraPeerRef.current = null; };
+    const onAdminCameraStopped = () => {
+      adminCameraPeerRef.current?.close();
+      adminCameraPeerRef.current = null;
+      if (adminMicAudioRef.current) { adminMicAudioRef.current.srcObject = null; }
+    };
     // Admin side: receive answer from player after sending mic offer
     const onAdminCameraAnswerFromPlayer = ({ answer, from }) => {
       adminMicConnsRef.current[from]?.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
@@ -1254,6 +1259,9 @@ export default function RoomPage() {
           </div>
         </div>
       )}
+
+      {/* Hidden audio element — plays admin's mic voice on player side */}
+      <audio ref={adminMicAudioRef} autoPlay playsInline style={{ display: 'none' }} />
 
       {/* ── Admin called toast ── */}
       {adminCalledMsg && (
