@@ -177,7 +177,11 @@ export default function RoomPage() {
   const [adminPlayers,    setAdminPlayers]    = useState([]);
   const [adminStreamsMap,  setAdminStreamsMap]  = useState({});
   const [adminDecided,    setAdminDecided]    = useState(false);
+  const [adminMicActive,  setAdminMicActive]  = useState(false);
   const [playerRotations, setPlayerRotations]  = useState({});
+  const adminMicStreamRef = useRef(null);
+  const adminMicConnsRef  = useRef({});
+  const adminCameraPeerRef = useRef(null);
 
   // Detect tournament match from sessionStorage
   const [tournamentId, setTournamentId] = useState('');
@@ -492,6 +496,48 @@ export default function RoomPage() {
       setAdminWatching(false);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
+      adminCameraPeerRef.current?.close();
+      adminCameraPeerRef.current = null;
+    };
+
+    // Player side: receive admin mic-only audio stream
+    const onAdminCameraOffer = async ({ offer, roomId: rid }) => {
+      if (rid !== roomId || isAdminSpectate) return;
+      adminCameraPeerRef.current?.close();
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443'], username: 'openrelayproject', credential: 'openrelayproject' },
+        ],
+        iceCandidatePoolSize: 10,
+      });
+      pc.onconnectionstatechange = () => {
+        if (['closed','failed','disconnected'].includes(pc.connectionState)) adminCameraPeerRef.current = null;
+      };
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) getSocket()?.emit('admin_camera_ice', { roomId, candidate });
+      };
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        getSocket()?.emit('admin_camera_answer', { roomId, answer });
+      } catch (e) { console.warn('[admin mic recv]', e.message); }
+      adminCameraPeerRef.current = pc;
+    };
+    const onAdminCameraStopped = () => { adminCameraPeerRef.current?.close(); adminCameraPeerRef.current = null; };
+    // Admin side: receive answer from player after sending mic offer
+    const onAdminCameraAnswerFromPlayer = ({ answer, from }) => {
+      adminMicConnsRef.current[from]?.setRemoteDescription(new RTCSessionDescription(answer)).catch(() => {});
+    };
+    // ICE exchange for mic — bidirectional via same event
+    const onAdminCameraIce = ({ candidate, from }) => {
+      if (isAdminSpectate && from) {
+        try { adminMicConnsRef.current[from]?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      } else {
+        try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      }
     };
 
 
@@ -504,6 +550,10 @@ export default function RoomPage() {
     socket.on('admin_peer_answer',    onAdminPeerAnswer);
     socket.on('admin_peer_ice',       onAdminPeerIce);
     socket.on('admin_left',           onAdminLeft);
+    socket.on('admin_camera_offer',   onAdminCameraOffer);
+    socket.on('admin_camera_ice',     onAdminCameraIce);
+    socket.on('admin_camera_stopped', onAdminCameraStopped);
+    if (isAdminSpectate) socket.on('admin_camera_answer', onAdminCameraAnswerFromPlayer);
     if (isAdminSpectate) socket.on('admin_peer_offer', onAdminPeerOfferReceived);
     const onAdminCalled = ({ message }) => { setAdminCalledMsg(message); setTimeout(() => setAdminCalledMsg(''), 4000); };
     socket.on('admin_called', onAdminCalled);
@@ -544,9 +594,19 @@ export default function RoomPage() {
       socket.off('admin_called',   onAdminCalled);
       socket.off('error',          onAdminError);
       socket.off('spectate_ended', onSpectateEnded);
+      socket.off('admin_camera_offer',   onAdminCameraOffer);
+      socket.off('admin_camera_ice',     onAdminCameraIce);
+      socket.off('admin_camera_stopped', onAdminCameraStopped);
+      if (isAdminSpectate) socket.off('admin_camera_answer', onAdminCameraAnswerFromPlayer);
       if (isAdminSpectate) socket.off('admin_peer_offer', onAdminPeerOfferReceived);
       adminPeerRef.current?.close();
       adminPeerRef.current = null;
+      adminCameraPeerRef.current?.close();
+      adminCameraPeerRef.current = null;
+      adminMicStreamRef.current?.getTracks().forEach(tk => tk.stop());
+      adminMicStreamRef.current = null;
+      Object.values(adminMicConnsRef.current).forEach(pc => { try { pc.close(); } catch {} });
+      adminMicConnsRef.current = {};
       Object.values(adminPeersRef.current).forEach(pc => { try { pc.close(); } catch {} });
       adminPeersRef.current = {};
       Object.values(adminStreamRefs.current).forEach(vid => {
@@ -614,11 +674,47 @@ export default function RoomPage() {
   ];
 
 
+  const startAdminMic = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      adminMicStreamRef.current = stream;
+      setAdminMicActive(true);
+      const socket = getSocket();
+      for (const playerId of Object.keys(adminPeersRef.current)) {
+        const pc = new RTCPeerConnection({ iceServers: SPECTATE_CAMERA_ICE });
+        stream.getTracks().forEach(tk => pc.addTrack(tk, stream));
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) socket.emit('admin_camera_ice', { roomId, targetUserId: playerId, candidate });
+        };
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('admin_camera_offer', { roomId, targetUserId: playerId, offer });
+          adminMicConnsRef.current[playerId] = pc;
+        } catch (e) { pc.close(); }
+      }
+    } catch (e) { console.warn('[admin mic]', e.message); }
+  };
+
+  const stopAdminMic = () => {
+    getSocket()?.emit('admin_camera_stopped', { roomId });
+    adminMicStreamRef.current?.getTracks().forEach(tk => tk.stop());
+    adminMicStreamRef.current = null;
+    Object.values(adminMicConnsRef.current).forEach(pc => { try { pc.close(); } catch {} });
+    adminMicConnsRef.current = {};
+    setAdminMicActive(false);
+  };
+
   const handleAdminDecide = useCallback((winnerId) => {
     const s = getSocket();
     if (!s) return;
     s.emit('admin_decide_match', { roomId, winnerId });
     s.emit('admin_stop_watching', { roomId });
+    if (adminMicStreamRef.current) {
+      s.emit('admin_camera_stopped', { roomId });
+      adminMicStreamRef.current.getTracks().forEach(tk => tk.stop());
+      adminMicStreamRef.current = null;
+    }
     setAdminDecided(true);
     leftRef.current = true;
     setTimeout(() => router.push(spectatorTid ? `/tournament/${spectatorTid}` : '/tournament'), 1500);
@@ -772,6 +868,25 @@ export default function RoomPage() {
               style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
               <p className="text-slate-600 text-sm">{lang === 'th' ? 'รอกล้องผู้เล่น 2...' : 'Waiting P2 camera...'}</p>
             </div>
+          )}
+        </div>
+
+        {/* Admin mic button */}
+        <div className="px-3 pb-1 flex justify-center">
+          {adminMicActive ? (
+            <button onClick={stopAdminMic}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition active:scale-95"
+              style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+              {lang === 'th' ? 'ปิดไมค์' : 'Mute'}
+            </button>
+          ) : (
+            <button onClick={startAdminMic}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition active:scale-95"
+              style={{ background: 'rgba(99,102,241,0.12)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)' }}>
+              <Mic size={13} />
+              {lang === 'th' ? 'เปิดไมค์' : 'Open mic'}
+            </button>
           )}
         </div>
 
