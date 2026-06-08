@@ -854,8 +854,9 @@ const setupSocketHandlers = (io) => {
     // Admin sends their own camera stream offer to a specific player
     socket.on('admin_camera_offer', ({ roomId, targetUserId, offer }) => {
       if (!user.isAdmin) return;
-      const playerInfo = onlineUsers.get(targetUserId);
-      if (playerInfo) io.to(playerInfo.socketId).emit('admin_camera_offer', { offer, roomId });
+      console.log('[admin_camera_offer] broadcasting to room', roomId, 'targetUserId:', targetUserId, 'onlineUsers lookup:', !!onlineUsers.get(targetUserId));
+      // Broadcast to entire room — player side filters by targetUserId
+      socket.to(roomId).emit('admin_camera_offer', { offer, roomId, targetUserId });
     });
 
     // Player answers admin's camera offer
@@ -875,10 +876,9 @@ const setupSocketHandlers = (io) => {
     // ICE candidates for admin camera stream (both directions)
     socket.on('admin_camera_ice', ({ roomId, targetUserId, candidate }) => {
       if (targetUserId) {
-        // Admin → player
+        // Admin → player: broadcast to room, player filters by targetUserId
         if (!user.isAdmin) return;
-        const playerInfo = onlineUsers.get(targetUserId);
-        if (playerInfo) io.to(playerInfo.socketId).emit('admin_camera_ice', { candidate, roomId });
+        socket.to(roomId).emit('admin_camera_ice', { candidate, roomId, targetUserId });
       } else {
         // Player → admin
         const aw = adminWatching.get(roomId);

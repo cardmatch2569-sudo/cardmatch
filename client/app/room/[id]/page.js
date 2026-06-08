@@ -502,9 +502,10 @@ export default function RoomPage() {
     };
 
     // Player side: receive admin mic-only audio stream
-    const onAdminCameraOffer = async ({ offer, roomId: rid }) => {
-      console.log('[player] onAdminCameraOffer received, rid:', rid, 'roomId:', roomId, 'isAdminSpectate:', isAdminSpectate);
-      if (rid !== roomId || isAdminSpectate) { console.log('[player] offer ignored'); return; }
+    const onAdminCameraOffer = async ({ offer, roomId: rid, targetUserId }) => {
+      console.log('[player] onAdminCameraOffer received, rid:', rid, 'targetUserId:', targetUserId, 'myId:', user?._id, 'isAdminSpectate:', isAdminSpectate);
+      if (rid !== roomId || isAdminSpectate) { console.log('[player] offer ignored (room/admin check)'); return; }
+      if (targetUserId && targetUserId !== user?._id) { console.log('[player] offer not for me'); return; }
       adminCameraPeerRef.current?.close();
       const pc = new RTCPeerConnection({
         iceServers: [
@@ -549,10 +550,13 @@ export default function RoomPage() {
       adminMicConnsRef.current[from]?.setRemoteDescription(new RTCSessionDescription(answer)).catch(e => console.warn('[admin mic] setRemoteDesc failed:', e.message));
     };
     // ICE exchange for mic — bidirectional via same event
-    const onAdminCameraIce = ({ candidate, from }) => {
+    const onAdminCameraIce = ({ candidate, from, targetUserId }) => {
       if (isAdminSpectate && from) {
+        // Admin side: ICE from player
         try { adminMicConnsRef.current[from]?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
       } else {
+        // Player side: ICE from admin — filter by targetUserId
+        if (targetUserId && targetUserId !== user?._id) return;
         try { adminCameraPeerRef.current?.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
       }
     };
