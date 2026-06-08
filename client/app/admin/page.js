@@ -145,12 +145,13 @@ export default function AdminPage() {
     const onSpectateOffer = async ({ from, fromUsername, offer, roomId }) => {
       if (roomId !== spectateRoomIdRef.current) return;
       if (spectateConnsRef.current.has(from)) return;
-      // Reserve slot BEFORE any await — both offers arrive near-simultaneously (server
-      // broadcasts admin_watching to the whole room at once). Without this reservation
-      // the second offer sees size=0 too (set() hasn't run yet) and collides to slot 0.
+      // Capture slot then register the real PC immediately — both before any await so
+      // the second simultaneous offer sees size=1 and gets slot 1.  Registering the real
+      // PC (not a null placeholder) means ICE candidates that arrive during negotiation
+      // are applied to a live RTCPeerConnection instead of being silently dropped.
       const slot = spectateConnsRef.current.size;
-      spectateConnsRef.current.set(from, null); // placeholder — replaced below after negotiation
       const pc = new RTCPeerConnection({ iceServers: SPECTATE_ICE, iceCandidatePoolSize: 10 });
+      spectateConnsRef.current.set(from, pc);
       // Per-track fallback for macOS Safari where streams[0] can be empty on first ontrack.
       const incomingStream = new MediaStream();
       pc.ontrack = ({ track, streams }) => {
@@ -179,7 +180,6 @@ export default function AdminPage() {
         await pc.setLocalDescription(answer);
         socket.emit('admin_peer_answer', { roomId, targetUserId: from, answer });
       } catch {}
-      spectateConnsRef.current.set(from, pc);
       // If admin camera already running when player connects late — send stream to them too
       if (adminLocalStreamRef.current) {
         const cpc = new RTCPeerConnection({ iceServers: SPECTATE_ICE });
@@ -471,7 +471,7 @@ export default function AdminPage() {
     setSpectateRoomId(roomId);
     setSpectatePlayer1('');
     setSpectatePlayer2('');
-    spectateConnsRef.current.forEach(pc => pc.close());
+    spectateConnsRef.current.forEach(pc => { try { pc?.close(); } catch {} });
     spectateConnsRef.current = new Map();
     if (spectateVideo1Ref.current) spectateVideo1Ref.current.srcObject = null;
     if (spectateVideo2Ref.current) spectateVideo2Ref.current.srcObject = null;
@@ -485,7 +485,7 @@ export default function AdminPage() {
     // Stop admin camera BEFORE clearing spectateRoomIdRef — stopAdminCamera reads it to emit admin_camera_stopped
     stopAdminCamera();
     spectateRoomIdRef.current = null;
-    spectateConnsRef.current.forEach(pc => pc.close());
+    spectateConnsRef.current.forEach(pc => { try { pc?.close(); } catch {} });
     spectateConnsRef.current = new Map();
     [spectateVideo1Ref, spectateVideo2Ref].forEach(ref => {
       if (ref.current?.srcObject) {
