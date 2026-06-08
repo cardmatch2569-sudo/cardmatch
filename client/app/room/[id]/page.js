@@ -1193,12 +1193,14 @@ export default function RoomPage() {
           </button>
         )}
 
-        {/* Leave — always visible for safety */}
-        <button onClick={handleLeave}
-          className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
-          style={{ background: 'rgba(239,68,68,0.85)', boxShadow: '0 4px 15px rgba(239,68,68,0.3)' }}>
-          <PhoneOff size={20} />
-        </button>
+        {/* Leave — hidden in tournament (admin decides, players cannot self-exit) */}
+        {!isTournament && (
+          <button onClick={handleLeave}
+            className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
+            style={{ background: 'rgba(239,68,68,0.85)', boxShadow: '0 4px 15px rgba(239,68,68,0.3)' }}>
+            <PhoneOff size={20} />
+          </button>
+        )}
 
         <button onClick={toggleMic}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
