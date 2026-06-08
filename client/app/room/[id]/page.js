@@ -1193,8 +1193,8 @@ export default function RoomPage() {
           </button>
         )}
 
-        {/* Leave — hidden in tournament (admin decides, players cannot self-exit) */}
-        {!isTournament && (
+        {/* Leave — hidden only while admin is deciding (prevent exit before verdict) */}
+        {!(isTournament && tourneyPhase === 'admin_decision') && (
           <button onClick={handleLeave}
             className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
             style={{ background: 'rgba(239,68,68,0.85)', boxShadow: '0 4px 15px rgba(239,68,68,0.3)' }}>
