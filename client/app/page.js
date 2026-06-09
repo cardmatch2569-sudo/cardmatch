@@ -93,7 +93,7 @@ export default function HomePage() {
               href={user ? '/lobby' : '/login'}
               className="btn-primary text-base px-7 py-3.5 rounded-xl"
             >
-              {t.heroBtn}
+              {user ? t.heroBtn : (lang === 'th' ? 'สมัครสมาชิกฟรี' : 'Sign Up Free')}
               <ArrowRight size={18} />
             </Link>
             {!user && (
@@ -209,10 +209,10 @@ export default function HomePage() {
                   style={{ borderColor: `${game.color}20` }}
                 >
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-4 transition-transform group-hover:scale-110"
-                    style={{ background: `${game.color}15`, border: `1px solid ${game.color}30` }}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black mb-4 transition-transform group-hover:scale-110"
+                    style={{ background: `${game.color}20`, border: `1px solid ${game.color}35`, color: game.color }}
                   >
-                    🃏
+                    {(lang === 'th' ? game.nameTh : game.name).charAt(0).toUpperCase()}
                   </div>
                   <div
                     className="inline-block w-1.5 h-1.5 rounded-full mb-3"

@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Shuffle, Search, X, Swords, Loader2, Users, Settings, Hash, Heart } from 'lucide-react';
+import { Shuffle, Search, X, Swords, Loader2, Users, Hash, Heart } from 'lucide-react';
 import Link from 'next/link';
 import PreMatchModal from '../../components/PreMatchModal';
 import PublicChat from '../../components/PublicChat';
@@ -465,12 +465,6 @@ export default function LobbyPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Link href="/setup"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm font-medium transition border"
-            style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border)', color: '#94a3b8' }}>
-            <Settings size={14} />
-            <span className="hidden sm:inline">{lang === 'th' ? 'ทดสอบ' : 'Setup'}</span>
-          </Link>
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-sm"
             style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)', color: '#4ade80' }}>
             <Users size={13} />
@@ -506,8 +500,8 @@ export default function LobbyPage() {
                     className={`flex-shrink-0 snap-start flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition whitespace-nowrap
                       ${active ? 'border-purple-500/50' : 'border-[var(--border)]'}`}
                     style={active ? { background: 'rgba(124,58,237,0.12)', color: game.color } : { background: 'var(--card)', color: '#94a3b8' }}>
-                    <div className="w-5 h-5 rounded-md flex items-center justify-center text-sm"
-                      style={{ background: `${game.color}20` }}>🃏</div>
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black flex-shrink-0"
+                      style={{ background: `${game.color}20`, color: game.color }}>{(lang === 'th' ? game.nameTh : game.name).charAt(0).toUpperCase()}</div>
                     {lang === 'th' ? game.nameTh : game.name}
                   </button>
                 );
@@ -528,8 +522,8 @@ export default function LobbyPage() {
                   className={`w-full flex items-center gap-3 p-4 rounded-xl border text-left transition-all
                     ${active ? 'border-purple-500/50 shadow-[0_0_20px_rgba(124,58,237,0.15)]' : 'border-[var(--border)] hover:border-[var(--border-2)] hover:bg-white/[0.02]'}`}
                   style={active ? { background: 'rgba(124,58,237,0.08)' } : { background: 'var(--card)' }}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
-                    style={{ background: `${game.color}15`, border: `1px solid ${game.color}30` }}>🃏</div>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-base font-black"
+                    style={{ background: `${game.color}20`, border: `1px solid ${game.color}35`, color: game.color }}>{(lang === 'th' ? game.nameTh : game.name).charAt(0).toUpperCase()}</div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-white text-sm">{lang === 'th' ? game.nameTh : game.name}</div>
                     <div className="text-xs text-slate-600 truncate mt-0.5">{lang === 'th' ? game.descriptionTh : game.description}</div>

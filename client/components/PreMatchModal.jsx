@@ -239,7 +239,7 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
                   style={{ background: lit ? color : 'rgba(255,255,255,0.06)', height: `${30 + (i / BAR_COUNT) * 70}%`, opacity: lit ? 1 : 0.4 }} />
               ))}
             </div>
-            {!loading && !camError && (
+            {!loading && (
               <p className="text-[10px] text-slate-700 text-center mt-1">
                 {lang === 'th' ? 'พูดอะไรก็ได้เพื่อทดสอบ' : 'Say something to test'}
               </p>
@@ -273,7 +273,7 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
             </button>
           </div>
 
-          {canConfirm && !cameraOk && (
+          {!cameraOk && !loading && (
             <p className="text-[10px] text-slate-600 text-center">
               {lang === 'th' ? '💡 สามารถจับคู่ได้แม้ไม่มีกล้อง' : '💡 You can match without a camera'}
             </p>

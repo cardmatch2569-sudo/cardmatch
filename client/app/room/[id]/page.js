@@ -165,6 +165,7 @@ export default function RoomPage() {
   const [matchResult,    setMatchResult]    = useState(null);      // { winnerId, loserId, method }
   const [timeoutAt,      setTimeoutAt]      = useState(null);
   const [partnerReconnecting, setPartnerReconnecting] = useState(false);
+  const [reconnectCountdown, setReconnectCountdown]   = useState(0);
   const [adminWatching,    setAdminWatching]    = useState(false);
   const [adminCalledMsg,   setAdminCalledMsg]   = useState('');
   const [escapeCountdown, setEscapeCountdown] = useState(0);
@@ -218,6 +219,13 @@ export default function RoomPage() {
     return () => clearInterval(escapeTimerRef.current);
   }, [tourneyPhase]);
 
+  // Count down the 15s reconnect grace period so the banner shows remaining time
+  useEffect(() => {
+    if (!partnerReconnecting) { setReconnectCountdown(0); return; }
+    setReconnectCountdown(15);
+    const id = setInterval(() => setReconnectCountdown(c => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [partnerReconnecting]);
 
   useEffect(() => {
     chatOpenRef.current = chatOpen;
@@ -1048,6 +1056,9 @@ export default function RoomPage() {
             style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(251,191,36,0.4)', backdropFilter: 'blur(8px)' }}>
             <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
             {lang === 'th' ? 'คู่แข่งกำลังเชื่อมต่อใหม่...' : 'Opponent reconnecting...'}
+            {reconnectCountdown > 0 && (
+              <span className="font-mono text-yellow-300 text-[10px] ml-1">{reconnectCountdown}s</span>
+            )}
           </div>
         </div>
       )}
@@ -1236,8 +1247,9 @@ export default function RoomPage() {
 
         {/* Rotate opponent */}
         <button onClick={() => setRemoteRotation(r => (r + 90) % 360)}
+          aria-label={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent video'}
           title={lang === 'th' ? 'หมุนภาพคู่แข่ง' : 'Rotate opponent'}
-          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
+          className="w-11 h-11 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
           style={{ background: remoteRotation !== 0 ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.1)', border: `1px solid ${remoteRotation !== 0 ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.12)'}`, color: remoteRotation !== 0 ? '#c4b5fd' : 'white' }}>
           <RotateCw size={14} />
           <span className="text-[8px] leading-none">{remoteRotation}°</span>
@@ -1255,8 +1267,9 @@ export default function RoomPage() {
         {/* Flip camera */}
         {hasFlipCamera && (
           <button onClick={flipCamera}
+            aria-label={lang === 'th' ? (facingMode === 'user' ? 'สลับกล้องหลัง' : 'สลับกล้องหน้า') : (facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera')}
             title={lang === 'th' ? (facingMode === 'user' ? 'สลับกล้องหลัง' : 'สลับกล้องหน้า') : (facingMode === 'user' ? 'Switch to back' : 'Switch to front')}
-            className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
+            className="w-11 h-11 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
             style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', color: 'white' }}>
             <SwitchCamera size={16} />
             <span className="text-[8px] leading-none opacity-70">{facingMode === 'user' ? (lang === 'th' ? 'หลัง' : 'Back') : (lang === 'th' ? 'หน้า' : 'Front')}</span>
@@ -1294,8 +1307,9 @@ export default function RoomPage() {
 
         {/* Rotate own */}
         <button onClick={() => setLocalRotation(r => (r + 90) % 360)}
+          aria-label={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
           title={lang === 'th' ? 'หมุนกล้องของฉัน' : 'Rotate my camera'}
-          className="w-10 h-10 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
+          className="w-11 h-11 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 active:opacity-100 opacity-60 hover:opacity-80"
           style={{ background: localRotation !== 0 ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.1)', border: `1px solid ${localRotation !== 0 ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.12)'}`, color: localRotation !== 0 ? '#c4b5fd' : 'white' }}>
           <RotateCw size={14} />
           <span className="text-[8px] leading-none">{localRotation}°</span>

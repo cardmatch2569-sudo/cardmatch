@@ -202,7 +202,7 @@ export default function LoginPage() {
 
         {/* Step indicator for reset password flow */}
         {(mode === 'forgot' || mode === 'reset') && (() => {
-          const resetStep = mode === 'forgot' ? 1 : resetCode.length === 6 ? 3 : 2;
+          const resetStep = mode === 'forgot' ? 1 : newPass.length > 0 ? 3 : 2;
           const steps = [
             { step: 1, label: lang === 'th' ? 'อีเมล' : 'Email' },
             { step: 2, label: 'OTP' },
@@ -317,7 +317,7 @@ export default function LoginPage() {
                   {lang === 'th' ? 'ระบบจะส่งรหัส OTP 6 หลักไปยัง Email เพื่อยืนยัน' : 'A 6-digit OTP will be sent to verify your email'}
                 </p>
               </div>
-              <div className="flex items-start gap-2 p-3 rounded-xl mb-3"
+              <div className="flex items-start gap-2 p-3 rounded-xl mb-2"
                 style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
                 <span className="flex-shrink-0 mt-0.5">🧪</span>
                 <p className="text-xs text-yellow-300/80 leading-relaxed break-words">
@@ -326,6 +326,11 @@ export default function LoginPage() {
                     : 'Beta — unlimited signups, max 1,000 concurrent players'}
                 </p>
               </div>
+              {googleConfigured && (
+                <p className="text-[11px] text-slate-500 text-center mb-2">
+                  {lang === 'th' ? '💡 สมัครด้วย Google ได้ที่แท็บ "เข้าสู่ระบบ"' : '💡 Sign up with Google via the "Login" tab'}
+                </p>
+              )}
             </>
           )}
 
@@ -435,7 +440,7 @@ export default function LoginPage() {
           )}
 
           {mode === 'register' && (
-            <p className="text-xs text-slate-700 text-center mt-3">
+            <p className="text-xs text-slate-500 text-center mt-3">
               {lang === 'th' ? 'ผู้ใช้คนแรกจะได้รับสิทธิ์ Admin อัตโนมัติ' : 'First registered user gets Admin rights'}
             </p>
           )}
