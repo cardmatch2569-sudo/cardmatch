@@ -97,7 +97,8 @@ router.get('/:id', protect, async (req, res) => {
         matches:          matchesOut,
         scheduledAt:      t.scheduledAt || null,
         scheduledEnd:     t.scheduledEnd || null,
-        playoffBracket:   t.playoffBracket || null,
+        playoffBracket:   t.playoffBracket   || null,
+        playoffQualifiers: t.playoffQualifiers || [],
       },
     });
   } catch (err) { res.status(500).json({ message: err.message }); }

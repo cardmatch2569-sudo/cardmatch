@@ -118,7 +118,8 @@ export default function TournamentWaitingRoom() {
   const [players,       setPlayers]       = useState([]);
   const [standings,     setStandings]     = useState([]);
   const [pageLoading,   setPageLoading]   = useState(true);
-  const [startingRound, setStartingRound] = useState(false);
+  const [startingRound,   setStartingRound]   = useState(false);
+  const [startingPlayoff, setStartingPlayoff] = useState(false);
   // status: loading | waiting | round_in_progress | round_complete | bye | tournament_complete | playoff_ready | playoff_sf | playoff_final | error
   const [status,        setStatus]        = useState('loading');
   const [roundInfo,     setRoundInfo]     = useState(null); // { roundNumber, totalRounds }
@@ -167,7 +168,8 @@ export default function TournamentWaitingRoom() {
       if (t.status === 'ended') { setStatus('tournament_complete'); return; }
 
       // Restore playoff state from initial load
-      if (t.playoffBracket) setPlayoffBracket(t.playoffBracket);
+      if (t.playoffBracket)    setPlayoffBracket(t.playoffBracket);
+      if (t.playoffQualifiers?.length) setPlayoffQualifiers(t.playoffQualifiers);
 
       // Set initial status from API immediately (don't wait for socket)
       if      (t.status === 'active')         setStatus('round_in_progress');
@@ -244,6 +246,7 @@ export default function TournamentWaitingRoom() {
       if (!mounted || tid !== tournamentId) return;
       if (bracket) setPlayoffBracket(bracket);
       setTournament(prev => prev ? { ...prev, status: 'playoff_sf' } : prev);
+      setStartingPlayoff(false);
       setStatus('playoff_sf');
     };
 
@@ -546,10 +549,13 @@ export default function TournamentWaitingRoom() {
                 )}
                 {status === 'playoff_ready' && (
                   <button
-                    onClick={() => getSocket()?.emit('start_playoff', { tournamentId })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                    onClick={() => { setStartingPlayoff(true); getSocket()?.emit('start_playoff', { tournamentId }); }}
+                    disabled={startingPlayoff}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: 'rgba(251,146,60,0.15)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.3)' }}>
-                    <Play size={11} />
+                    {startingPlayoff
+                      ? <span className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                      : <Play size={11} />}
                     {lang === 'th' ? 'เริ่ม Playoff' : 'Start Playoff'}
                   </button>
                 )}

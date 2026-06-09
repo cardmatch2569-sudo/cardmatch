@@ -49,7 +49,8 @@ export default function AdminPage() {
   // Tournament state
   const [tournaments,     setTournaments]     = useState([]);
   const [tourneyForm,     setTourneyForm]     = useState(EMPTY_TOURNEY);
-  const [tourneyCreating, setTourneyCreating] = useState(false);
+  const [tourneyCreating,  setTourneyCreating]  = useState(false);
+  const [startingPlayoffs, setStartingPlayoffs] = useState({}); // { [tournamentId]: bool }
   const [tourneyError,    setTourneyError]    = useState('');
   const [alerts,          setAlerts]          = useState([]); // { id, type, roomId, matchId, players }
   // Spectate state
@@ -134,8 +135,10 @@ export default function AdminPage() {
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'ended' } : x));
     const onPlayoffReady = ({ tournamentId, qualifiers, bracket }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'playoff_ready', phase: 'playoff', playoffBracket: bracket, qualifiers } : x));
-    const onPlayoffSemisStarted = ({ tournamentId, bracket }) =>
+    const onPlayoffSemisStarted = ({ tournamentId, bracket }) => {
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'playoff_sf', playoffBracket: bracket } : x));
+      setStartingPlayoffs(p => { const n = { ...p }; delete n[tournamentId]; return n; });
+    };
     const onPlayoffFinalsStarted = ({ tournamentId, bracket }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'playoff_final', playoffBracket: bracket } : x));
     const onPlayoffBracketUpdated = ({ tournamentId, bracket }) =>
@@ -395,6 +398,7 @@ export default function AdminPage() {
   };
 
   const handleStartPlayoff = (tournamentId) => {
+    setStartingPlayoffs(p => ({ ...p, [tournamentId]: true }));
     getSocket()?.emit('start_playoff', { tournamentId });
   };
 
@@ -1436,9 +1440,12 @@ export default function AdminPage() {
                         {tourney.status === 'playoff_ready' && (
                           <button
                             onClick={() => handleStartPlayoff(tourney.id)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95"
+                            disabled={!!startingPlayoffs[tourney.id]}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                             style={{ background: 'rgba(251,146,60,0.15)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.3)' }}>
-                            <Play size={11} />
+                            {startingPlayoffs[tourney.id]
+                              ? <span className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                              : <Play size={11} />}
                             {lang === 'th' ? 'เริ่ม Playoff' : 'Start Playoff'}
                           </button>
                         )}

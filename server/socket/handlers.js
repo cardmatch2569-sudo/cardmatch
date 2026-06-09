@@ -251,11 +251,13 @@ const buildStandings = (t) => {
     }))
     .sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
-      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+      // Tiebreaker 1: H2H (เคยแข่งกันโดยตรง)
       const key = [a.userId, b.userId].sort().join('_');
       const winner = t.h2h?.get(key);
       if (winner === a.userId) return -1;
       if (winner === b.userId) return 1;
+      // Tiebreaker 2: Buchholz (ผลรวมคะแนนของคนที่แพ้ตัวเอง)
+      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
       return 0;
     });
 };
