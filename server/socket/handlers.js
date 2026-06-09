@@ -99,8 +99,28 @@ const notifyAdmins = (io, type, data) => {
 };
 
 const ADMIN_DECISION_TIMEOUT_MS = 10 * 60 * 1000; // BUG-06: 10 min auto-resolve if no admin decides
+const MATCH_PLAYING_TIMEOUT_MS  = 45 * 60 * 1000; // 45 min: stalled 'playing' match → admin_decision
+
+const handleMatchPlayingTimeout = (io, roomId) => {
+  const match = tourneyMatches.get(roomId);
+  if (!match || match.phase !== 'playing') return;
+  match.playingTimer = null;
+  match.phase = 'admin_decision';
+  io.to(roomId).emit('match_needs_admin', { reason: 'no_response' });
+  notifyAdmins(io, 'timeout', {
+    roomId, matchId: match.matchId, tournamentId: match.tournamentId,
+    players: match.players,
+    playerNames: match.players.map(id => onlineUsers.get(id)?.username || '?'),
+  });
+  match.adminDecisionTimer = setTimeout(() => {
+    if (match.phase !== 'admin_decision') return;
+    const winnerId = match.players[Math.floor(Math.random() * match.players.length)];
+    finalizeMatch(io, roomId, match, winnerId, 'auto_timeout').catch(() => {});
+  }, ADMIN_DECISION_TIMEOUT_MS);
+};
 
 const finalizeMatch = async (io, roomId, match, winnerId, method) => {
+  clearTimeout(match.playingTimer);
   clearTimeout(match.timer);
   clearTimeout(match.adminDecisionTimer); // BUG-06
   match.phase = 'done';
@@ -181,7 +201,7 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
     if (match.matchType === 'final' || match.matchType === 'third') {
       b[match.matchType].winner = winnerId;
       const finalDone = b.final.winner != null;
-      const thirdDone = b.third.winner != null;
+      const thirdDone = b.third.winner != null || !!b.third.skipped;
 
       if (finalDone && thirdDone) {
         // Tournament over
@@ -281,7 +301,8 @@ const createPlayoffRoom = async (io, t, p1Id, p2Id, matchType) => {
     return null;
   }
   activeRooms.set(roomId, { players: [p1Id, p2Id], isTournament: true });
-  tourneyMatches.set(roomId, { matchId, tournamentId: t.id, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null, matchType });
+  const playingTimer = setTimeout(() => handleMatchPlayingTimeout(io, roomId), MATCH_PLAYING_TIMEOUT_MS);
+  tourneyMatches.set(roomId, { matchId, tournamentId: t.id, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null, playingTimer, matchType });
   try {
     await pool.query(
       `INSERT INTO TournamentMatches (id, tournament_id, room_id, player1_id, player2_id, status, round, match_type) VALUES ($1,$2,$3,$4,$5,'playing',$6,$7)`,
@@ -351,7 +372,24 @@ const startPlayoffSemis = async (io, t) => {
     const r = await createPlayoffRoom(io, t, b.sf2.p1, b.sf2.p2, 'sf2');
     if (r) { b.sf2.roomId = r.roomId; b.sf2.matchId = r.matchId; started++; }
   }
+  // Auto-advance any SF slot where p2 is null (insufficient qualifiers or bye)
+  for (const sfKey of ['sf1', 'sf2']) {
+    if (!b[sfKey].winner && b[sfKey].p1 && !b[sfKey].p2) {
+      b[sfKey].winner = b[sfKey].p1;
+      console.log(`[playoff] ${sfKey}: no opponent, auto-advancing ${b[sfKey].p1}`);
+    }
+  }
   t.activeMatchCount = started;
+
+  // If both SFs resolved with no live matches (e.g. <4 qualifiers), jump straight to finals
+  if (b.sf1.winner != null && b.sf2.winner != null && started === 0) {
+    b.final.p1 = b.sf1.winner;
+    b.final.p2 = b.sf2.winner;
+    b.third.p1 = b.sf1.p1 === b.sf1.winner ? b.sf1.p2 : b.sf1.p1;
+    b.third.p2 = b.sf2.p1 === b.sf2.winner ? b.sf2.p2 : b.sf2.p1;
+    await startPlayoffFinals(io, t);
+    return;
+  }
 
   try {
     await getPool().query(
@@ -382,6 +420,11 @@ const startPlayoffFinals = async (io, t) => {
   if (b.third.p1 && b.third.p2) {
     const r = await createPlayoffRoom(io, t, b.third.p1, b.third.p2, 'third');
     if (r) { b.third.roomId = r.roomId; b.third.matchId = r.matchId; started++; }
+  }
+  // Skip third place if either player is missing (happens with <4 qualifiers)
+  if (!b.third.roomId && (!b.third.p1 || !b.third.p2)) {
+    b.third.skipped = true;
+    console.log('[playoff] third place match skipped: missing player(s)');
   }
   t.activeMatchCount = started;
 
@@ -466,6 +509,28 @@ const setupSocketHandlers = (io) => {
         console.log(`[QUEUE] Updated socketId for ${user.username}`);
       }
     });
+
+    // Tournament match reconnect: re-notify player if they missed match_found while offline
+    for (const [roomId, tm] of tourneyMatches) {
+      if (tm.phase === 'done' || !tm.players.includes(userId)) continue;
+      const opponentId = tm.players.find(p => p !== userId);
+      const opponentInfo = onlineUsers.get(opponentId);
+      const t = tournaments.get(tm.tournamentId);
+      if (!t) continue;
+      const isPlayoffMatch = tm.matchType && tm.matchType !== 'group';
+      setImmediate(async () => {
+        let gameType = null;
+        try { gameType = await GameType.findById(t.gameTypeId); } catch {}
+        const gameInfo = { _id: t.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
+        if (isPlayoffMatch) {
+          socket.emit('tournament_match_found', { roomId, opponentId, opponentName: opponentInfo?.username || '?', gameInfo, matchType: tm.matchType });
+        } else {
+          socket.emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: opponentId, username: opponentInfo?.username || '?', avatar: opponentInfo?.avatar || '' }, isTournament: true, tournamentId: t.id, matchId: tm.matchId, roundNumber: t.currentRound });
+        }
+        console.log(`[reconnect] re-notified ${user.username} of active tournament match in room ${roomId}`);
+      });
+      break; // player can only be in one active match
+    }
 
     // ── MATCHMAKING ────────────────────────────────────────────────
     socket.on('join_queue', async ({ gameTypeId }) => {
@@ -771,7 +836,8 @@ const setupSocketHandlers = (io) => {
         }
 
         activeRooms.set(roomId, { players: [p1Id, p2Id], isTournament: true });
-        tourneyMatches.set(roomId, { matchId, tournamentId, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null });
+        const playingTimer = setTimeout(() => handleMatchPlayingTimeout(io, roomId), MATCH_PLAYING_TIMEOUT_MS);
+        tourneyMatches.set(roomId, { matchId, tournamentId, players: [p1Id, p2Id], results: new Map(), phase: 'playing', timer: null, playingTimer });
 
         log.info({ event: 'start_round', step: 'inserting_match_db', tournamentId, matchId, roomId });
         try {
@@ -967,6 +1033,7 @@ const setupSocketHandlers = (io) => {
       if (!tm || tm.phase !== 'playing') return;
       if (!tm.players.includes(userId)) return;
 
+      clearTimeout(tm.playingTimer);
       tm.phase = 'result_reporting';
       const timeoutAt = Date.now() + 60000;
       tm.timer = setTimeout(() => handleMatchTimeout(io, roomId), 60000);
@@ -1126,6 +1193,7 @@ const setupSocketHandlers = (io) => {
           const tm = tourneyMatches.get(roomId);
           if (tm && tm.phase !== 'done') {
             // Tournament match: disconnecting = forfeit → remaining player wins immediately
+            clearTimeout(tm.playingTimer);
             clearTimeout(tm.timer);
             clearTimeout(tm.adminDecisionTimer);
             const winnerId = tm.players.find(p => p !== userId);
@@ -1243,6 +1311,21 @@ const restoreTournamentsFromDB = async () => {
       let status = row.status;
       if (status === 'active' && activeMatchCount === 0) status = 'round_complete';
 
+      // Rebuild playoffQualifiers from bracket if in playoff phase
+      let playoffQualifiers = [];
+      if (phase === 'playoff' && playoffBracket) {
+        const sfPlayers = [
+          playoffBracket.sf1?.p1, playoffBracket.sf1?.p2,
+          playoffBracket.sf2?.p1, playoffBracket.sf2?.p2,
+        ].filter(Boolean);
+        playoffQualifiers = sfPlayers.map(id => ({
+          userId:    id,
+          username:  playerNames.get(id) || '?',
+          points:    points.get(id) || 0,
+          buchholz:  0,
+        }));
+      }
+
       tournaments.set(row.id, {
         id:               row.id,
         name:             row.name,
@@ -1250,6 +1333,7 @@ const restoreTournamentsFromDB = async () => {
         status,
         phase,
         playoffBracket,
+        playoffQualifiers,
         maxPlayers:       row.max_players,
         totalRounds:      row.total_rounds || 3,
         currentRound:     row.current_round || 0,
@@ -1279,6 +1363,10 @@ const restoreTournamentsFromDB = async () => {
       const matchesToRestore = [...playingMatches, ...adminDecisionMatches];
       for (const m of matchesToRestore) {
         if (!m.room_id) continue;
+        // Restore activeRooms so players can rejoin rooms after server restart
+        if (!activeRooms.has(m.room_id)) {
+          activeRooms.set(m.room_id, { players: [m.player1_id, m.player2_id], isTournament: true });
+        }
         tourneyMatches.set(m.room_id, {
           matchId:            m.id,
           tournamentId:       row.id,
@@ -1286,6 +1374,7 @@ const restoreTournamentsFromDB = async () => {
           results:            new Map(),
           phase:              'admin_decision',
           timer:              null,
+          playingTimer:       null,
           adminDecisionTimer: null,
           matchType:          m.match_type || 'group',
         });
