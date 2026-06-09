@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
-import { Trophy, Users, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
+import { Trophy, Users, ChevronRight, RefreshCw, Loader2, Info } from 'lucide-react';
 import translations from '../../lib/translations';
 
 function useCountdown(targetDate, lang) {
@@ -22,6 +22,72 @@ function useCountdown(targetDate, lang) {
   if (h > 24) return isTh ? `${Math.floor(h/24)} วัน` : `${Math.floor(h/24)}d`;
   if (h > 0) return isTh ? `${h}ชม. ${m}น.` : `${h}h ${m}m`;
   return `${m}:${String(s).padStart(2,'0')}${isTh ? ' น.' : ''}`;
+}
+
+// ── How It Works ────────────────────────────────────────────────────
+function HowItWorksPanel({ lang }) {
+  const [open, setOpen] = useState(false);
+  const isTh = lang !== 'en';
+
+  const rows = isTh ? [
+    { icon: '⚔️', label: 'รอบแบ่งกลุ่ม',    color: '#a78bfa', detail: 'แข่งทุกคนหลายรอบ · ชนะ = +3 คะแนน · ไม่จับคู่ซ้ำ' },
+    { icon: '📊', label: 'ตัดสินอันดับ',      color: '#60a5fa', detail: 'แต้ม → ผลตรง (H2H) → Buchholz → สุ่ม' },
+    { icon: '🥊', label: 'Playoff Top 4',     color: '#fb923c', detail: 'อันดับ 1vs4 / 2vs3 → ชิงที่ 3 + รอบชิงชนะเลิศ' },
+    { icon: '🏆', label: 'รับอันดับ 1-2-3',   color: '#fbbf24', detail: '🥇 แชมป์  🥈 รองแชมป์  🥉 อันดับ 3' },
+  ] : [
+    { icon: '⚔️', label: 'Group Stage',       color: '#a78bfa', detail: 'Multiple rounds vs everyone · Win = +3 pts · No repeat pairings' },
+    { icon: '📊', label: 'Tiebreaker',        color: '#60a5fa', detail: 'Points → H2H → Buchholz → Random' },
+    { icon: '🥊', label: 'Playoff Top 4',     color: '#fb923c', detail: 'Seed 1vs4 / 2vs3 → 3rd Place + Final' },
+    { icon: '🏆', label: 'Final Rankings',    color: '#fbbf24', detail: '🥇 Champion  🥈 Runner-up  🥉 3rd Place' },
+  ];
+
+  return (
+    <div className="card overflow-hidden" style={{ borderColor: 'rgba(124,58,237,0.15)' }}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left transition hover:bg-white/[0.02]">
+        <div className="flex items-center gap-2">
+          <Info size={14} className="text-purple-400 flex-shrink-0" />
+          <span className="text-sm font-semibold text-slate-300">
+            {isTh ? 'รูปแบบการแข่งขัน' : 'Tournament Format'}
+          </span>
+          <span className="text-xs text-slate-600">
+            {isTh ? 'แบ่งกลุ่ม → Playoff → 🥇🥈🥉' : 'Group Stage → Playoff → 🥇🥈🥉'}
+          </span>
+        </div>
+        <span className={`text-slate-600 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t border-[var(--border)]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+            {rows.map((r, i) => (
+              <div key={i} className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
+                style={{ background: `${r.color}0d`, border: `1px solid ${r.color}20` }}>
+                <span className="text-base flex-shrink-0 mt-0.5">{r.icon}</span>
+                <div>
+                  <p className="text-xs font-bold" style={{ color: r.color }}>{r.label}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tiebreaker note */}
+          <div className="mt-3 px-3 py-2 rounded-xl text-xs text-slate-600 leading-relaxed"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+            {isTh
+              ? '💡 Buchholz = ผลรวมคะแนนสุดท้ายของคนที่เราชนะทุกคน — ยิ่งชนะคนที่แข็งแกร่ง ยิ่งได้คะแนน Buchholz สูง'
+              : '💡 Buchholz = sum of final points of all players you defeated — beating stronger opponents gives you a higher Buchholz score'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TournamentCard({ t, lang, onJoin, joining, user }) {
@@ -271,16 +337,19 @@ export default function TournamentListPage() {
           </button>
         </div>
       ) : open.length === 0 && active.length === 0 ? (
-        <div className="card p-12 text-center">
-          <div className="text-5xl mb-4">🏆</div>
-          <p className="text-slate-400 font-semibold">
-            {lang === 'th' ? 'ยังไม่มีทัวร์นาเมนต์ที่เปิดรับ' : 'No open tournaments right now'}
-          </p>
-          <p className="text-slate-700 text-sm mt-1">
-            {lang === 'th'
-              ? 'Admin จะเปิดทัวร์นาเมนต์เร็วๆ นี้ — กดปุ่ม Refresh หรือตรวจสอบใหม่อีกสักครู่'
-              : 'Admin will open one soon — tap Refresh or check back later'}
-          </p>
+        <div className="space-y-4">
+          <div className="card p-12 text-center">
+            <div className="text-5xl mb-4">🏆</div>
+            <p className="text-slate-400 font-semibold">
+              {lang === 'th' ? 'ยังไม่มีทัวร์นาเมนต์ที่เปิดรับ' : 'No open tournaments right now'}
+            </p>
+            <p className="text-slate-700 text-sm mt-1">
+              {lang === 'th'
+                ? 'Admin จะเปิดทัวร์นาเมนต์เร็วๆ นี้ — กดปุ่ม Refresh หรือตรวจสอบใหม่อีกสักครู่'
+                : 'Admin will open one soon — tap Refresh or check back later'}
+            </p>
+          </div>
+          <HowItWorksPanel lang={lang} />
         </div>
       ) : (
         <div className="space-y-4">
@@ -304,6 +373,10 @@ export default function TournamentListPage() {
               ))}
             </>
           )}
+
+          <div className="mt-6">
+            <HowItWorksPanel lang={lang} />
+          </div>
         </div>
       )}
     </div>

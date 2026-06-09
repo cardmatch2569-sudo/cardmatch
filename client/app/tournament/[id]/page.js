@@ -61,6 +61,119 @@ function Leaderboard({ standings, myId, tl }) {
   );
 }
 
+// ── TournamentFormatInfo ──────────────────────────────────────────────
+function TournamentFormatInfo({ tournament: t, lang }) {
+  const [open, setOpen] = useState(false);
+  const isTh = lang !== 'en';
+  const rounds = t?.totalRounds || 3;
+  const maxP   = t?.maxPlayers  || 8;
+
+  const steps = isTh ? [
+    { icon: '⚔️', title: `รอบแบ่งกลุ่ม (${rounds} รอบ)`, color: '#a78bfa',
+      desc: `ผู้เล่นทุกคนแข่งกัน ${rounds} รอบ ระบบจับคู่อัตโนมัติและไม่จับคู่ซ้ำ`,
+      points: [`ชนะ = +3 คะแนน`, `แพ้ = 0 คะแนน`, `ถ้าคนเดี่ยว (Bye) = ผ่านรอบโดยไม่แข่ง`] },
+    { icon: '📊', title: 'การตัดสินอันดับ (ถ้าคะแนนเท่ากัน)', color: '#60a5fa',
+      desc: 'ใช้ตัวตัดสินตามลำดับนี้',
+      points: ['① ผลการแข่งโดยตรง (เคยเจอกันใครชนะ)', '② Buchholz — ผลรวมคะแนนของคนที่เราชนะ', '③ สุ่ม (ถ้าเท่ากันทั้งหมด)'] },
+    { icon: '🥊', title: 'Playoff — Top 4 เข้ารอบ', color: '#fb923c',
+      desc: `4 อันดับแรกจาก ${maxP} คนผ่านเข้า Playoff แบบแพ้คัดออก`,
+      points: ['รอบรองชนะเลิศ: อันดับ 1 vs 4 และ อันดับ 2 vs 3', 'รอบชิงที่ 3: 2 คนที่แพ้รอบรองฯ', 'รอบชิงชนะเลิศ: 2 คนที่ชนะรอบรองฯ'] },
+    { icon: '🏆', title: 'ผลลัพธ์สุดท้าย', color: '#fbbf24',
+      desc: 'ได้อันดับชัดเจนทุกคน',
+      points: ['🥇 แชมป์ — ชนะรอบชิงชนะเลิศ', '🥈 รองแชมป์ — แพ้รอบชิงชนะเลิศ', '🥉 อันดับ 3 — ชนะรอบชิงที่ 3'] },
+  ] : [
+    { icon: '⚔️', title: `Group Stage (${rounds} rounds)`, color: '#a78bfa',
+      desc: `Everyone plays ${rounds} rounds. Matchups are automatic — no repeat pairings.`,
+      points: [`Win = +3 points`, `Loss = 0 points`, `Bye (odd players) = advance without playing`] },
+    { icon: '📊', title: 'Tiebreaker (if points are equal)', color: '#60a5fa',
+      desc: 'Applied in this order',
+      points: ['① Head-to-Head — who won when they played directly', '② Buchholz — total points of players you defeated', '③ Random draw (if still tied)'] },
+    { icon: '🥊', title: 'Playoff — Top 4 advance', color: '#fb923c',
+      desc: `The top 4 of ${maxP} players enter a single-elimination Playoff.`,
+      points: ['Semifinals: Seed 1 vs 4 and Seed 2 vs 3', '3rd Place match: the two SF losers', 'Final: the two SF winners'] },
+    { icon: '🏆', title: 'Final Results', color: '#fbbf24',
+      desc: 'Clear rankings for all finalists',
+      points: ['🥇 Champion — wins the Final', '🥈 Runner-up — loses the Final', '🥉 3rd Place — wins the 3rd Place match'] },
+  ];
+
+  return (
+    <div className="card mt-4 overflow-hidden" style={{ borderColor: 'rgba(124,58,237,0.2)' }}>
+      {/* Header — always visible, tap to expand */}
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left transition hover:bg-white/[0.02]">
+        <div className="flex items-center gap-2.5">
+          <span className="text-base">📋</span>
+          <div>
+            <p className="text-sm font-bold text-white">
+              {isTh ? 'วิธีการแข่งขัน' : 'How this tournament works'}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isTh
+                ? `${rounds} รอบแบ่งกลุ่ม → Top 4 → Playoff → 🥇🥈🥉`
+                : `${rounds} group rounds → Top 4 → Playoff → 🥇🥈🥉`}
+            </p>
+          </div>
+        </div>
+        <span className={`text-slate-500 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </button>
+
+      {/* Expandable detail */}
+      {open && (
+        <div className="px-5 pb-5 border-t border-[var(--border)]">
+          <div className="space-y-4 mt-4">
+            {steps.map((step, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                    style={{ background: `${step.color}18`, border: `1px solid ${step.color}30` }}>
+                    {step.icon}
+                  </div>
+                  {i < steps.length - 1 && (
+                    <div className="w-px flex-1 min-h-[16px]" style={{ background: 'var(--border)' }} />
+                  )}
+                </div>
+                <div className="flex-1 pb-1">
+                  <p className="text-sm font-bold text-white leading-tight">{step.title}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 mb-1.5">{step.desc}</p>
+                  <ul className="space-y-0.5">
+                    {step.points.map((pt, j) => (
+                      <li key={j} className="flex items-start gap-1.5 text-xs text-slate-400">
+                        <span className="text-slate-600 mt-0.5 flex-shrink-0">·</span>
+                        {pt}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick flow summary */}
+          <div className="mt-4 px-3 py-2.5 rounded-xl flex items-center gap-1.5 flex-wrap text-[11px] font-medium text-slate-500"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
+            <span className="text-purple-400">{isTh ? 'แบ่งกลุ่ม' : 'Group'}</span>
+            <span>→</span>
+            <span className="text-orange-400">{isTh ? 'Top 4' : 'Top 4'}</span>
+            <span>→</span>
+            <span className="text-orange-300">{isTh ? 'รอบรองฯ' : 'Semis'}</span>
+            <span>→</span>
+            <span className="text-red-400">{isTh ? 'รอบชิง' : 'Final'}</span>
+            <span>+</span>
+            <span className="text-yellow-600">{isTh ? 'ชิงที่ 3' : '3rd'}</span>
+            <span>→</span>
+            <span className="text-yellow-400">🥇🥈🥉</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── PlayoffBracketView ────────────────────────────────────────────────
 function PlayoffBracketView({ bracket, myId, lang, playerNames }) {
   if (!bracket) return null;
@@ -796,6 +909,11 @@ export default function TournamentWaitingRoom() {
       {/* Playoff bracket (shown during/after playoff) */}
       {playoffBracket && ['playoff_sf','playoff_final','tournament_complete'].includes(status) && (
         <PlayoffBracketView bracket={playoffBracket} myId={user?._id} lang={lang} playerNames={standings} />
+      )}
+
+      {/* Tournament format info — shown during waiting so players understand before it starts */}
+      {status === 'waiting' && t && (
+        <TournamentFormatInfo tournament={t} lang={lang} />
       )}
 
       {/* Players list (shown during waiting phase) */}
