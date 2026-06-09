@@ -69,16 +69,25 @@ function PlayoffBracketView({ bracket, myId, lang, playerNames }) {
   if (playerNames) playerNames.forEach(p => { nameMap[p.userId] = p.username; });
 
   const MatchSlot = ({ label, p1, p2, winner }) => {
-    const n1 = nameMap[p1] || (p1 ? p1.slice(0, 6) + '…' : '—');
-    const n2 = nameMap[p2] || (p2 ? p2.slice(0, 6) + '…' : '—');
+    const tbd = isTh ? 'รอผู้เล่น' : 'TBD';
+    const n1 = nameMap[p1] || (p1 ? p1.slice(0, 6) + '…' : null);
+    const n2 = nameMap[p2] || (p2 ? p2.slice(0, 6) + '…' : null);
     return (
       <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(251,146,60,0.2)', minWidth: '140px' }}>
-        <div className="px-2 py-1 text-[10px] font-bold text-orange-400" style={{ background: 'rgba(251,146,60,0.1)' }}>{label}</div>
+        <div className="px-2 py-1 text-xs font-bold text-orange-400" style={{ background: 'rgba(251,146,60,0.1)' }}>{label}</div>
         {[{ id: p1, name: n1 }, { id: p2, name: n2 }].map((pl, i) => (
-          <div key={i} className={`flex items-center gap-2 px-2 py-1.5 text-xs ${winner === pl.id ? 'text-yellow-300 font-semibold' : 'text-slate-400'}`}
+          <div key={i} className={`flex items-center gap-2 px-2 py-1.5 text-xs ${
+            !pl.name      ? 'text-slate-600 italic' :
+            winner === pl.id ? 'text-yellow-300 font-semibold' :
+            'text-slate-400'
+          }`}
             style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
             {winner === pl.id && <span className="text-xs">🏆</span>}
-            <span className="truncate">{pl.name}{pl.id === myId ? ' (คุณ)' : ''}</span>
+            <span className="truncate">
+              {pl.name
+                ? <>{pl.name}{pl.id === myId ? <span className="text-purple-400 ml-1 text-[10px]">(คุณ)</span> : ''}</>
+                : tbd}
+            </span>
           </div>
         ))}
       </div>

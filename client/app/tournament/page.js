@@ -27,20 +27,54 @@ function useCountdown(targetDate, lang) {
 function TournamentCard({ t, lang, onJoin, joining, user }) {
   const tl = translations[lang];
   const countdown = useCountdown(t.scheduledAt, lang);
-  const isFull  = t.playerCount >= t.maxPlayers;
-  const canJoin = t.status === 'waiting' && !isFull;
-  const isActive = t.status === 'active';
+  const isFull          = t.playerCount >= t.maxPlayers;
+  const canJoin         = t.status === 'waiting' && !isFull;
+  const isActive        = t.status === 'active';
   const isRoundComplete = t.status === 'round_complete';
+  const isPlayoffReady  = t.status === 'playoff_ready';
+  const isPlayoffSF     = t.status === 'playoff_sf';
+  const isPlayoffFinal  = t.status === 'playoff_final';
+  const isPlayoff       = isPlayoffReady || isPlayoffSF || isPlayoffFinal;
+
+  const borderColor = isPlayoffFinal  ? 'rgba(239,68,68,0.3)'
+                    : isPlayoffSF     ? 'rgba(251,146,60,0.3)'
+                    : isPlayoffReady  ? 'rgba(251,146,60,0.25)'
+                    : isActive || isRoundComplete ? 'rgba(251,191,36,0.25)'
+                    : 'var(--border)';
+
+  const iconBg = isPlayoff          ? 'rgba(251,146,60,0.1)'
+               : isActive || isRoundComplete ? 'rgba(251,191,36,0.1)'
+               : 'rgba(124,58,237,0.1)';
+
+  const iconBorder = isPlayoff          ? '1px solid rgba(251,146,60,0.2)'
+                   : isActive || isRoundComplete ? '1px solid rgba(251,191,36,0.2)'
+                   : '1px solid rgba(124,58,237,0.2)';
+
+  const statusEmoji = isPlayoffFinal ? '🏆' : isPlayoffSF ? '🥊' : isPlayoffReady ? '🥊'
+                    : isActive ? '⚔️' : isRoundComplete ? '🔄' : '🏆';
+
+  const statusLabel = isPlayoffFinal  ? (lang === 'th' ? '🔴 รอบชิงชนะเลิศ' : '🔴 Finals')
+                    : isPlayoffSF     ? (lang === 'th' ? '🟠 รอบรองชนะเลิศ' : '🟠 Semifinals')
+                    : isPlayoffReady  ? (lang === 'th' ? '🥊 Playoff พร้อมแล้ว' : '🥊 Playoff Ready')
+                    : isActive        ? tl.tourneyStatusActive
+                    : isRoundComplete ? tl.tourneyStatusBetween
+                    : isFull          ? (lang === 'th' ? '❌ เต็ม' : '❌ Full')
+                    : tl.tourneyStatusOpen;
+
+  const statusColor = isPlayoffFinal  ? 'text-red-400'
+                    : isPlayoffSF     ? 'text-orange-300'
+                    : isPlayoffReady  ? 'text-orange-400'
+                    : isActive        ? 'text-yellow-400'
+                    : isRoundComplete ? 'text-purple-400'
+                    : isFull          ? 'text-red-400'
+                    : 'text-green-400';
 
   return (
     <div className="card p-5 flex items-center gap-4 transition"
-      style={{ borderColor: isActive || isRoundComplete ? 'rgba(251,191,36,0.25)' : 'var(--border)' }}>
+      style={{ borderColor }}>
       <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
-        style={{
-          background: isActive || isRoundComplete ? 'rgba(251,191,36,0.1)' : 'rgba(124,58,237,0.1)',
-          border: `1px solid ${isActive || isRoundComplete ? 'rgba(251,191,36,0.2)' : 'rgba(124,58,237,0.2)'}`,
-        }}>
-        {isActive ? '⚔️' : isRoundComplete ? '🔄' : '🏆'}
+        style={{ background: iconBg, border: iconBorder }}>
+        {statusEmoji}
       </div>
 
       <div className="flex-1 min-w-0">
@@ -48,24 +82,23 @@ function TournamentCard({ t, lang, onJoin, joining, user }) {
         {(t.gameTypeNameTh || t.gameTypeName) && (
           <p className="text-xs text-slate-500 truncate mt-0.5">
             🎮 {lang === 'th' ? (t.gameTypeNameTh || t.gameTypeName) : (t.gameTypeName || t.gameTypeNameTh)}
-            {t.totalRounds > 0 && (
+            {t.totalRounds > 0 && !isPlayoff && (
               <span className="ml-2 text-slate-600">
                 · {isActive || isRoundComplete
                   ? (lang === 'th' ? `รอบ ${t.currentRound}/${t.totalRounds}` : `Round ${t.currentRound}/${t.totalRounds}`)
                   : (lang === 'th' ? `${t.totalRounds} รอบ` : `${t.totalRounds} rounds`)}
               </span>
             )}
+            {isPlayoff && (
+              <span className="ml-2 text-orange-500">
+                · {lang === 'th' ? 'รอบ Playoff' : 'Playoff'}
+              </span>
+            )}
           </p>
         )}
         <div className="flex items-center gap-3 mt-1">
-          <span className={`text-xs font-semibold ${isActive ? 'text-yellow-400' : isRoundComplete ? 'text-purple-400' : isFull ? 'text-red-400' : 'text-green-400'}`}>
-            {isActive
-              ? tl.tourneyStatusActive
-              : isRoundComplete
-                ? tl.tourneyStatusBetween
-                : isFull
-                  ? (lang === 'th' ? '❌ เต็ม' : '❌ Full')
-                  : tl.tourneyStatusOpen}
+          <span className={`text-xs font-semibold ${statusColor}`}>
+            {statusLabel}
           </span>
           {isRoundComplete && (
             <span className="text-[10px] text-slate-500">{tl.waitingAdminNextRound}</span>

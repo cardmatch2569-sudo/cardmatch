@@ -34,7 +34,7 @@ export default function Navbar() {
   const navLinks = [
     { href: '/lobby',      label: t.lobby,                            icon: <Swords size={15} />,  always: true },
     { href: '/tournament', label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament', icon: <span className="text-sm">🏆</span>, always: true, tourney: true },
-    { href: '/setup',      label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, always: true },
+    { href: '/setup',      label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, requireAuth: true },
     ...(isAdminMode ? [{ href: '/admin', label: t.admin, icon: <Shield size={15} />, admin: true }] : []),
   ];
 
@@ -63,7 +63,7 @@ export default function Navbar() {
           {/* Desktop center nav */}
           {user && (
             <div className="hidden md:flex items-center gap-1 flex-1 justify-center">
-              {navLinks.map(({ href, label, icon, admin, tourney }) => (
+              {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney }) => (
                 <Link key={href} href={href}
                   aria-current={isActive(href) ? 'page' : undefined}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
@@ -213,7 +213,7 @@ export default function Navbar() {
             {/* Nav links */}
             {user && (
               <div className="px-3 py-2 space-y-1">
-                {navLinks.map(({ href, label, icon, admin, tourney }) => (
+                {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney }) => (
                   <Link key={href} href={href} onClick={close}
                     aria-current={isActive(href) ? 'page' : undefined}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
