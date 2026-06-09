@@ -44,7 +44,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
             bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
             right: 'max(12px, env(safe-area-inset-right, 0px))',
             width: 'min(360px, calc(100vw - 24px))',
-            maxHeight: 'min(480px, calc(100dvh - 200px))',
+            maxHeight: 'min(520px, max(300px, calc(100dvh - 140px)))',
             background: 'rgba(10,10,22,0.97)',
             border: '1px solid rgba(74,222,128,0.2)',
             borderRadius: '16px',
@@ -75,7 +75,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
             ) : (
               messages.map((msg) => {
                 const isMe = msg.from._id === user?._id;
-                const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const time = new Date(msg.timestamp).toLocaleTimeString(lang === 'th' ? 'th-TH' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
                 return (
                   <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">

@@ -38,15 +38,22 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
     setLoading(true); setCamError(''); setCameraOk(false); setMicLevel(0); setMicOk(false);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facing,
-          width:     { ideal: 1280 },
-          height:    { ideal: 720  },
-          frameRate: { ideal: 30   },
-        },
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
+      const stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width:     { ideal: 1280 },
+            height:    { ideal: 720  },
+            frameRate: { ideal: 30   },
+          },
+          audio: { echoCancellation: true, noiseSuppression: true },
+        }),
+        new Promise((_, reject) => setTimeout(() => {
+          const e = new Error('Camera timed out');
+          e.name = 'TimeoutError';
+          reject(e);
+        }, 15000)),
+      ]);
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraOk(stream.getVideoTracks().length > 0);
@@ -71,9 +78,12 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
       setLoading(false);
     } catch (err) {
       setLoading(false);
-      setCamError(err.name === 'NotAllowedError'
-        ? (lang === 'th' ? 'กรุณาอนุญาตกล้อง/ไมค์ในเบราว์เซอร์' : 'Allow camera/mic in browser settings')
-        : (lang === 'th' ? 'ไม่พบกล้อง — สามารถจับคู่ได้โดยไม่มีกล้อง' : 'No camera — you can still match without it'));
+      setCamError(
+        err.name === 'NotAllowedError'
+          ? (lang === 'th' ? 'กรุณาอนุญาตกล้อง/ไมค์ในเบราว์เซอร์' : 'Allow camera/mic in browser settings')
+          : err.name === 'TimeoutError'
+            ? (lang === 'th' ? 'กล้องไม่ตอบสนอง กรุณาแตะลองใหม่' : 'Camera not responding — tap to retry')
+            : (lang === 'th' ? 'ไม่พบกล้อง — สามารถจับคู่ได้โดยไม่มีกล้อง' : 'No camera — you can still match without it'));
     }
   }, [lang]);
 

@@ -128,6 +128,7 @@ export default function Navbar() {
 
             {/* Language toggle */}
             <button onClick={toggleLang}
+              aria-label={lang === 'th' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
               className="flex items-center gap-1 text-xs text-slate-500 hover:text-white transition px-2 py-1.5 rounded-lg hover:bg-white/5">
               <Globe size={13} />
               <span className="font-medium">{lang === 'th' ? 'EN' : 'ไทย'}</span>

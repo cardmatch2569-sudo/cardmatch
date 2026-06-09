@@ -1228,7 +1228,7 @@ export default function RoomPage() {
             className="w-12 h-12 rounded-full flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 opacity-80 hover:opacity-100"
             style={{ background: 'rgba(251,191,36,0.25)', border: '1px solid rgba(251,191,36,0.5)', color: '#fbbf24' }}>
             <Flag size={15} />
-            <span className="text-[7px] leading-none">จบ</span>
+            <span className="text-[7px] leading-none">{lang === 'th' ? 'จบ' : 'End'}</span>
           </button>
         )}
 

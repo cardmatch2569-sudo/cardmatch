@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -11,11 +11,15 @@ export default function HomePage() {
   const { user, lang } = useAuth();
   const { onlineCount } = useSocket();
   const t = translations[lang];
-  const [games, setGames] = useState([]);
+  const [games, setGames]           = useState([]);
+  const [gamesError, setGamesError] = useState(false);
 
-  useEffect(() => {
-    api.get('/api/games').then(({ games }) => setGames(games)).catch(() => {});
+  const loadGames = useCallback(() => {
+    setGamesError(false);
+    api.get('/api/games').then(({ games }) => setGames(games)).catch(() => setGamesError(true));
   }, []);
+
+  useEffect(() => { loadGames(); }, [loadGames]);
 
   const features = [
     { icon: <Camera size={20} />, label: lang === 'th' ? 'วิดีโอสด' : 'Live Video', color: '#a78bfa' },
@@ -157,7 +161,17 @@ export default function HomePage() {
       </section>
 
       {/* ── GAMES ─────────────────────────────────────────────── */}
-      {games.length === 0 && (
+      {gamesError && (
+        <section className="py-20 px-4">
+          <div className="max-w-5xl mx-auto text-center">
+            <p className="text-slate-500 text-sm mb-4">{lang === 'th' ? 'โหลดรายการเกมไม่สำเร็จ' : 'Failed to load games'}</p>
+            <button onClick={loadGames} className="btn-ghost text-sm px-5 py-2.5 rounded-xl">
+              {lang === 'th' ? '↺ ลองใหม่' : '↺ Retry'}
+            </button>
+          </div>
+        </section>
+      )}
+      {games.length === 0 && !gamesError && (
         <section className="py-20 px-4">
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-14">

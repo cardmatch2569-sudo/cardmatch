@@ -195,7 +195,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         {stats.map(({ label, value, icon, color, bg, border }) => (
           <div key={label} className="card p-4 text-center card-hover" style={{ borderColor: border }}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center mx-auto mb-2"

@@ -111,6 +111,7 @@ export default function LoginPage() {
   /* ── Reusable: eye-toggle button ── */
   const EyeBtn = ({ show, toggle }) => (
     <button type="button" tabIndex={-1} onClick={toggle}
+      aria-label={show ? (lang === 'th' ? 'ซ่อนรหัสผ่าน' : 'Hide password') : (lang === 'th' ? 'แสดงรหัสผ่าน' : 'Show password')}
       className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-300 transition flex items-center justify-center"
       style={{ width: 36, height: 36 }}>
       {show ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -119,13 +120,13 @@ export default function LoginPage() {
 
   /* ── Reusable: checkbox ── */
   const Checkbox = ({ checked, onChange }) => (
-    <div className="relative flex-shrink-0" style={{ width: 20, height: 20, marginTop: 1 }}>
+    <label className="relative flex-shrink-0 cursor-pointer" style={{ width: 20, height: 20, marginTop: 1 }}>
       <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all
         ${checked ? 'bg-purple-500 border-purple-500' : 'border-slate-600 group-hover:border-purple-500'}`}>
         {checked && <svg viewBox="0 0 10 8" width="9" height="9" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </div>
-    </div>
+    </label>
   );
 
   /* ── Reusable: error/success box ── */

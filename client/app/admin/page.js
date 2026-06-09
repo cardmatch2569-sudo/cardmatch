@@ -52,6 +52,8 @@ export default function AdminPage() {
   const [tourneyCreating,  setTourneyCreating]  = useState(false);
   const [startingPlayoffs, setStartingPlayoffs] = useState({}); // { [tournamentId]: bool }
   const [tourneyError,    setTourneyError]    = useState('');
+  const [saveSuccess,     setSaveSuccess]     = useState(false);
+  const [searchPending,   setSearchPending]   = useState(false);
   const [alerts,          setAlerts]          = useState([]); // { id, type, roomId, matchId, players }
   // Spectate state
   const [spectateRoomId,  setSpectateRoomId]  = useState(null);
@@ -270,11 +272,22 @@ export default function AdminPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, getSocket]);
 
+  // H4: auto-dismiss tournament creation errors after 5s
+  useEffect(() => {
+    if (!tourneyError) return;
+    const id = setTimeout(() => setTourneyError(''), 5000);
+    return () => clearTimeout(id);
+  }, [tourneyError]);
+
   // Bug fix: debounced user search
-  const handleUserSearch = (q) => {
+  const handleUserSearch = async (q) => {
     setUserSearch(q);
+    setSearchPending(true);
     clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => loadUsers(1, q), 350);
+    searchTimer.current = setTimeout(async () => {
+      await loadUsers(1, q).catch(() => {});
+      setSearchPending(false);
+    }, 350);
   };
 
   const handleToggleAdmin = async (id, name) => {
@@ -300,7 +313,9 @@ export default function AdminPage() {
     try {
       if (modal === 'game' && !editId) await api.post('/api/games', form);
       else await api.put(`/api/games/${editId}`, form);
-      await loadGames(); setModal(null);
+      await loadGames();
+      setSaveSuccess(true);
+      setTimeout(() => { setSaveSuccess(false); setModal(null); }, 1000);
     } catch (err) { setFormError(err.message); }
     finally { setSaving(false); }
   };
@@ -823,7 +838,8 @@ export default function AdminPage() {
                 <h2 className="text-lg font-bold text-white">{editId ? t.editGame : t.addGame}</h2>
                 <button onClick={() => setModal(null)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition"><X size={15} /></button>
               </div>
-              {formError && <div className="badge badge-red w-full justify-center py-2 rounded-lg text-xs mb-4">{formError}</div>}
+              {formError   && <div className="badge badge-red   w-full justify-center py-2 rounded-lg text-xs mb-4">{formError}</div>}
+              {saveSuccess && <div className="badge badge-green w-full justify-center py-2 rounded-lg text-xs mb-4">✓ {lang === 'th' ? 'บันทึกสำเร็จ' : 'Saved'}</div>}
               <div className="space-y-3">
                 {[
                   { key: 'name',          label: t.gameName },
@@ -841,6 +857,7 @@ export default function AdminPage() {
                   <label className="text-xs text-slate-500 block mb-1.5 font-medium">{t.colorLabel}</label>
                   <div className="flex items-center gap-3">
                     <input type="color" value={form.color} onChange={e => { setForm({ ...form, color: e.target.value }); setHexError(false); }}
+                      aria-label={t.colorLabel}
                       className="w-10 h-10 rounded-lg cursor-pointer p-0.5"
                       style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }} />
                     <div className="flex-1 flex items-center gap-2 input-base text-sm">
@@ -1052,8 +1069,9 @@ export default function AdminPage() {
                 value={userSearch}
                 onChange={e => handleUserSearch(e.target.value)}
                 placeholder={t.userSearchPlaceholder}
-                className="input-base text-sm pl-9"
+                className="input-base text-sm pl-9 pr-9"
               />
+              {searchPending && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 animate-spin" />}
             </div>
             <div className="text-xs text-slate-600 flex-shrink-0">
               {t.userTotal} {userTotal} {t.userTotalSuffix}

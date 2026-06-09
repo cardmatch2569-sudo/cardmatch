@@ -198,7 +198,7 @@ function PlayoffBracketView({ bracket, myId, lang, playerNames }) {
             {winner === pl.id && <span className="text-xs">🏆</span>}
             <span className="truncate">
               {pl.name
-                ? <>{pl.name}{pl.id === myId ? <span className="text-purple-400 ml-1 text-[10px]">(คุณ)</span> : ''}</>
+                ? <>{pl.name}{pl.id === myId ? <span className="text-purple-400 ml-1 text-[10px]">{isTh ? '(คุณ)' : '(You)'}</span> : ''}</>
                 : tbd}
             </span>
           </div>
@@ -279,7 +279,12 @@ export default function TournamentWaitingRoom() {
     if (!user) { router.push('/login'); return; }
 
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket) {
+      // Socket not yet ready — effect re-runs when socketReady changes.
+      // Fallback: clear spinner after 10s if connection never establishes.
+      const t = setTimeout(() => { setPageLoading(false); setStatus('error'); }, 10000);
+      return () => clearTimeout(t);
+    }
     let mounted = true;
 
     const init = async () => {

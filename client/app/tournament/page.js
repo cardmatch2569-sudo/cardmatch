@@ -21,7 +21,7 @@ function useCountdown(targetDate, lang) {
   const isTh = lang !== 'en';
   if (h > 24) return isTh ? `${Math.floor(h/24)} วัน` : `${Math.floor(h/24)}d`;
   if (h > 0) return isTh ? `${h}ชม. ${m}น.` : `${h}h ${m}m`;
-  return `${m}:${String(s).padStart(2,'0')}${isTh ? ' น.' : ''}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}${isTh ? ' น.' : ''}`;
 }
 
 // ── How It Works ────────────────────────────────────────────────────
