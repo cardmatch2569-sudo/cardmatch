@@ -164,6 +164,7 @@ export default function RoomPage() {
   const [opponentResult, setOpponentResult] = useState(null);
   const [matchResult,    setMatchResult]    = useState(null);      // { winnerId, loserId, method }
   const [timeoutAt,      setTimeoutAt]      = useState(null);
+  const [partnerReconnecting, setPartnerReconnecting] = useState(false);
   const [adminWatching,    setAdminWatching]    = useState(false);
   const [adminCalledMsg,   setAdminCalledMsg]   = useState('');
   const [escapeCountdown, setEscapeCountdown] = useState(0);
@@ -383,6 +384,7 @@ export default function RoomPage() {
     };
     const onPartnerLeft = () => {
       setPartnerLeft(true);
+      setPartnerReconnecting(false);
       setPeerConnected(false);
       if (remoteVideoRef.current) {
         const s = remoteVideoRef.current.srcObject;
@@ -390,6 +392,31 @@ export default function RoomPage() {
         remoteVideoRef.current.srcObject = null;
       }
       setEndModal('partner_left');
+    };
+
+    const onPartnerTemporarilyOffline = () => {
+      setPartnerReconnecting(true);
+      setPeerConnected(false);
+      // Close stale WebRTC — fresh connection will be created on reconnect
+      if (peerRef.current) {
+        peerRef.current.onicecandidate = null;
+        peerRef.current.ontrack = null;
+        peerRef.current.onconnectionstatechange = null;
+        peerRef.current.close();
+        peerRef.current = null;
+      }
+    };
+
+    const onPartnerReconnected = () => {
+      setPartnerReconnecting(false);
+      // Null out stale PC so onOffer creates a fresh one when other player re-initiates WebRTC
+      if (peerRef.current) {
+        peerRef.current.onicecandidate = null;
+        peerRef.current.ontrack = null;
+        peerRef.current.onconnectionstatechange = null;
+        peerRef.current.close();
+        peerRef.current = null;
+      }
     };
 
     // Tournament socket handlers
@@ -596,6 +623,8 @@ export default function RoomPage() {
 
     socket.on('peer_joined', onPeerJoined); socket.on('offer', onOffer); socket.on('answer', onAnswer);
     socket.on('ice_candidate', onIce); socket.on('message_received', onMessage); socket.on('partner_disconnected', onPartnerLeft);
+    socket.on('partner_temporarily_offline', onPartnerTemporarilyOffline);
+    socket.on('partner_reconnected', onPartnerReconnected);
 
     init();
 
@@ -635,6 +664,8 @@ export default function RoomPage() {
 
       socket.off('peer_joined', onPeerJoined); socket.off('offer', onOffer); socket.off('answer', onAnswer);
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
+      socket.off('partner_temporarily_offline', onPartnerTemporarilyOffline);
+      socket.off('partner_reconnected', onPartnerReconnected);
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
       localStreamRef.current = null;
       if (peerRef.current) {
@@ -1006,6 +1037,17 @@ export default function RoomPage() {
             {[0, 0.15, 0.3].map((d, i) => (
               <div key={i} className="w-1.5 h-1.5 rounded-full bg-purple-600" style={{ animation: `blink 1.2s ease ${d}s infinite` }} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Partner reconnecting banner ── */}
+      {partnerReconnecting && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 anim-fade-up">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full text-xs text-white"
+            style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(251,191,36,0.4)', backdropFilter: 'blur(8px)' }}>
+            <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+            {lang === 'th' ? 'คู่แข่งกำลังเชื่อมต่อใหม่...' : 'Opponent reconnecting...'}
           </div>
         </div>
       )}

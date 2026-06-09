@@ -17,6 +17,7 @@ const publicChatBuffer = [];         // last 50 public lobby messages
 const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, phase, maxPlayers, totalRounds, currentRound, activeMatchCount, playedPairs: Set, points: Map, h2h: Map, playoffBracket, createdBy, players: Set<userId> }
 const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map, phase, timer, matchType }
 const adminWatching  = new Map();    // roomId → { adminUserId, adminSocketId }
+const pendingReconnects = new Map(); // userId → { roomId, timer } — grace period before forfeiting disconnect
 
 // ── Pairing: random, no-repeat (greedy with fallback) ─────────────────
 const pairPlayersNoRepeat = (playerIds, playedPairs) => {
@@ -100,6 +101,7 @@ const notifyAdmins = (io, type, data) => {
 
 const ADMIN_DECISION_TIMEOUT_MS = 10 * 60 * 1000; // BUG-06: 10 min auto-resolve if no admin decides
 const MATCH_PLAYING_TIMEOUT_MS  = 45 * 60 * 1000; // 45 min: stalled 'playing' match → admin_decision
+const RECONNECT_GRACE_MS        = 15 * 1000;       // 15s grace: don't forfeit until player fails to reconnect
 
 const handleMatchPlayingTimeout = (io, roomId) => {
   const match = tourneyMatches.get(roomId);
@@ -491,6 +493,18 @@ const setupSocketHandlers = (io) => {
     io.emit('online_count', { count: onlineUsers.size });
     console.log(`[+] ${user.username} (${socket.id})`);
     log.info({ event: 'connect', userId, username: user.username, isAdmin: !!user.isAdmin, socketId: socket.id, onlineCount: onlineUsers.size });
+
+    // ── Reconnect grace period: player reconnected before forfeit fired ──
+    const pending = pendingReconnects.get(userId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      pendingReconnects.delete(userId);
+      socket.join(pending.roomId);
+      // Notify both players: partner is back + restart WebRTC (other player sends new offer)
+      io.to(pending.roomId).emit('partner_reconnected', { userId });
+      socket.to(pending.roomId).emit('peer_joined', { userId });
+      console.log(`[reconnect] ✅ ${user.username} restored — room ${pending.roomId}`);
+    }
 
     socket.emit('public_chat_history', publicChatBuffer);
     if (currentAnnouncement) socket.emit('announcement', currentAnnouncement);
@@ -1193,30 +1207,62 @@ const setupSocketHandlers = (io) => {
         matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== userId));
       });
       for (const [roomId, room] of activeRooms) {
-        if (room.players.includes(userId)) {
-          const tm = tourneyMatches.get(roomId);
-          if (tm && tm.phase !== 'done') {
-            // Tournament match: disconnecting = forfeit → remaining player wins immediately
-            clearTimeout(tm.playingTimer);
-            clearTimeout(tm.timer);
-            clearTimeout(tm.adminDecisionTimer);
-            const winnerId = tm.players.find(p => p !== userId);
-            if (winnerId) {
-              finalizeMatch(io, roomId, tm, winnerId, 'opponent_disconnected').catch(() => {});
-            } else {
-              tourneyMatches.delete(roomId);
+        if (!room.players.includes(userId)) continue;
+        const tm = tourneyMatches.get(roomId);
+
+        if (tm && tm.phase !== 'done') {
+          // Active match — grace period: notify partner and wait before forfeiting
+          const existing = pendingReconnects.get(userId);
+          if (existing) clearTimeout(existing.timer);
+          io.to(roomId).emit('partner_temporarily_offline', { userId });
+          const gracePeriodTimer = setTimeout(async () => {
+            pendingReconnects.delete(userId);
+            const match = tourneyMatches.get(roomId);
+            if (match && match.phase !== 'done') {
+              clearTimeout(match.playingTimer);
+              clearTimeout(match.timer);
+              clearTimeout(match.adminDecisionTimer);
+              const winnerId = match.players.find(p => p !== userId);
+              if (winnerId) {
+                finalizeMatch(io, roomId, match, winnerId, 'opponent_disconnected').catch(() => {});
+              } else {
+                tourneyMatches.delete(roomId);
+              }
             }
-          } else {
-            socket.to(roomId).emit('partner_disconnected');
-            if (tm) { clearTimeout(tm.timer); tourneyMatches.delete(roomId); }
-          }
+            try { await Room.updateStatus(roomId, 'ended'); } catch {}
+            activeRooms.delete(roomId);
+            const aw = adminWatching.get(roomId);
+            if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
+          }, RECONNECT_GRACE_MS);
+          pendingReconnects.set(userId, { roomId, timer: gracePeriodTimer });
+
+        } else if (!tm) {
+          // Normal (non-tournament) room — grace period before ending
+          const existing = pendingReconnects.get(userId);
+          if (existing) clearTimeout(existing.timer);
+          io.to(roomId).emit('partner_temporarily_offline', { userId });
+          const gracePeriodTimer = setTimeout(async () => {
+            pendingReconnects.delete(userId);
+            io.to(roomId).emit('partner_disconnected');
+            try { await Room.updateStatus(roomId, 'ended'); } catch {}
+            activeRooms.delete(roomId);
+            const aw = adminWatching.get(roomId);
+            if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
+          }, RECONNECT_GRACE_MS);
+          pendingReconnects.set(userId, { roomId, timer: gracePeriodTimer });
+
+        } else {
+          // Match already done — no grace needed, clean up immediately
+          socket.to(roomId).emit('partner_disconnected');
+          clearTimeout(tm.timer);
+          tourneyMatches.delete(roomId);
           try { await Room.updateStatus(roomId, 'ended'); } catch {}
           activeRooms.delete(roomId);
           const aw = adminWatching.get(roomId);
           if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
         }
       }
-      // Remove from waiting tournaments on disconnect
+      // Remove from waiting tournaments on disconnect (no grace — not in an active match)
       for (const t of tournaments.values()) {
         if (t.players.has(userId) && t.status === 'waiting') {
           t.players.delete(userId);
