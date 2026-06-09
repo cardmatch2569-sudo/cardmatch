@@ -147,6 +147,30 @@ const initTables = async () => {
     console.error('[DB] Tournament tables warning:', e.message);
   }
 
+  // Error logging table
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS ErrorLogs (
+        id         SERIAL       PRIMARY KEY,
+        level      VARCHAR(10)  NOT NULL DEFAULT 'error',
+        source     VARCHAR(10)  NOT NULL DEFAULT 'server',
+        event      VARCHAR(100) NOT NULL DEFAULT '',
+        message    TEXT         NOT NULL,
+        stack      TEXT         NOT NULL DEFAULT '',
+        user_id    VARCHAR(36),
+        username   VARCHAR(50),
+        room_id    VARCHAR(50),
+        url        VARCHAR(500) NOT NULL DEFAULT '',
+        metadata   JSONB        NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP    DEFAULT NOW()
+      )
+    `);
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_el_created ON ErrorLogs(created_at DESC)`).catch(() => {});
+    console.log('[DB] ErrorLogs table ready');
+  } catch (e) {
+    console.error('[DB] ErrorLogs table warning:', e.message);
+  }
+
   if (noId.length) console.log(`[DB] Generated player_id for ${noId.length} existing user(s)`);
   console.log('Tables initialized (PostgreSQL)');
 };

@@ -13,7 +13,7 @@ import {
   Video, VideoOff, Mic, MicOff, SwitchCamera,
 } from 'lucide-react';
 
-const TABS = ['overview', 'users', 'games', 'rooms', 'tournament'];
+const TABS = ['overview', 'users', 'games', 'rooms', 'tournament', 'errors'];
 const EMPTY_GAME = { name: '', nameTh: '', description: '', descriptionTh: '', imageUrl: '', color: '#7c3aed', isActive: true };
 const EMPTY_TOURNEY = { name: '', gameTypeId: '', maxPlayers: 8, totalRounds: 3, scheduledAt: '', scheduledEnd: '' };
 
@@ -56,6 +56,14 @@ export default function AdminPage() {
   const [searchPending,   setSearchPending]   = useState(false);
   const [alerts,          setAlerts]          = useState([]); // { id, type, roomId, matchId, players }
   // Spectate state
+  // Error logs state
+  const [errors,          setErrors]          = useState([]);
+  const [errorsTotal,     setErrorsTotal]     = useState(0);
+  const [errorsLoading,   setErrorsLoading]   = useState(false);
+  const [errLevelFilter,  setErrLevelFilter]  = useState('');
+  const [errSourceFilter, setErrSourceFilter] = useState('');
+  const [errClearing,     setErrClearing]     = useState(false);
+
   const [spectateRoomId,  setSpectateRoomId]  = useState(null);
   const spectateRoomIdRef  = useRef(null);      // ref mirror — always current in closures
   const [spectatePlayer1, setSpectatePlayer1] = useState('');
@@ -106,11 +114,24 @@ export default function AdminPage() {
     try { const { tournaments: list } = await api.get('/api/tournament'); setTournaments(list || []); } catch {}
   }, []);
 
+  const loadErrors = useCallback(async (level = '', source = '') => {
+    setErrorsLoading(true);
+    try {
+      const qs = new URLSearchParams({ limit: 100 });
+      if (level)  qs.set('level', level);
+      if (source) qs.set('source', source);
+      const { errors: list, total } = await api.get(`/api/errors?${qs}`);
+      setErrors(list || []);
+      setErrorsTotal(total || 0);
+    } catch {} finally { setErrorsLoading(false); }
+  }, []);
+
   useEffect(() => { if (user?.isAdmin) { loadStats(); loadOnline(); loadAnnouncement(); loadTournaments(); loadGames(); } }, [user, loadStats, loadOnline, loadAnnouncement, loadTournaments, loadGames]);
   useEffect(() => { if (tab === 'users')      loadUsers(1, ''); },    [tab, loadUsers]);
   useEffect(() => { if (tab === 'games')      loadGames(); },          [tab, loadGames]);
   useEffect(() => { if (tab === 'rooms')      loadRooms(); },          [tab, loadRooms]);
   useEffect(() => { if (tab === 'tournament') loadTournaments(); }, [tab, loadTournaments]);
+  useEffect(() => { if (tab === 'errors') loadErrors(errLevelFilter, errSourceFilter); }, [tab]); // eslint-disable-line
   useEffect(() => { if (tab === 'overview')   { loadStats(); loadOnline(); } }, [tab, loadStats, loadOnline]);
 
   // Tournament socket: admin match alerts + real-time updates
@@ -572,6 +593,15 @@ export default function AdminPage() {
         )}
       </span>
     ),
+    errors: (
+      <span className="relative flex items-center gap-1">
+        <span>🐛</span>
+        <span className="hidden sm:inline">{lang === 'th' ? 'Errors' : 'Errors'}</span>
+        {errorsTotal > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[1rem] h-4 px-0.5 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">{errorsTotal > 99 ? '99+' : errorsTotal}</span>
+        )}
+      </span>
+    ),
   };
 
   const statCards = stats ? [
@@ -981,7 +1011,7 @@ export default function AdminPage() {
       <div className="flex gap-1 p-1 rounded-xl mb-6 overflow-x-auto" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
         {TABS.map(tabKey => (
           <button key={tabKey} onClick={() => setTab(tabKey)}
-            title={{ overview: t.overview, users: t.users, games: t.games, rooms: t.rooms, tournament: t.tournament }[tabKey]}
+            title={{ overview: t.overview, users: t.users, games: t.games, rooms: t.rooms, tournament: t.tournament, errors: 'Error Logs' }[tabKey]}
             className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all text-center whitespace-nowrap px-2
               ${tab === tabKey ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
             style={tab === tabKey ? { background: 'rgba(124,58,237,0.3)', border: '1px solid rgba(124,58,237,0.2)' } : {}}>
@@ -1501,6 +1531,134 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── ERRORS ────────────────────────────────────────────── */}
+      {tab === 'errors' && (
+        <div className="space-y-4">
+          {/* Header + controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-bold text-white flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-red-400">🐛</span>
+              {lang === 'th' ? 'บันทึก Errors' : 'Error Logs'}
+              <span className="text-xs font-normal text-slate-500">({errorsTotal} {lang === 'th' ? 'รายการทั้งหมด' : 'total'})</span>
+            </h3>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Level filter */}
+              <select value={errLevelFilter} onChange={e => { setErrLevelFilter(e.target.value); loadErrors(e.target.value, errSourceFilter); }}
+                className="input-base text-xs py-1.5 px-2" style={{ minWidth: '80px' }}>
+                <option value="">{lang === 'th' ? 'ทุก Level' : 'All levels'}</option>
+                <option value="error">error</option>
+                <option value="warn">warn</option>
+                <option value="info">info</option>
+              </select>
+              {/* Source filter */}
+              <select value={errSourceFilter} onChange={e => { setErrSourceFilter(e.target.value); loadErrors(errLevelFilter, e.target.value); }}
+                className="input-base text-xs py-1.5 px-2" style={{ minWidth: '80px' }}>
+                <option value="">{lang === 'th' ? 'ทุก Source' : 'All sources'}</option>
+                <option value="server">server</option>
+                <option value="client">client</option>
+              </select>
+              {/* Refresh */}
+              <button onClick={() => loadErrors(errLevelFilter, errSourceFilter)}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>
+                <RefreshCw size={13} />
+              </button>
+              {/* Clear all */}
+              {errors.length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(lang === 'th' ? 'ลบ errors ทั้งหมด?' : 'Clear all errors?')) return;
+                    setErrClearing(true);
+                    try { await api.delete('/api/errors'); setErrors([]); setErrorsTotal(0); } catch {}
+                    setErrClearing(false);
+                  }}
+                  disabled={errClearing}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-50"
+                  style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+                  <Trash2 size={12} />
+                  {lang === 'th' ? 'ล้างทั้งหมด' : 'Clear all'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          {errorsLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
+            </div>
+          ) : errors.length === 0 ? (
+            <div className="card p-8 text-center">
+              <div className="text-3xl mb-2">✅</div>
+              <p className="text-slate-500 text-sm">{lang === 'th' ? 'ไม่มี errors' : 'No errors found'}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {errors.map(err => (
+                <div key={err.id} className="card p-3 text-xs"
+                  style={{ borderColor: err.level === 'error' ? 'rgba(239,68,68,0.2)' : err.level === 'warn' ? 'rgba(251,191,36,0.2)' : 'var(--border)' }}>
+                  <div className="flex items-start gap-2">
+                    {/* Badges */}
+                    <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                      <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px]"
+                        style={err.level === 'error'
+                          ? { background: 'rgba(239,68,68,0.15)', color: '#f87171' }
+                          : err.level === 'warn'
+                          ? { background: 'rgba(251,191,36,0.12)', color: '#fbbf24' }
+                          : { background: 'rgba(148,163,184,0.12)', color: '#94a3b8' }}>
+                        {err.level}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded font-mono text-[10px]"
+                        style={err.source === 'client'
+                          ? { background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }
+                          : { background: 'rgba(255,255,255,0.06)', color: '#64748b' }}>
+                        {err.source}
+                      </span>
+                    </div>
+                    {/* Body */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {err.event && <span className="font-mono text-purple-300">{err.event}</span>}
+                        {err.username && <span className="text-slate-400">👤 {err.username}</span>}
+                        {err.room_id  && <span className="text-slate-600 font-mono">{err.room_id.slice(0, 8)}</span>}
+                        <span className="text-slate-700 ml-auto flex-shrink-0">
+                          {new Date(err.created_at).toLocaleString(lang === 'th' ? 'th-TH' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 mt-0.5 break-words">{err.message}</p>
+                      {err.url && <p className="text-slate-600 mt-0.5 font-mono truncate">{err.url}</p>}
+                      {err.stack && (
+                        <details className="mt-1">
+                          <summary className="text-slate-600 cursor-pointer hover:text-slate-400 transition">
+                            {lang === 'th' ? 'ดู stack trace' : 'Stack trace'}
+                          </summary>
+                          <pre className="mt-1 text-[10px] text-slate-500 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed"
+                            style={{ maxHeight: '160px' }}>
+                            {err.stack}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                    {/* Delete */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          await api.delete(`/api/errors/${err.id}`);
+                          setErrors(p => p.filter(e => e.id !== err.id));
+                          setErrorsTotal(p => Math.max(0, p - 1));
+                        } catch {}
+                      }}
+                      className="flex-shrink-0 p-1 rounded text-slate-700 hover:text-red-400 transition">
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
