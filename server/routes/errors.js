@@ -21,7 +21,7 @@ setInterval(() => {
 // POST /api/errors/client — receive client-side error reports (auth required)
 router.post('/client', protect, async (req, res) => {
   res.json({ ok: true }); // respond immediately — don't block the client
-  if (!clientRateOk(req.user.id)) return;
+  if (!clientRateOk(req.user._id)) return;
   try {
     const { event = 'client_error', message = '', stack = '', url = '', metadata = {} } = req.body;
     if (!message) return;
@@ -29,7 +29,7 @@ router.post('/client', protect, async (req, res) => {
     await pool.query(
       `INSERT INTO ErrorLogs (level, source, event, message, stack, user_id, username, url, metadata)
        VALUES ('error', 'client', $1, $2, $3, $4, $5, $6, $7)`,
-      [String(event).slice(0, 100), String(message).slice(0, 2000), String(stack).slice(0, 5000), req.user.id, req.user.username, String(url).slice(0, 500), JSON.stringify(metadata || {})]
+      [String(event).slice(0, 100), String(message).slice(0, 2000), String(stack).slice(0, 5000), req.user._id, req.user.username, String(url).slice(0, 500), JSON.stringify(metadata || {})]
     );
     pool.query(`DELETE FROM ErrorLogs WHERE id NOT IN (SELECT id FROM ErrorLogs ORDER BY created_at DESC LIMIT 500)`).catch(() => {});
   } catch {}
