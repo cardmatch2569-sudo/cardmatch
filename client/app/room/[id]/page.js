@@ -408,6 +408,8 @@ export default function RoomPage() {
     // Admin spectate
     const onAdminWatching = async () => {
       setAdminWatching(true);
+      // Close any stale connection before creating a new one (prevents WebRTC leak)
+      if (adminPeerRef.current) { adminPeerRef.current.close(); adminPeerRef.current = null; }
       const s = getSocket();
       if (!s) return;
       // Refresh camera if tracks are dead — happens on iOS when browser goes to background

@@ -33,6 +33,29 @@ router.get('/', protect, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// GET /api/tournament/admin/all — all tournaments with stats (admin) — MUST be before /:id
+router.get('/admin/all', protect, adminOnly, async (req, res) => {
+  try {
+    const { rows } = await getPool().query(
+      `SELECT t.id, t.name, t.status, t.max_players, t.created_at,
+              g.name AS game_name, g.name_th AS game_name_th, g.color AS game_color,
+              u.username AS created_by_name
+       FROM Tournaments t
+       LEFT JOIN GameTypes g ON t.game_type_id = g.id
+       LEFT JOIN Users     u ON t.created_by   = u.id
+       ORDER BY t.created_at DESC
+       LIMIT 30`
+    );
+    const live = getTournaments();
+    const list = rows.map(r => ({
+      ...r,
+      livePlayerCount: live.get(r.id)?.players.size ?? 0,
+      liveStatus:      live.get(r.id)?.status || r.status,
+    }));
+    res.json({ tournaments: list });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // GET /api/tournament/:id — tournament details + players + matches
 router.get('/:id', protect, async (req, res) => {
   try {
@@ -69,6 +92,17 @@ router.get('/:id', protect, async (req, res) => {
     }));
 
     const online = getOnlineUsers();
+    const buchholzOf = (playerId) => {
+      let score = 0;
+      if (!t.h2h) return score;
+      for (const [key, winnerId] of t.h2h) {
+        if (winnerId !== playerId) continue;
+        const [x, y] = key.split('_');
+        const loserId = x === playerId ? y : x;
+        score += t.points?.get(loserId) || 0;
+      }
+      return score;
+    };
     const playersInfo = [...t.players].map(id => {
       const info = online.get(id);
       return {
@@ -78,7 +112,14 @@ router.get('/:id', protect, async (req, res) => {
         points:   (t.points && t.points.get(id)) || 0,
         isOnline: !!info,
       };
-    }).sort((a, b) => b.points - a.points);
+    }).sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      const key = [a.userId, b.userId].sort().join('_');
+      const winner = t.h2h?.get(key);
+      if (winner === a.userId) return -1;
+      if (winner === b.userId) return 1;
+      return buchholzOf(b.userId) - buchholzOf(a.userId);
+    });
 
     res.json({
       tournament: {
@@ -118,29 +159,6 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
     ts.delete(req.params.id);
 
     res.json({ message: 'ปิด Tournament แล้ว' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-// GET /api/tournament/admin/all — all tournaments with stats (admin)
-router.get('/admin/all', protect, adminOnly, async (req, res) => {
-  try {
-    const { rows } = await getPool().query(
-      `SELECT t.id, t.name, t.status, t.max_players, t.created_at,
-              g.name AS game_name, g.name_th AS game_name_th, g.color AS game_color,
-              u.username AS created_by_name
-       FROM Tournaments t
-       LEFT JOIN GameTypes g ON t.game_type_id = g.id
-       LEFT JOIN Users     u ON t.created_by   = u.id
-       ORDER BY t.created_at DESC
-       LIMIT 30`
-    );
-    const live = getTournaments();
-    const list = rows.map(r => ({
-      ...r,
-      livePlayerCount: live.get(r.id)?.players.size ?? 0,
-      liveStatus:      live.get(r.id)?.status || r.status,
-    }));
-    res.json({ tournaments: list });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

@@ -141,6 +141,7 @@ const initTables = async () => {
     await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS phase VARCHAR(20) DEFAULT 'group'`).catch(() => {});
     await p.query(`ALTER TABLE Tournaments ADD COLUMN IF NOT EXISTS playoff_bracket JSONB`).catch(() => {});
     await p.query(`ALTER TABLE TournamentMatches ADD COLUMN IF NOT EXISTS match_type VARCHAR(20) DEFAULT 'group'`).catch(() => {});
+    await p.query(`ALTER TABLE EmailVerifications ADD COLUMN IF NOT EXISTS verify_attempts INTEGER DEFAULT 0`).catch(() => {});
     console.log('[DB] Tournament tables ready');
   } catch (e) {
     console.error('[DB] Tournament tables warning:', e.message);

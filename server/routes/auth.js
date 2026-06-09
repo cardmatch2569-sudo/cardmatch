@@ -99,28 +99,26 @@ router.post('/google', async (req, res) => {
   } catch (err) { console.error('Google auth error:', err.message); res.status(400).json({ message: 'Google authentication failed' }); }
 });
 
-// OTP verify rate limiter — max 5 attempts per email per 10 min
-const otpVerifyAttempts = new Map();
-const checkOtpRate = (email) => {
-  const now = Date.now(), win = 10 * 60 * 1000;
-  const e = otpVerifyAttempts.get(email) || { count: 0, resetAt: now + win };
-  if (now > e.resetAt) { e.count = 0; e.resetAt = now + win; }
-  if (e.count >= 5) return false;
-  e.count++; otpVerifyAttempts.set(email, e); return true;
-};
-// Clean up expired OTP rate limit entries every 15 minutes
-setInterval(() => { const now = Date.now(); otpVerifyAttempts.forEach((v, k) => { if (now > v.resetAt) otpVerifyAttempts.delete(k); }); }, 15 * 60 * 1000);
-
 // ── VERIFY OTP — Step 2 ───────────────────────────────────────────
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) return res.status(400).json({ message: 'Email and code required' });
-    if (!checkOtpRate(email))
+
+    // Rate limit: max 5 attempts per OTP record (DB-persisted — survives server restart)
+    const pool = getPool();
+    const { rows: pending } = await pool.query(
+      `SELECT id, verify_attempts FROM EmailVerifications WHERE email=$1 AND expires_at > NOW() AND used=FALSE ORDER BY created_at DESC LIMIT 1`,
+      [email.toLowerCase()]
+    );
+    if (pending[0] && pending[0].verify_attempts >= 5)
       return res.status(429).json({ message: 'พยายามยืนยัน OTP มากเกินไป กรุณารอ 10 นาที' });
 
     const otpRow = await EmailVerification.verify(email, code);
-    if (!otpRow) return res.status(400).json({ message: 'รหัสไม่ถูกต้องหรือหมดอายุแล้ว' });
+    if (!otpRow) {
+      if (pending[0]) await pool.query('UPDATE EmailVerifications SET verify_attempts=verify_attempts+1 WHERE id=$1', [pending[0].id]).catch(() => {});
+      return res.status(400).json({ message: 'รหัสไม่ถูกต้องหรือหมดอายุแล้ว' });
+    }
 
     const data = JSON.parse(otpRow.google_data);
     const isFirstUser = (await User.count()) === 0;
@@ -177,7 +175,7 @@ router.post('/forgot-password', async (req, res) => {
     if (!email) return res.status(400).json({ message: 'กรุณากรอก Email' });
 
     const user = await User.findByEmail(email);
-    if (!user) return res.status(404).json({ message: 'ไม่พบบัญชีที่ใช้ Email นี้' });
+    if (!user) return res.json({ message: 'ถ้า Email นี้ถูกลงทะเบียนไว้ คุณจะได้รับรหัส OTP ในไม่ช้า' });
 
     if (await EmailVerification.isRateLimited(email))
       return res.status(429).json({ message: 'กรุณารอ 60 วินาทีก่อนขอรหัสใหม่' });

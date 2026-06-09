@@ -527,7 +527,11 @@ const setupSocketHandlers = (io) => {
         } else {
           socket.emit('match_found', { roomId, gameType: gameInfo, opponent: { _id: opponentId, username: opponentInfo?.username || '?', avatar: opponentInfo?.avatar || '' }, isTournament: true, tournamentId: t.id, matchId: tm.matchId, roundNumber: t.currentRound });
         }
-        console.log(`[reconnect] re-notified ${user.username} of active tournament match in room ${roomId}`);
+        // If match is already in admin_decision, restore that phase on client immediately after redirect
+        if (tm.phase === 'admin_decision') {
+          setTimeout(() => socket.emit('match_needs_admin', { reason: 'reconnect' }), 500);
+        }
+        console.log(`[reconnect] re-notified ${user.username} of active tournament match in room ${roomId} (phase: ${tm.phase})`);
       });
       break; // player can only be in one active match
     }

@@ -105,12 +105,21 @@ router.delete('/users/:id', protect, adminOnly, async (req, res) => {
     const target = await User.findById(req.params.id);
     if (!target) return res.status(404).json({ message: 'ไม่พบผู้ใช้' });
 
-    const pool = getPool();
-    // Cascade-delete all user data
-    await pool.query('DELETE FROM TournamentPlayers WHERE user_id=$1', [req.params.id]);
-    await pool.query('DELETE FROM RoomPlayers WHERE user_id=$1', [req.params.id]);
-    await pool.query('DELETE FROM EmailVerifications WHERE email=$1', [target.email]);
-    await pool.query('DELETE FROM Users WHERE id=$1', [req.params.id]);
+    const pool   = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM TournamentPlayers WHERE user_id=$1',  [req.params.id]);
+      await client.query('DELETE FROM RoomPlayers WHERE user_id=$1',        [req.params.id]);
+      await client.query('DELETE FROM EmailVerifications WHERE email=$1',   [target.email]);
+      await client.query('DELETE FROM Users WHERE id=$1',                   [req.params.id]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
 
     // BUG-02: Force-disconnect the deleted user's socket if online
     const io = req.app.get('io');
