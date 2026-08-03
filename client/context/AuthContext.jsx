@@ -25,6 +25,12 @@ export function AuthProvider({ children }) {
     const token = getToken();
     if (!token) { setLoading(false); return; }
 
+    // Skip network call if JWT is already expired (prevents 401 noise in console)
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp * 1000 < Date.now()) { removeToken(); setLoading(false); return; }
+    } catch { removeToken(); setLoading(false); return; }
+
     // If token came from localStorage only (new tab), mirror it to sessionStorage
     if (!sessionStorage.getItem('cg_token')) sessionStorage.setItem('cg_token', token);
 
