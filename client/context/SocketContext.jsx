@@ -49,7 +49,7 @@ export function SocketProvider({ children }) {
 
     const socket = io(SERVER_URL, {
       auth: { token },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       upgrade: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay:    500,
@@ -67,6 +67,7 @@ export function SocketProvider({ children }) {
     socket.on('connect', () => {
       setConnected(true);
       console.log('[Socket] ✅ Connected via', socket.io.engine.transport.name, '| ID:', socket.id);
+      socket.io.engine.once('upgrade', (t) => console.log('[Socket] ⬆️ Upgraded to', t.name));
       if (queueRef.current) {
         console.log('[Socket] Re-joining queue after reconnect:', queueRef.current);
         socket.emit('join_queue', { gameTypeId: queueRef.current });
