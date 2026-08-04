@@ -50,7 +50,7 @@ export default function DonatePage() {
         </div>
 
         {/* Beta — Unlimited free */}
-        <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl mb-3 border border-green-500/25 bg-green-500/8">
+        <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl mb-3 border border-green-500/25 bg-green-500/[0.08]">
           <Zap size={16} className="text-green-400 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-green-300 text-sm font-bold mb-0.5">{t.betaTitle}</p>
@@ -181,8 +181,12 @@ export default function DonatePage() {
             </div>
           </div>
 
-          <p className="text-xs text-slate-400 font-medium">นายจักรรินทร์ ขาวงาม</p>
-          <p className="text-xs text-slate-600 mt-0.5">PromptPay · กรุงไทย</p>
+          <p className="text-xs text-slate-400 font-medium">
+            {lang === 'th' ? 'นายจักรรินทร์ ขาวงาม' : 'Chakkharin Khaongam'}
+          </p>
+          <p className="text-xs text-slate-600 mt-0.5">
+            PromptPay · {lang === 'th' ? 'กรุงไทย' : 'Krungthai Bank'}
+          </p>
         </div>
         )}
 

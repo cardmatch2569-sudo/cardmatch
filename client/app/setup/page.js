@@ -310,8 +310,8 @@ export default function SetupPage() {
             </button>
           </div>
 
-          {/* Tips — hidden on mobile to save space */}
-          <div className="hidden md:block p-4 rounded-xl"
+          {/* Tips */}
+          <div className="p-4 rounded-xl"
             style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)' }}>
             <p className="text-xs text-purple-300 font-semibold mb-2">💡 {lang === 'th' ? 'เคล็ดลับ' : 'Tips'}</p>
             <ul className="text-xs text-slate-500 space-y-1">

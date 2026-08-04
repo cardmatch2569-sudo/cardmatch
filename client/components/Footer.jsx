@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
+import { Globe } from 'lucide-react';
 
 export default function Footer() {
-  const { lang } = useAuth();
+  const { lang, toggleLang } = useAuth();
   const th = lang === 'th';
 
   return (
@@ -25,6 +26,13 @@ export default function Footer() {
             <Link href="/donate" className="hover:text-pink-400 transition text-pink-600">
               {th ? '💗 สนับสนุน' : '💗 Support'}
             </Link>
+            <span className="opacity-30">·</span>
+            <button onClick={toggleLang}
+              aria-label={th ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
+              className="flex items-center gap-1 hover:text-slate-300 transition">
+              <Globe size={10} />
+              {th ? 'EN' : 'ไทย'}
+            </button>
           </div>
         </div>
         {/* IP Disclaimer */}

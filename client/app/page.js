@@ -22,10 +22,14 @@ export default function HomePage() {
   useEffect(() => { loadGames(); }, [loadGames]);
 
   const features = [
-    { icon: <Camera size={20} />, label: lang === 'th' ? 'วิดีโอสด' : 'Live Video', color: '#a78bfa' },
-    { icon: <Shuffle size={20} />, label: lang === 'th' ? 'จับคู่สุ่ม' : 'Random Match', color: '#f472b6' },
-    { icon: <Search size={20} />, label: lang === 'th' ? 'ค้นหาผู้เล่น' : 'Find Players', color: '#60a5fa' },
-    { icon: <Shield size={20} />, label: lang === 'th' ? 'ปลอดภัย' : 'Secure', color: '#4ade80' },
+    { icon: <Camera size={20} />, label: lang === 'th' ? 'วิดีโอสด' : 'Live Video',
+      cls: 'bg-violet-400/[0.07] border border-violet-400/[0.15] text-violet-400' },
+    { icon: <Shuffle size={20} />, label: lang === 'th' ? 'จับคู่สุ่ม' : 'Random Match',
+      cls: 'bg-pink-400/[0.07] border border-pink-400/[0.15] text-pink-400' },
+    { icon: <Search size={20} />, label: lang === 'th' ? 'ค้นหาผู้เล่น' : 'Find Players',
+      cls: 'bg-blue-400/[0.07] border border-blue-400/[0.15] text-blue-400' },
+    { icon: <Shield size={20} />, label: lang === 'th' ? 'ปลอดภัย' : 'Secure',
+      cls: 'bg-green-400/[0.07] border border-green-400/[0.15] text-green-400' },
   ];
 
   const steps = [
@@ -108,15 +112,10 @@ export default function HomePage() {
 
           {/* Feature pills */}
           <div className="anim-fade-up delay-400 flex flex-wrap justify-center gap-3">
-            {features.map(({ icon, label, color }) => (
+            {features.map(({ icon, label, cls }) => (
               <div
                 key={label}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
-                style={{
-                  background: `${color}12`,
-                  border: `1px solid ${color}25`,
-                  color,
-                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${cls}`}
               >
                 {icon}
                 {label}
@@ -128,7 +127,7 @@ export default function HomePage() {
         {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-slate-600">
           <div className="w-[1px] h-12 bg-gradient-to-b from-transparent to-slate-600" />
-          <span className="text-xs uppercase tracking-widest">scroll</span>
+          <span className="text-xs uppercase tracking-widest">{lang === 'th' ? 'เลื่อน' : 'scroll'}</span>
         </div>
       </section>
 

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
@@ -17,6 +17,7 @@ export default function Navbar() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
+  const mobileMenuRef = useRef(null);
 
   // Fetch pending friend requests and listen for real-time updates
   useEffect(() => {
@@ -39,6 +40,27 @@ export default function Navbar() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Focus trap for mobile menu
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const panel = mobileMenuRef.current;
+    if (!panel) return;
+    const focusable = panel.querySelectorAll('a[href], button:not([disabled])');
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    first?.focus();
+    const trap = (e) => {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', trap);
+    return () => document.removeEventListener('keydown', trap);
+  }, [mobileOpen]);
 
   // Room page has its own full-screen UI — hide Navbar completely
   if (pathname?.startsWith('/room/')) return null;
@@ -88,14 +110,14 @@ export default function Navbar() {
                   className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                     ${isActive(href)
                       ? admin       ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-600/20'
-                      : tourney     ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30'
+                      : tourney     ? 'bg-yellow-500/[0.15] text-yellow-300 border border-yellow-500/30'
                       : leaderboard ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-600/20'
                       : friends     ? 'bg-blue-600/20 text-blue-300 border border-blue-600/20'
                                     : 'bg-purple-600/20 text-purple-300 border border-purple-600/20'
                       : admin       ? 'text-yellow-500 hover:text-yellow-300 hover:bg-yellow-500/5'
-                      : tourney     ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8 border border-yellow-500/20'
-                      : leaderboard ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/8'
-                      : friends     ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/8'
+                      : tourney     ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/[0.08] border border-yellow-500/20'
+                      : leaderboard ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08]'
+                      : friends     ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/[0.08]'
                                     : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                   {icon}{label}
                   {badge > 0 && (
@@ -135,7 +157,7 @@ export default function Navbar() {
                 className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border
                   ${viewMode === 'admin'
                     ? 'text-yellow-400 border-yellow-600/20 bg-yellow-500/5 hover:bg-yellow-500/10'
-                    : 'text-purple-300 border-purple-600/30 bg-purple-600/10 hover:bg-purple-600/15'}`}>
+                    : 'text-purple-300 border-purple-600/30 bg-purple-600/10 hover:bg-purple-600/[0.15]'}`}>
                 {viewMode === 'admin' ? <><Eye size={12} />{lang === 'th' ? 'ดูผู้ใช้' : 'User'}</> : <><EyeOff size={12} />Admin</>}
               </button>
             )}
@@ -172,6 +194,7 @@ export default function Navbar() {
                       <span className="text-sm text-slate-300 hidden md:block font-medium">{user.username}</span>
                     </Link>
                     <button onClick={handleLogout}
+                      aria-label={lang === 'th' ? 'ออกจากระบบ' : 'Log out'}
                       className="p-1.5 text-slate-500 hover:text-red-400 transition rounded-lg hover:bg-red-500/10">
                       <LogOut size={15} />
                     </button>
@@ -193,7 +216,8 @@ export default function Navbar() {
             <button
               onClick={() => setMobileOpen(p => !p)}
               className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition"
-              aria-label="Menu"
+              aria-label={mobileOpen ? (lang === 'th' ? 'ปิดเมนู' : 'Close menu') : (lang === 'th' ? 'เปิดเมนู' : 'Open menu')}
+              aria-expanded={mobileOpen}
             >
               {mobileOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -209,6 +233,7 @@ export default function Navbar() {
 
           {/* Menu panel */}
           <div
+            ref={mobileMenuRef}
             className="absolute left-0 right-0 anim-fade-in"
             style={{ top: 'var(--navbar-h, 4rem)', background: 'rgba(10,10,20,0.98)', borderBottom: '1px solid var(--border)' }}
             onClick={e => e.stopPropagation()}
@@ -244,14 +269,14 @@ export default function Navbar() {
                     aria-current={isActive(href) ? 'page' : undefined}
                     className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
                       ${isActive(href)
-                        ? admin       ? 'bg-yellow-600/15 text-yellow-300'
-                        : tourney     ? 'bg-yellow-500/12 text-yellow-300'
-                        : leaderboard ? 'bg-emerald-600/15 text-emerald-300'
-                        : friends     ? 'bg-blue-600/15 text-blue-300'
-                                      : 'bg-purple-600/15 text-purple-300'
-                        : tourney     ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8'
-                        : leaderboard ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/8'
-                        : friends     ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/8'
+                        ? admin       ? 'bg-yellow-600/[0.15] text-yellow-300'
+                        : tourney     ? 'bg-yellow-500/[0.12] text-yellow-300'
+                        : leaderboard ? 'bg-emerald-600/[0.15] text-emerald-300'
+                        : friends     ? 'bg-blue-600/[0.15] text-blue-300'
+                                      : 'bg-purple-600/[0.15] text-purple-300'
+                        : tourney     ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/[0.08]'
+                        : leaderboard ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08]'
+                        : friends     ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/[0.08]'
                                       : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
                     <span className={admin ? 'text-yellow-400' : tourney ? 'text-yellow-400' : leaderboard ? 'text-emerald-400' : friends ? 'text-blue-400' : 'text-purple-400'}>{icon}</span>
                     {label}
@@ -271,7 +296,7 @@ export default function Navbar() {
               <div className="px-3 py-2 border-t border-[var(--border)]">
                 <button onClick={() => { toggleViewMode(); close(); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition
-                    ${viewMode === 'admin' ? 'text-yellow-400 bg-yellow-500/8' : 'text-purple-300 bg-purple-600/8'}`}>
+                    ${viewMode === 'admin' ? 'text-yellow-400 bg-yellow-500/[0.08]' : 'text-purple-300 bg-purple-600/[0.08]'}`}>
                   {viewMode === 'admin' ? <Eye size={16} /> : <EyeOff size={16} />}
                   {viewMode === 'admin'
                     ? (lang === 'th' ? 'ดูในมุมมองผู้ใช้' : 'Preview as User')
@@ -284,7 +309,7 @@ export default function Navbar() {
             <div className="px-3 py-2 border-t border-[var(--border)]">
               <Link href={donateLink.href} onClick={close}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
-                  ${isActive('/donate') ? 'bg-pink-600/15 text-pink-300' : 'text-pink-400 hover:text-pink-300 hover:bg-pink-500/8'}`}>
+                  ${isActive('/donate') ? 'bg-pink-600/[0.15] text-pink-300' : 'text-pink-400 hover:text-pink-300 hover:bg-pink-500/[0.08]'}`}>
                 <span className="text-pink-400">{donateLink.icon}</span>
                 {donateLink.label}
                 {isActive('/donate') && <div className="ml-auto w-2 h-2 rounded-full bg-current opacity-60" />}

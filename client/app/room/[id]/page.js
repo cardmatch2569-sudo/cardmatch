@@ -1275,6 +1275,7 @@ export default function RoomPage() {
         </button>
 
         <button onClick={toggleCamera}
+          aria-label={lang === 'th' ? (cameraOn ? 'ปิดกล้อง' : 'เปิดกล้อง') : (cameraOn ? 'Turn off camera' : 'Turn on camera')}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
             ${cameraOn ? 'opacity-60 hover:opacity-80' : 'opacity-90'}`}
           style={cameraOn
@@ -1309,6 +1310,7 @@ export default function RoomPage() {
         {/* Leave — hidden in tournament (players exit via proper จบเกม flow) */}
         {!isTournament && (
           <button onClick={handleLeave}
+            aria-label={lang === 'th' ? 'วางสาย' : 'Hang up'}
             className="w-14 h-14 rounded-full flex items-center justify-center text-white transition-all active:scale-95 opacity-80 hover:opacity-100"
             style={{ background: 'rgba(239,68,68,0.85)', boxShadow: '0 4px 15px rgba(239,68,68,0.3)' }}>
             <PhoneOff size={20} />
@@ -1316,6 +1318,7 @@ export default function RoomPage() {
         )}
 
         <button onClick={toggleMic}
+          aria-label={lang === 'th' ? (micOn ? 'ปิดไมค์' : 'เปิดไมค์') : (micOn ? 'Mute mic' : 'Unmute mic')}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100
             ${micOn ? 'opacity-60 hover:opacity-80' : 'opacity-90'}`}
           style={micOn
@@ -1335,6 +1338,7 @@ export default function RoomPage() {
         </button>
 
         <button onClick={() => setChatOpen(p => !p)}
+          aria-label={lang === 'th' ? (chatOpen ? 'ปิดแชท' : 'เปิดแชท') : (chatOpen ? 'Close chat' : 'Open chat')}
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 active:opacity-100 relative
             ${chatOpen ? 'opacity-90' : 'opacity-60 hover:opacity-80'}`}
           style={chatOpen
@@ -1562,7 +1566,7 @@ export default function RoomPage() {
             style={{
               background: 'rgba(10,10,22,0.98)',
               borderTop: '1px solid var(--border)',
-              height: 'min(60vh, 480px, 100vw - 16px)',
+              height: 'min(60vh, 480px)',
             }}
             onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1 flex-shrink-0">

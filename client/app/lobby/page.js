@@ -481,7 +481,7 @@ export default function LobbyPage() {
       <div className="flex items-center justify-between mb-6 md:mb-8 gap-2 w-full min-w-0">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-bold text-white">{t.lobbyTitle}</h1>
-          <p className="text-slate-500 text-sm mt-0.5 hidden sm:block">
+          <p className="text-slate-500 text-sm mt-0.5">
             {lang === 'th' ? 'เลือกเกมและหาคู่ต่อสู้' : 'Choose a game and find an opponent'}
           </p>
         </div>

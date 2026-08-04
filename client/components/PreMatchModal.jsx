@@ -124,6 +124,7 @@ export default function PreMatchModal({ lang, gameName, onConfirm, onCancel }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      role="dialog" aria-modal="true"
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
 
       <div className="anim-slide-up sm:anim-scale-in w-full sm:max-w-md card overflow-hidden"

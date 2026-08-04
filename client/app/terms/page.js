@@ -1,15 +1,21 @@
 'use client';
 import { useAuth } from '../../context/AuthContext';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function TermsPage() {
   const { lang } = useAuth();
+  const router = useRouter();
   const th = lang === 'th';
+
+  const goBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else router.push('/');
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="mb-8">
-        <Link href="/" className="text-slate-500 hover:text-white text-sm transition">← {th ? 'กลับหน้าหลัก' : 'Back to Home'}</Link>
+        <button onClick={goBack} className="text-slate-500 hover:text-white text-sm transition">← {th ? 'กลับ' : 'Back'}</button>
       </div>
 
       <div className="card p-6 md:p-8 space-y-6 text-sm text-slate-300 leading-relaxed">
@@ -80,7 +86,7 @@ export default function TermsPage() {
               เราขอสงวนสิทธิ์ระงับหรือลบบัญชีของผู้ใช้ที่ฝ่าฝืนข้อกำหนดเหล่านี้โดยไม่ต้องแจ้งล่วงหน้า
             </Section>
 
-            <Section title="8. การปฏิเสธความรับผิด">
+            <Section title="9. การปฏิเสธความรับผิด">
               <ul className="list-disc pl-5 space-y-1">
                 <li>บริการนี้ให้บริการ "ตามที่มีอยู่" โดยไม่มีการรับประกันใด ๆ</li>
                 <li>เราไม่รับผิดชอบต่อความเสียหายที่เกิดจากการใช้บริการ</li>
@@ -89,11 +95,11 @@ export default function TermsPage() {
               </ul>
             </Section>
 
-            <Section title="9. กฎหมายที่ใช้บังคับ">
+            <Section title="10. กฎหมายที่ใช้บังคับ">
               ข้อกำหนดเหล่านี้อยู่ภายใต้กฎหมายไทย ข้อพิพาทใด ๆ ให้อยู่ในเขตอำนาจศาลไทย
             </Section>
 
-            <Section title="10. ติดต่อเรา">
+            <Section title="11. ติดต่อเรา">
               <b>อีเมล:</b> cardmatch2569@gmail.com
             </Section>
           </>
@@ -107,9 +113,9 @@ export default function TermsPage() {
             <Section title="6. Content">Chat messages must not contain offensive, hateful, or spam content.</Section>
             <Section title="7. Third-Party Intellectual Property">CardMatch is a matchmaking facilitation platform. It is <b>not affiliated with, endorsed by, or a representative</b> of any game publisher. All game names, trademarks, and copyrights are the property of their respective owners. Users must not infringe third-party intellectual property on this platform.</Section>
             <Section title="8. Termination">We reserve the right to suspend or delete accounts that violate these terms without prior notice.</Section>
-            <Section title="8. Disclaimer">The service is provided "as is" with no warranties. We are not responsible for user behavior or service interruptions.</Section>
-            <Section title="9. Governing Law">These terms are governed by Thai law.</Section>
-            <Section title="10. Contact"><b>Email:</b> cardmatch2569@gmail.com</Section>
+            <Section title="9. Disclaimer">The service is provided "as is" with no warranties. We are not responsible for user behavior or service interruptions.</Section>
+            <Section title="10. Governing Law">These terms are governed by Thai law.</Section>
+            <Section title="11. Contact"><b>Email:</b> cardmatch2569@gmail.com</Section>
           </>
         )}
       </div>

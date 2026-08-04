@@ -32,6 +32,7 @@ export default function LoginPage() {
   const [newPass,    setNewPass]      = useState('');
   const [newPassConf,setNewPassConf]  = useState('');
   const [showNewPass,setShowNewPass]  = useState(false);
+  const [showConfPass,setShowConfPass] = useState(false);
 
   const [otpData, setOtpData] = useState(null);
 
@@ -285,11 +286,12 @@ export default function LoginPage() {
               </div>
               <div className="relative">
                 <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
-                <input type={showNewPass ? 'text' : 'password'} required
+                <input type={showConfPass ? 'text' : 'password'} required
                   placeholder={lang === 'th' ? 'ยืนยันรหัสผ่านใหม่' : 'Confirm new password'}
                   value={newPassConf} onChange={e => setNewPassConf(e.target.value)}
-                  className={`input-base pl-9 text-sm ${newPassConf && newPass !== newPassConf ? 'border-red-500/60' : newPassConf && newPass === newPassConf ? 'border-green-500/60' : ''}`}
+                  className={`input-base pl-9 pr-10 text-sm ${newPassConf && newPass !== newPassConf ? 'border-red-500/60' : newPassConf && newPass === newPassConf ? 'border-green-500/60' : ''}`}
                   autoComplete="new-password" />
+                <EyeBtn show={showConfPass} toggle={() => setShowConfPass(p => !p)} />
               </div>
               <MsgBox msg={error} type="error" />
               <button type="submit" disabled={loading || resetCode.length !== 6} className="btn-primary w-full py-3 rounded-xl text-sm gap-2 disabled:opacity-40">
@@ -355,7 +357,7 @@ export default function LoginPage() {
               <input type="email" required placeholder={t.email}
                 value={form.email} onChange={e => { const v = e.target.value; setForm({ ...form, email: v }); try { sessionStorage.setItem('cg_login_email', v); } catch {} }}
                 className="input-base pl-9 text-sm"
-                autoComplete={mode === 'login' ? 'email' : 'new-email'}
+                autoComplete="email"
                 onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
               />
             </div>
@@ -439,11 +441,6 @@ export default function LoginPage() {
             </p>
           )}
 
-          {mode === 'register' && (
-            <p className="text-xs text-slate-500 text-center mt-3">
-              {lang === 'th' ? 'ผู้ใช้คนแรกจะได้รับสิทธิ์ Admin อัตโนมัติ' : 'First registered user gets Admin rights'}
-            </p>
-          )}
         </div>
 
         <p className="text-center text-xs text-slate-700 mt-4">CardMatch © 2026</p>

@@ -6,24 +6,7 @@ import { useSocket } from '../../../context/SocketContext';
 import { api } from '../../../lib/api';
 import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel, RefreshCw } from 'lucide-react';
 import translations from '../../../lib/translations';
-
-function useCountdown(targetDate, lang) {
-  const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
-  useEffect(() => {
-    if (!targetDate) return;
-    const id = setInterval(() => setDiff(new Date(targetDate) - Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [targetDate]);
-  if (diff === null || diff <= 0) return null;
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  const isTh = lang !== 'en';
-  if (h > 24) return isTh ? `${Math.floor(h/24)} วัน` : `${Math.floor(h/24)}d`;
-  if (h >= 2) return isTh ? `${h}ชม. ${m}น.` : `${h}h ${m}m`;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${m}:${String(s).padStart(2,'0')}`;
-}
+import useCountdown from '../../../hooks/useCountdown';
 
 // ── Leaderboard ───────────────────────────────────────────────────────
 function Leaderboard({ standings, myId, tl }) {
@@ -617,7 +600,7 @@ export default function TournamentWaitingRoom() {
 
       {/* ── Toast notification ──────────────────────────────────── */}
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+        <div className="fixed top-[var(--navbar-h,4rem)] left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
           style={{ background: 'rgba(239,68,68,0.9)', border: '1px solid rgba(239,68,68,0.6)', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(239,68,68,0.4)' }}>
           ⚠️ {toast}
         </div>

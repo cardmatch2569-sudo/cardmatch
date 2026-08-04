@@ -578,16 +578,15 @@ export default function AdminPage() {
 
   const t = translations[lang];
 
-  // Short labels for mobile, full for desktop
   const tabLabels = {
-    overview:   <><span className="hidden sm:inline">📊 </span><span className="sm:hidden">📊</span><span className="hidden sm:inline">{t.overview}</span></>,
-    users:      <><span className="hidden sm:inline">👥 </span><span className="sm:hidden">👥</span><span className="hidden sm:inline">{t.users}</span></>,
-    games:      <><span className="hidden sm:inline">🃏 </span><span className="sm:hidden">🃏</span><span className="hidden sm:inline">{t.games}</span></>,
-    rooms:      <><span className="hidden sm:inline">🎮 </span><span className="sm:hidden">🎮</span><span className="hidden sm:inline">{t.rooms}</span></>,
+    overview:   <>📊 {t.overview}</>,
+    users:      <>👥 {t.users}</>,
+    games:      <>🃏 {t.games}</>,
+    rooms:      <>🎮 {t.rooms}</>,
     tournament: (
       <span className="relative flex items-center gap-1">
         <span>🏆</span>
-        <span className="hidden sm:inline">{t.tournament}</span>
+        <span>{t.tournament}</span>
         {alerts.length > 0 && (
           <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">{alerts.length}</span>
         )}
@@ -596,7 +595,7 @@ export default function AdminPage() {
     errors: (
       <span className="relative flex items-center gap-1">
         <span>🐛</span>
-        <span className="hidden sm:inline">{lang === 'th' ? 'Errors' : 'Errors'}</span>
+        <span>Errors</span>
         {errorsTotal > 0 && (
           <span className="absolute -top-1.5 -right-1.5 min-w-[1rem] h-4 px-0.5 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center font-bold">{errorsTotal > 99 ? '99+' : errorsTotal}</span>
         )}
@@ -1152,7 +1151,7 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           {u._id !== user._id && (
-                            <div className="flex items-center gap-1.5 md:opacity-0 md:group-hover:opacity-100 transition">
+                            <div className="flex items-center gap-1.5 transition">
                               <button onClick={() => handleToggleAdmin(u._id, u.username)}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition"
                                 style={{ background: u.isAdmin ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)', color: u.isAdmin ? '#f87171' : '#fbbf24', border: `1px solid ${u.isAdmin ? 'rgba(239,68,68,0.2)' : 'rgba(251,191,36,0.2)'}` }}>
@@ -1232,7 +1231,7 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition">
+                          <div className="flex items-center justify-end gap-0.5 transition">
                             <button onClick={() => openEdit(g)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition active:scale-95" title={t.editTitle}><Pencil size={14} /></button>
                             <button onClick={() => handleDeleteGame(g._id, g.name)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition active:scale-95" title={t.deleteTitle}><Trash2 size={14} /></button>
                           </div>

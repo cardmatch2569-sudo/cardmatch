@@ -1,15 +1,21 @@
 'use client';
 import { useAuth } from '../../context/AuthContext';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function PrivacyPage() {
   const { lang } = useAuth();
+  const router = useRouter();
   const th = lang === 'th';
+
+  const goBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else router.push('/');
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="mb-8">
-        <Link href="/" className="text-slate-500 hover:text-white text-sm transition">← {th ? 'กลับหน้าหลัก' : 'Back to Home'}</Link>
+        <button onClick={goBack} className="text-slate-500 hover:text-white text-sm transition">← {th ? 'กลับ' : 'Back'}</button>
       </div>
 
       <div className="card p-6 md:p-8 space-y-6 text-sm text-slate-300 leading-relaxed">

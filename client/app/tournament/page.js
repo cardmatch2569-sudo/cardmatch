@@ -6,23 +6,7 @@ import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import { Trophy, Users, ChevronRight, RefreshCw, Loader2, Info } from 'lucide-react';
 import translations from '../../lib/translations';
-
-function useCountdown(targetDate, lang) {
-  const [diff, setDiff] = useState(() => targetDate ? new Date(targetDate) - Date.now() : null);
-  useEffect(() => {
-    if (!targetDate) return;
-    const id = setInterval(() => setDiff(new Date(targetDate) - Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [targetDate]);
-  if (diff === null || diff <= 0) return null;
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  const isTh = lang !== 'en';
-  if (h > 24) return isTh ? `${Math.floor(h/24)} วัน` : `${Math.floor(h/24)}d`;
-  if (h > 0) return isTh ? `${h}ชม. ${m}น.` : `${h}h ${m}m`;
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}${isTh ? ' น.' : ''}`;
-}
+import useCountdown from '../../hooks/useCountdown';
 
 // ── How It Works ────────────────────────────────────────────────────
 function HowItWorksPanel({ lang }) {
@@ -179,7 +163,7 @@ function TournamentCard({ t, lang, onJoin, joining, user }) {
           )}
           {t.scheduledAt && (
             <span className="text-xs text-slate-500">
-              ⏰ {countdown !== null ? `เหลือ ${countdown}` : new Date(t.scheduledAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.'}
+              ⏰ {countdown !== null ? (lang === 'en' ? `${countdown} left` : `เหลือ ${countdown}`) : new Date(t.scheduledAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.'}
             </span>
           )}
         </div>

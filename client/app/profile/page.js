@@ -285,31 +285,6 @@ export default function ProfilePage() {
         );
       })()}
 
-      {/* Available games */}
-      <div className="card p-5">
-        <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-widest">
-          {lang === 'th' ? 'เกมที่รองรับ' : 'Available Games'}
-        </h2>
-        <div className="space-y-2">
-          {gamesError && (
-            <p className="text-red-400 text-sm text-center py-2">{t.failedToLoad}</p>
-          )}
-          {games.map((game) => (
-            <div key={game._id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] hover:border-[var(--border-2)] transition"
-              style={{ background: 'var(--bg-2)' }}>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: `${game.color}12`, border: `1px solid ${game.color}25` }}>
-                🃏
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-white">{lang === 'th' ? game.nameTh : game.name}</div>
-              </div>
-              <div className="ml-auto w-2 h-2 rounded-full flex-shrink-0" style={{ background: game.color }} />
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* ── Match History ───────────────────────────────────────── */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-4">
@@ -320,7 +295,7 @@ export default function ProfilePage() {
           {matchHistory.length > 0 && (
             <button onClick={() => setHideOpponents(p => !p)}
               className="text-xs text-slate-600 hover:text-slate-400 transition px-2 py-1 rounded-lg hover:bg-white/5"
-              title={hideOpponents ? (lang === 'th' ? 'แสดงชื่อคู่แข่ง' : 'Show opponents') : (lang === 'th' ? 'ซ่อนชื่อคู่แข่ง' : 'Hide opponents')}>
+              aria-label={hideOpponents ? (lang === 'th' ? 'แสดงชื่อคู่แข่ง' : 'Show opponents') : (lang === 'th' ? 'ซ่อนชื่อคู่แข่ง' : 'Hide opponents')}>
               {hideOpponents ? '👁' : '🙈'} {lang === 'th' ? (hideOpponents ? 'แสดง' : 'ซ่อน') : (hideOpponents ? 'Show' : 'Hide')}
             </button>
           )}

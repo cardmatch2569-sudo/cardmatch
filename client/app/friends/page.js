@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import { UserPlus, UserCheck, UserX, Swords, Search, Trophy, CheckCircle, XCircle } from 'lucide-react';
+import PageLoader from '../../components/PageLoader';
 
 function EloBar({ elo }) {
   const pct = Math.min(100, Math.round(((elo - 100) / 1900) * 100));
@@ -32,6 +33,9 @@ export default function FriendsPage() {
   const [searching, setSearching] = useState(false);
   const [toast,    setToast]    = useState(null);
   const [busy,     setBusy]     = useState({}); // { [userId]: true }
+  const [games,    setGames]    = useState([]);
+  const [challengeTarget, setChallengeTarget] = useState(null); // { id, username }
+  const [confirmRemove,   setConfirmRemove]   = useState(null); // { id, username }
 
   const th = lang === 'th';
 
@@ -48,6 +52,7 @@ export default function FriendsPage() {
     if (!user) return;
     loadFriends();
     loadRequests();
+    api.get('/api/games').then(d => setGames((d.games || []).filter(g => g.isActive))).catch(() => {});
   }, [user, loading]);
 
   // Real-time friend events
@@ -112,20 +117,31 @@ export default function FriendsPage() {
     } catch {} finally { setBusy(b => ({ ...b, [fromId]: false })); }
   };
 
-  const removeFriend = async (friendId, username) => {
-    if (!confirm(th ? `ลบ ${username} ออกจากรายชื่อเพื่อน?` : `Remove ${username} from friends?`)) return;
-    setBusy(b => ({ ...b, [friendId]: true }));
-    try {
-      await api.delete(`/api/friends/${friendId}`);
-      setFriends(f => f.filter(x => x._id !== friendId));
-      showToast(th ? 'ลบเพื่อนแล้ว' : 'Friend removed');
-    } catch {} finally { setBusy(b => ({ ...b, [friendId]: false })); }
+  const removeFriend = (friendId, username) => {
+    setConfirmRemove({ id: friendId, username });
   };
 
-  if (loading) return null;
+  const doRemoveFriend = async () => {
+    const { id } = confirmRemove;
+    setConfirmRemove(null);
+    setBusy(b => ({ ...b, [id]: true }));
+    try {
+      await api.delete(`/api/friends/${id}`);
+      setFriends(f => f.filter(x => x._id !== id));
+      showToast(th ? 'ลบเพื่อนแล้ว' : 'Friend removed');
+    } catch {} finally { setBusy(b => ({ ...b, [id]: false })); }
+  };
+
+  const sendChallenge = (gameTypeId) => {
+    safeEmit('challenge_player', { targetUserId: challengeTarget.id, gameTypeId });
+    setChallengeTarget(null);
+    showToast(th ? 'ส่งคำท้าแล้ว!' : 'Challenge sent!');
+  };
+
+  if (loading) return <PageLoader />;
 
   return (
-    <main className="min-h-screen pt-[var(--navbar-h,4rem)]" style={{ background: 'var(--bg)' }}>
+    <main className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <div className="max-w-2xl mx-auto px-4 py-8">
 
         {/* Header */}
@@ -180,7 +196,15 @@ export default function FriendsPage() {
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <span className="text-[10px] text-slate-600">{f.stats.wins}W {f.stats.losses}L</span>
+                  {f.isOnline && games.length > 0 && (
+                    <button onClick={() => setChallengeTarget({ id: f._id, username: f.username })} disabled={busy[f._id]}
+                      aria-label={th ? `ท้าแข่ง ${f.username}` : `Challenge ${f.username}`}
+                      className="p-1.5 text-slate-600 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition">
+                      <Swords size={14} />
+                    </button>
+                  )}
                   <button onClick={() => removeFriend(f._id, f.username)} disabled={busy[f._id]}
+                    aria-label={th ? `ลบ ${f.username}` : `Remove ${f.username}`}
                     className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
                     <UserX size={14} />
                   </button>
@@ -270,6 +294,57 @@ export default function FriendsPage() {
               {search.trim().length < 2 && !searching && (
                 <p className="text-center text-xs text-slate-600 py-6">{th ? 'พิมพ์ชื่ออย่างน้อย 2 ตัวอักษรเพื่อค้นหา' : 'Type at least 2 characters to search'}</p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Confirm Remove Modal */}
+        {confirmRemove && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.75)' }}
+            role="dialog" aria-modal="true">
+            <div className="card p-6 max-w-xs w-full text-center space-y-4">
+              <p className="font-semibold text-white text-sm">
+                {th ? `ลบ ${confirmRemove.username} ออกจากรายชื่อเพื่อน?` : `Remove ${confirmRemove.username} from friends?`}
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button onClick={() => setConfirmRemove(null)}
+                  className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white transition">
+                  {th ? 'ยกเลิก' : 'Cancel'}
+                </button>
+                <button onClick={doRemoveFriend}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-red-400 hover:bg-red-500/10 transition">
+                  {th ? 'ลบ' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Challenge Game Picker */}
+        {challengeTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.75)' }}
+            role="dialog" aria-modal="true">
+            <div className="card p-6 max-w-xs w-full space-y-4">
+              <h3 className="font-bold text-white text-center text-sm">
+                {th ? `ท้าแข่ง ${challengeTarget.username}` : `Challenge ${challengeTarget.username}`}
+              </h3>
+              <p className="text-xs text-slate-500 text-center">{th ? 'เลือกเกม' : 'Choose a game'}</p>
+              <div className="space-y-2">
+                {games.map(g => (
+                  <button key={g._id} onClick={() => sendChallenge(g._id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-white hover:bg-white/5 transition text-left"
+                    style={{ border: `1px solid ${g.color}30`, background: `${g.color}08` }}>
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: g.color }} />
+                    {th && g.nameTh ? g.nameTh : g.name}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setChallengeTarget(null)}
+                className="w-full text-center text-xs text-slate-600 hover:text-white transition py-1">
+                {th ? 'ยกเลิก' : 'Cancel'}
+              </button>
             </div>
           </div>
         )}

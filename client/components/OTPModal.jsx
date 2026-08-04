@@ -80,9 +80,10 @@ export default function OTPModal({ email, name, lang, onSuccess, onCancel }) {
   const handleResend = async () => {
     setResending(true); setError('');
     try {
-      const res = await api.post('/api/auth/resend-otp', { email });
+      await api.post('/api/auth/resend-otp', { email });
       setDigits(['','','','','','']);
       startTimer();
+      setError(lang === 'th' ? '✓ ส่งรหัสใหม่ไปยังอีเมลแล้ว' : '✓ New code sent to your email');
       setTimeout(() => inputs.current[0]?.focus(), 100);
     } catch (err) { setError(err.message); }
     finally { setResending(false); }
@@ -93,6 +94,7 @@ export default function OTPModal({ email, name, lang, onSuccess, onCancel }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog" aria-modal="true" aria-label={lang === 'th' ? 'ยืนยันอีเมล' : 'Email Verification'}
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
 
       {/* Smaller padding on mobile (p-4), normal on desktop (p-7) */}
@@ -170,7 +172,7 @@ export default function OTPModal({ email, name, lang, onSuccess, onCancel }) {
               </div>
 
               {error && (
-                <p className="text-red-400 text-xs text-center mb-3 anim-fade-in">{error}</p>
+                <p className={`text-xs text-center mb-3 anim-fade-in ${error.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{error}</p>
               )}
 
               {/* Timer */}

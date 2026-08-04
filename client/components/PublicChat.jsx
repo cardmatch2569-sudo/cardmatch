@@ -60,7 +60,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
             </span>
             <button onClick={() => setOpen(false)}
               className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition">
-              <ChevronDown size={16} />
+              <X size={16} />
             </button>
           </div>
 
@@ -142,7 +142,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
           border: `1px solid ${open ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.2)'}`,
           backdropFilter: 'blur(12px)',
         }}
-        title={t ? 'แชทสาธารณะ' : 'Public Chat'}
+        aria-label={t ? (open ? 'ปิดแชทสาธารณะ' : 'เปิดแชทสาธารณะ') : (open ? 'Close public chat' : 'Open public chat')}
       >
         {open
           ? <X size={18} className="text-green-400" />

@@ -47,7 +47,7 @@ export default function LeaderboardPage() {
   const th = lang === 'th';
 
   return (
-    <main className="min-h-screen pt-[var(--navbar-h,4rem)]" style={{ background: 'var(--bg)' }}>
+    <main className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <div className="max-w-3xl mx-auto px-4 py-8">
 
         {/* Header */}
@@ -107,10 +107,10 @@ export default function LeaderboardPage() {
             {board.length >= 3 && (
               <div className="flex items-end justify-center gap-4 p-6 pb-4"
                 style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(124,58,237,0.05) 100%)' }}>
-                {[1, 0, 2].map((i) => {
-                  const p = board[i];
+                {[1, 0, 2].map((boardIdx) => {
+                  const p = board[boardIdx];
                   if (!p) return null;
-                  const isCenter = i === 0;
+                  const isCenter = boardIdx === 0;
                   return (
                     <div key={p.userId} className={`flex flex-col items-center gap-2 ${isCenter ? 'order-2 -mb-2' : i === 1 ? 'order-1' : 'order-3'}`}>
                       <span className="text-3xl">{RANK_LABELS[i]}</span>
@@ -134,7 +134,7 @@ export default function LeaderboardPage() {
                 const isMe = p.userId === user?._id;
                 return (
                   <div key={p.userId}
-                    className={`flex items-center gap-3 px-4 py-3 transition ${isMe ? 'bg-purple-600/10' : 'hover:bg-white/3'}`}>
+                    className={`flex items-center gap-3 px-4 py-3 transition ${isMe ? 'bg-purple-600/10' : 'hover:bg-white/[0.03]'}`}>
                     {/* Rank */}
                     <div className="w-8 text-center flex-shrink-0">
                       {p.rank <= 3

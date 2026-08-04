@@ -11,19 +11,19 @@ export default function GlobalChallengeModal() {
   const router = useRouter();
   const [challenge, setChallenge] = useState(null);
 
-  setGlobalChallengeCallbacks({
-    onChallengeReceived: (data) => setChallenge(data),
-    onChallengeExpired:  ()     => setChallenge(null),
-    onChallengeAccepted: ({ roomId, gameType }) => {
-      setChallenge(null);
-      if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id);
-      router.push(`/room/${roomId}`);
-    },
-  });
-
   useEffect(() => {
+    setGlobalChallengeCallbacks({
+      onChallengeReceived: (data) => setChallenge(data),
+      onChallengeExpired:  ()     => setChallenge(null),
+      onChallengeAccepted: ({ roomId, gameType }) => {
+        setChallenge(null);
+        if (gameType?._id) sessionStorage.setItem('cg_last_game', gameType._id);
+        router.push(`/room/${roomId}`);
+      },
+    });
     return () => setGlobalChallengeCallbacks({});
-  }, [setGlobalChallengeCallbacks]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const respond = (accepted) => {
     getSocket()?.emit('challenge_response', { challengeId: challenge.challengeId, accepted });
@@ -34,6 +34,7 @@ export default function GlobalChallengeModal() {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      role="dialog" aria-modal="true"
       style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
       <div className="anim-scale-in card w-full max-w-sm p-6 md:p-8 text-center"
         style={{ borderColor: 'rgba(124,58,237,0.3)' }}>
