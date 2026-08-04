@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Shuffle, Search, X, Swords, Loader2, Users, Hash, Heart } from 'lucide-react';
+import { Shuffle, Search, X, Swords, Loader2, Users, Hash, Heart, UserPlus, UserCheck, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import PreMatchModal from '../../components/PreMatchModal';
 import PublicChat from '../../components/PublicChat';
@@ -46,6 +46,8 @@ export default function LobbyPage() {
   const cancelConfirmTimer = useRef(null);
   const [pidInputFocused, setPidInputFocused] = useState(false);
   const [marqueeHovered, setMarqueeHovered] = useState(false);
+  const [friendIds, setFriendIds] = useState(new Set());
+  const [addingFriend, setAddingFriend] = useState({});
 
   const inQueueRef  = useRef(inQueue); // mirror inQueue for socket closures
   const restoredQueueRef = useRef(restoredQueue); // capture before SocketContext clears sessionStorage
@@ -90,6 +92,14 @@ export default function LobbyPage() {
     api.get('/api/games').then(({ games }) => setGames(games)).catch(() => setGamesError(true));
   }, []);
   useEffect(() => { loadGames(); }, [loadGames]);
+
+  // Load friend IDs for the Add Friend button in search results
+  useEffect(() => {
+    if (!user) return;
+    api.get('/api/friends').then(d => {
+      setFriendIds(new Set((d.friends || []).map(f => f._id)));
+    }).catch(() => {});
+  }, [user?._id]);
 
   // Check if player is locked in a tournament
   useEffect(() => {
@@ -250,6 +260,17 @@ export default function LobbyPage() {
       finally { setSearching(false); }
     }, 350);
   }, []);
+
+  const sendFriendRequest = async (targetId, username) => {
+    setAddingFriend(b => ({ ...b, [targetId]: true }));
+    try {
+      await api.post(`/api/friends/request/${targetId}`, {});
+      setFriendIds(s => new Set([...s, targetId]));
+      showToast(lang === 'th' ? `ส่งคำขอเพื่อนถึง ${username} แล้ว` : `Friend request sent to ${username}`);
+    } catch (e) {
+      showToast(e.message || (lang === 'th' ? 'เกิดข้อผิดพลาด' : 'Error'), 'error');
+    } finally { setAddingFriend(b => ({ ...b, [targetId]: false })); }
+  };
 
   const handleChallenge = (targetUserId) => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
@@ -644,24 +665,46 @@ export default function LobbyPage() {
 
             {searchResults.length > 0 && (
               <div className="space-y-2">
-                {searchResults.map(p => (
-                  <div key={p._id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] hover:border-[var(--border-2)] transition" style={{ background: 'var(--bg-2)' }}>
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                      {p.username[0].toUpperCase()}
+                {searchResults.map(p => {
+                  const alreadyFriend = friendIds.has(p._id);
+                  return (
+                    <div key={p._id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] hover:border-[var(--border-2)] transition" style={{ background: 'var(--bg-2)' }}>
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        {p.username[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-white text-sm truncate">{p.username}</div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                          <Trophy size={9} className="text-emerald-400" />
+                          <span className="text-emerald-400 font-bold">{p.elo || 1000}</span>
+                          <span>·</span>
+                          <span>{p.stats?.wins || 0}W {p.stats?.losses || 0}L</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {p._id !== user?._id && (alreadyFriend ? (
+                          <span className="flex items-center gap-1 text-[10px] text-emerald-400 px-2 py-1">
+                            <UserCheck size={11} />
+                          </span>
+                        ) : (
+                          <button onClick={() => sendFriendRequest(p._id, p.username)}
+                            disabled={addingFriend[p._id]}
+                            title={lang === 'th' ? 'เพิ่มเพื่อน' : 'Add Friend'}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition disabled:opacity-40">
+                            <UserPlus size={13} />
+                          </button>
+                        ))}
+                        <button onClick={() => handleChallenge(p._id)}
+                          disabled={!!lockedTournament}
+                          aria-label={`${t.challenge} ${p.username}`}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa' }}>
+                          <Swords size={12} /> {t.challenge}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-white text-sm truncate">{p.username}</div>
-                      <div className="text-xs text-slate-600">{p.stats?.totalGames || 0} {lang === 'th' ? 'เกม' : 'games'}</div>
-                    </div>
-                    <button onClick={() => handleChallenge(p._id)}
-                      disabled={!!lockedTournament}
-                      aria-label={`${t.challenge} ${p.username}`}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa' }}>
-                      <Swords size={12} /> {t.challenge}
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

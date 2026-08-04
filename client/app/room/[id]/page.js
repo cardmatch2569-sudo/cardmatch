@@ -163,6 +163,7 @@ export default function RoomPage() {
   const [pendingResult,  setPendingResult]  = useState(null);      // 'win' | 'lose' — awaiting user confirm
   const [opponentResult, setOpponentResult] = useState(null);
   const [matchResult,    setMatchResult]    = useState(null);      // { winnerId, loserId, method }
+  const [eloChange,      setEloChange]      = useState(null);       // { elo, delta }
   const [timeoutAt,      setTimeoutAt]      = useState(null);
   const [partnerReconnecting, setPartnerReconnecting] = useState(false);
   const [reconnectCountdown, setReconnectCountdown]   = useState(0);
@@ -617,6 +618,7 @@ export default function RoomPage() {
     socket.on('result_phase_started', onResultPhaseStarted);
     socket.on('opponent_declared',    onOpponentDeclared);
     socket.on('match_result_final',   onMatchResultFinal);
+    socket.on('elo_updated', ({ elo, delta }) => setEloChange({ elo, delta }));
     socket.on('match_conflict',       onMatchConflict);
     socket.on('match_needs_admin',    onMatchNeedsAdmin);
     socket.on('admin_watching',       onAdminWatching);
@@ -1500,6 +1502,16 @@ export default function RoomPage() {
                 )}
                 {matchResult.method === 'timeout_one_sided' && (
                   <p className="text-xs text-slate-600 mb-2">{lang === 'th' ? 'ผลโดยอัตโนมัติ (หมดเวลา)' : 'Auto result (timeout)'}</p>
+                )}
+                {eloChange && (
+                  <div className="flex items-center justify-center gap-2 my-3 px-4 py-2 rounded-xl"
+                    style={{ background: eloChange.delta >= 0 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)', border: `1px solid ${eloChange.delta >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                    <span className="text-sm text-slate-400">ELO</span>
+                    <span className="font-black text-white text-lg">{eloChange.elo}</span>
+                    <span className={`text-sm font-bold ${eloChange.delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {eloChange.delta >= 0 ? '+' : ''}{eloChange.delta}
+                    </span>
+                  </div>
                 )}
                 {matchResult.standings?.length > 0 && (
                   <div className="w-full mt-2 mb-3 space-y-1">

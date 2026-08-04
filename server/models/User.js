@@ -116,7 +116,7 @@ const User = {
 
   async search(query, excludeId) {
     const { rows } = await getPool().query(
-      `SELECT id,username,avatar,player_id,total_games,wins,losses
+      `SELECT id,username,avatar,player_id,total_games,wins,losses,elo
        FROM Users
        WHERE username ILIKE $1 AND id <> $2
        LIMIT 10`,

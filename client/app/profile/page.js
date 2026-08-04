@@ -4,7 +4,21 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import translations from '../../lib/translations';
-import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check, Trash2, Lock, Eye, EyeOff, Swords } from 'lucide-react';
+import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check, Trash2, Lock, Eye, EyeOff, Swords, TrendingUp } from 'lucide-react';
+
+function EloRankBadge({ elo }) {
+  const r = elo >= 1800 ? { label: 'Diamond', color: '#818cf8' }
+    : elo >= 1600 ? { label: 'Platinum', color: '#67e8f9' }
+    : elo >= 1400 ? { label: 'Gold', color: '#fbbf24' }
+    : elo >= 1200 ? { label: 'Silver', color: '#94a3b8' }
+    : { label: 'Bronze', color: '#b45309' };
+  return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+      style={{ background: `${r.color}22`, color: r.color, border: `1px solid ${r.color}44` }}>
+      {r.label}
+    </span>
+  );
+}
 
 export default function ProfilePage() {
   const { user, loading, lang, setUser } = useAuth();
@@ -108,9 +122,10 @@ export default function ProfilePage() {
     ? Math.round((user.stats.wins / user.stats.totalGames) * 100) : 0;
 
   const stats = [
-    { label: lang === 'th' ? 'เกมทั้งหมด' : 'Total Games', value: user.stats?.totalGames || 0, icon: <Gamepad2 size={16} />, color: '#60a5fa', bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.2)' },
-    { label: lang === 'th' ? 'ชนะ' : 'Wins',               value: user.stats?.wins || 0,       icon: <Trophy size={16} />,   color: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.2)' },
-    { label: lang === 'th' ? 'อัตราชนะ' : 'Win Rate',      value: `${winRate}%`,               icon: <Target size={16} />,   color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.2)' },
+    { label: lang === 'th' ? 'คะแนน ELO' : 'ELO Rating',  value: user.elo || 1000,            icon: <TrendingUp size={16} />, color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)' },
+    { label: lang === 'th' ? 'เกมทั้งหมด' : 'Total Games', value: user.stats?.totalGames || 0, icon: <Gamepad2 size={16} />,  color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.2)' },
+    { label: lang === 'th' ? 'ชนะ' : 'Wins',               value: user.stats?.wins || 0,       icon: <Trophy size={16} />,    color: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.2)' },
+    { label: lang === 'th' ? 'อัตราชนะ' : 'Win Rate',      value: `${winRate}%`,               icon: <Target size={16} />,    color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  border: 'rgba(74,222,128,0.2)' },
   ];
 
   return (
@@ -133,6 +148,7 @@ export default function ProfilePage() {
             <div className="pb-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-white">{user.username}</h1>
+                <EloRankBadge elo={user.elo || 1000} />
                 {user.isAdmin && (
                   <span className="badge badge-yellow gap-1">
                     <Shield size={9} /> Admin
@@ -195,7 +211,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         {stats.map(({ label, value, icon, color, bg, border }) => (
           <div key={label} className="card p-4 text-center card-hover" style={{ borderColor: border }}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center mx-auto mb-2"
