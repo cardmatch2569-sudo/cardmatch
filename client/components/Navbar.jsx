@@ -10,7 +10,7 @@ import { api } from '../lib/api';
 
 export default function Navbar() {
   const { user, lang, loading, isAdminMode, viewMode, toggleViewMode, logout, toggleLang } = useAuth();
-  const { onlineCount, connected } = useSocket();
+  const { onlineCount, connected, getSocket } = useSocket();
   const router   = useRouter();
   const pathname = usePathname();
   const t = translations[lang];
