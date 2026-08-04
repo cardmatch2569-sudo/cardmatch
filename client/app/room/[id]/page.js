@@ -6,8 +6,9 @@ import { useSocket } from '../../../context/SocketContext';
 import translations from '../../../lib/translations';
 import {
   Video, VideoOff, Mic, MicOff, PhoneOff, Send,
-  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera, Shuffle, Home, Flag,
+  MessageSquare, ChevronDown, Wifi, WifiOff, Maximize2, Minimize2, RotateCw, SwitchCamera, Shuffle, Home, Flag, Rss,
 } from 'lucide-react';
+import { useLiveKitPublisher } from '../../../hooks/useLiveKit';
 
 // ── Tournament countdown timer ─────────────────────────────────────
 function TournamentTimer({ timeoutAt }) {
@@ -128,6 +129,8 @@ export default function RoomPage() {
   const [msgInput,      setMsgInput]      = useState('');
   const [cameraOn,      setCameraOn]      = useState(true);
   const [micOn,         setMicOn]         = useState(true);
+  const [goLive,        setGoLive]        = useState(false);
+  const [liveStream,    setLiveStream]    = useState(null);
   const [partnerLeft,   setPartnerLeft]   = useState(false);
   const [peerConnected, setPeerConnected] = useState(false);
   const [chatOpen,      setChatOpen]      = useState(false);
@@ -815,6 +818,17 @@ export default function RoomPage() {
 
   const toggleMic    = () => { const tk = localStreamRef.current?.getAudioTracks()[0];  if (tk) { tk.enabled = !tk.enabled; setMicOn(tk.enabled); } };
 
+  const handleGoLive = () => {
+    if (goLive) { setGoLive(false); setLiveStream(null); return; }
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    setLiveStream(stream);
+    setGoLive(true);
+  };
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { live: isLive, viewers: liveViewers } = useLiveKitPublisher({ roomName: roomId, enabled: goLive, localStream: liveStream });
+
   const flipCamera = useCallback(async () => {
     const next = facingMode === 'user' ? 'environment' : 'user';
     try {
@@ -1251,6 +1265,14 @@ export default function RoomPage() {
           <div className="absolute top-1 right-1 bg-black/50 rounded-md px-1 py-0.5 text-[9px] text-white/60">
             {pipExpanded ? '✕' : '⤢'}
           </div>
+          {/* LIVE badge */}
+          {isLive && (
+            <div className="absolute top-1 left-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold"
+              style={{ background: 'rgba(239,68,68,0.85)', color: 'white' }}>
+              <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+              LIVE
+            </div>
+          )}
         </div>
       </div>
 
@@ -1326,6 +1348,24 @@ export default function RoomPage() {
             : { background: 'rgba(239,68,68,0.75)', color: 'white' }}>
           {micOn ? <Mic size={18} /> : <MicOff size={18} />}
         </button>
+
+        {/* Go Live — broadcast to spectators via LiveKit */}
+        {!user?.isAdmin && (
+          <button onClick={handleGoLive}
+            aria-label={goLive ? (lang === 'th' ? 'หยุดไลฟ์' : 'Stop live') : (lang === 'th' ? 'เริ่มไลฟ์' : 'Go Live')}
+            className="flex flex-col items-center justify-center gap-0.5 w-11 h-11 rounded-full transition-all active:scale-95"
+            style={goLive
+              ? { background: 'rgba(239,68,68,0.8)', color: 'white', boxShadow: '0 0 14px rgba(239,68,68,0.5)' }
+              : { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}>
+            <Rss size={14} />
+            {isLive && liveViewers > 0 && (
+              <span className="text-[8px] leading-none font-bold">{liveViewers}</span>
+            )}
+            {!isLive && goLive && (
+              <span className="text-[8px] leading-none opacity-60">...</span>
+            )}
+          </button>
+        )}
 
         {/* Rotate own */}
         <button onClick={() => setLocalRotation(r => (r + 90) % 360)}

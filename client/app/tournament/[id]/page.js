@@ -4,7 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { useSocket } from '../../../context/SocketContext';
 import { api } from '../../../lib/api';
-import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { Trophy, Users, LogOut, Clock, Loader2, Medal, Play, X, Shield, Bell, Gavel, RefreshCw, Eye } from 'lucide-react';
 import translations from '../../../lib/translations';
 import useCountdown from '../../../hooks/useCountdown';
 
@@ -842,6 +843,36 @@ export default function TournamentWaitingRoom() {
           </div>
         )}
       </div>
+
+      {/* Live Matches — spectator links */}
+      {['round_in_progress', 'playoff_sf', 'playoff_final'].includes(status) &&
+        tournament?.matches?.some(m => m.roomId && !m.winnerId) && (
+        <div className="card p-4 mb-4" style={{ borderColor: 'rgba(239,68,68,0.2)' }}>
+          <h3 className="text-xs font-bold text-red-400 flex items-center gap-1.5 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            {lang === 'th' ? 'กำลังแข่งขัน' : 'Live now'}
+          </h3>
+          <div className="space-y-2">
+            {tournament.matches
+              .filter(m => m.roomId && !m.winnerId)
+              .map(m => (
+                <div key={m.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="text-sm text-slate-300 truncate">
+                    {m.player1Name} <span className="text-slate-600">vs</span> {m.player2Name}
+                  </span>
+                  <Link href={`/spectate/${m.roomId}`}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 transition-all"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                    <Eye size={11} />
+                    {lang === 'th' ? 'ดูสด' : 'Watch'}
+                  </Link>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
 
       {/* Round progress bar */}
       {totalRounds > 0 && (

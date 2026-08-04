@@ -20,6 +20,7 @@ const tournamentRoutes        = require('./routes/tournament');
 const errorRoutes             = require('./routes/errors');
 const leaderboardRoutes       = require('./routes/leaderboard');
 const friendRoutes            = require('./routes/friends');
+const livekitRoutes           = require('./routes/livekit');
 const { setupSocketHandlers, restoreTournamentsFromDB } = require('./socket/handlers');
 
 const isAllowedOrigin = (origin) => {
@@ -138,6 +139,7 @@ connectDB().then(async () => {
   app.use('/api/errors',      errorRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/friends',     friendRoutes);
+  app.use('/api/livekit',     livekitRoutes);
 
   setupSocketHandlers(io);
 
