@@ -8,6 +8,12 @@ const log = require('../utils/logger');
 const { logErr } = require('../utils/errorLogger');
 const isDev = process.env.NODE_ENV !== 'production';
 
+// ELO calculation — K=32, floor at 100
+const calcElo = (myElo, oppElo, won) => {
+  const expected = 1 / (1 + Math.pow(10, (oppElo - myElo) / 400));
+  return Math.max(100, Math.round(myElo + 32 * ((won ? 1 : 0) - expected)));
+};
+
 // ── In-memory state ────────────────────────────────────────────────
 const onlineUsers = new Map();       // userId → { socketId, username, avatar, isAdmin }
 const matchQueues = new Map();       // gameTypeId → [{ userId, socketId, username }]
@@ -102,6 +108,16 @@ const notifyAdmins = (io, type, data) => {
 };
 
 const ADMIN_DECISION_TIMEOUT_MS = 10 * 60 * 1000; // BUG-06: 10 min auto-resolve if no admin decides
+
+// Cleanup ended tournaments from memory every 6h to prevent unbounded Map growth
+setInterval(() => {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000; // 2h after tournament ended
+  for (const [id, t] of tournaments) {
+    if (t.status === 'ended' && t.endedAt && t.endedAt < cutoff) {
+      tournaments.delete(id);
+    }
+  }
+}, 6 * 60 * 60 * 1000);
 const MATCH_PLAYING_TIMEOUT_MS  = 45 * 60 * 1000; // 45 min: stalled 'playing' match → admin_decision
 const RECONNECT_GRACE_MS        = 15 * 1000;       // 15s grace: don't forfeit until player fails to reconnect
 
@@ -163,6 +179,24 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
     );
     await pool.query('UPDATE Users SET wins=wins+1, total_games=total_games+1 WHERE id=$1', [winnerId]);
     await pool.query('UPDATE Users SET losses=losses+1, total_games=total_games+1 WHERE id=$1', [loserId]);
+
+    // ELO update
+    try {
+      const { rows: eloRows } = await pool.query(
+        'SELECT id, elo FROM Users WHERE id = ANY($1::varchar[])',
+        [[winnerId, loserId]]
+      );
+      const eloMap = {};
+      eloRows.forEach(r => { eloMap[r.id] = r.elo || 1000; });
+      const newWinnerElo = calcElo(eloMap[winnerId] || 1000, eloMap[loserId] || 1000, true);
+      const newLoserElo  = calcElo(eloMap[loserId]  || 1000, eloMap[winnerId] || 1000, false);
+      await pool.query('UPDATE Users SET elo=$1 WHERE id=$2', [newWinnerElo, winnerId]);
+      await pool.query('UPDATE Users SET elo=$1 WHERE id=$2', [newLoserElo,  loserId]);
+      const wInfo = onlineUsers.get(winnerId);
+      const lInfo = onlineUsers.get(loserId);
+      if (wInfo) io.to(wInfo.socketId).emit('elo_updated', { elo: newWinnerElo, delta: newWinnerElo - (eloMap[winnerId] || 1000) });
+      if (lInfo) io.to(lInfo.socketId).emit('elo_updated', { elo: newLoserElo,  delta: newLoserElo  - (eloMap[loserId]  || 1000) });
+    } catch (e) { console.error('[ELO]', e.message); }
     if (!isPlayoff) {
       await pool.query('UPDATE TournamentPlayers SET points=points+3, wins=wins+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, winnerId]).catch(() => {});
       await pool.query('UPDATE TournamentPlayers SET losses=losses+1 WHERE tournament_id=$1 AND user_id=$2', [match.tournamentId, loserId]).catch(() => {});
@@ -214,6 +248,7 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
         const second = b.final.p1 === first ? b.final.p2 : b.final.p1;
         const third  = b.third.winner;
         t.status = 'ended';
+        t.endedAt = Date.now();
         try {
           await getPool().query("UPDATE Tournaments SET status='ended', ended_at=NOW(), playoff_bracket=$1 WHERE id=$2", [JSON.stringify(b), t.id]);
         } catch {}

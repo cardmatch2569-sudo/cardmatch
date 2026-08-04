@@ -93,6 +93,13 @@ const initTables = async () => {
   `);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_ev_email ON EmailVerifications(email)`).catch(() => {});
 
+  // Performance indexes for high-frequency queries
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_rooms_status   ON Rooms(status)`).catch(() => {});
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_rooms_created  ON Rooms(created_at DESC)`).catch(() => {});
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_rp_user        ON RoomPlayers(user_id)`).catch(() => {});
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_users_username ON Users(username)`).catch(() => {});
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_users_elo      ON Users(elo DESC)`).catch(() => {});
+
   try {
     await p.query(`
       CREATE TABLE IF NOT EXISTS Tournaments (
@@ -170,6 +177,41 @@ const initTables = async () => {
   } catch (e) {
     console.error('[DB] ErrorLogs table warning:', e.message);
   }
+
+  // ELO rating column (safe on re-deploy)
+  await p.query(`ALTER TABLE Users ADD COLUMN IF NOT EXISTS elo INTEGER DEFAULT 1000`).catch(() => {});
+
+  // Friend system
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS Friendships (
+        user_id    VARCHAR(36) NOT NULL,
+        friend_id  VARCHAR(36) NOT NULL,
+        status     VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP   DEFAULT NOW(),
+        PRIMARY KEY (user_id, friend_id)
+      )
+    `);
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_fs_friend ON Friendships(friend_id, status)`).catch(() => {});
+    console.log('[DB] Friendships table ready');
+  } catch (e) { console.error('[DB] Friendships warning:', e.message); }
+
+  // In-app notifications
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS Notifications (
+        id         SERIAL      PRIMARY KEY,
+        user_id    VARCHAR(36) NOT NULL,
+        type       VARCHAR(50) NOT NULL,
+        data       JSONB       DEFAULT '{}',
+        read       BOOLEAN     DEFAULT FALSE,
+        created_at TIMESTAMP   DEFAULT NOW()
+      )
+    `);
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON Notifications(user_id, read, created_at DESC)`).catch(() => {});
+    // Keep max 200 notifications per user
+    console.log('[DB] Notifications table ready');
+  } catch (e) { console.error('[DB] Notifications warning:', e.message); }
 
   if (noId.length) console.log(`[DB] Generated player_id for ${noId.length} existing user(s)`);
   console.log('Tables initialized (PostgreSQL)');

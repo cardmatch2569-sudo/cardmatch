@@ -13,6 +13,7 @@ const fmt = (row) => {
     avatar:   row.avatar || '',
     isAdmin:  !!row.is_admin,
     googleId: row.google_id || null,
+    elo: row.elo || 1000,
     stats: {
       totalGames: row.total_games || 0,
       wins:       row.wins        || 0,
