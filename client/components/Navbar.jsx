@@ -87,8 +87,8 @@ export default function Navbar() {
       <nav className="fixed top-0 left-0 right-0 z-50"
         style={{ height: 'var(--navbar-h, 4rem)' }}>
         <div className="absolute inset-0 glass border-b border-white/[0.06]" />
-        <div className="relative max-w-7xl mx-auto px-4 flex items-end justify-between gap-3 pb-3"
-          style={{ height: '100%', paddingTop: 'calc(var(--safe-top, 0px) + 0.5rem)' }}>
+        <div className="relative max-w-7xl mx-auto px-4 flex items-center justify-between gap-3"
+          style={{ height: '100%', paddingTop: 'var(--safe-top, 0px)' }}>
 
           {/* Logo */}
           <Link href="/" onClick={close} className="flex items-center gap-2 group flex-shrink-0">
