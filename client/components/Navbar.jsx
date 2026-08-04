@@ -5,7 +5,8 @@ import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart } from 'lucide-react';
+import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart, Trophy, UserPlus } from 'lucide-react';
+import { api } from '../lib/api';
 
 export default function Navbar() {
   const { user, lang, loading, isAdminMode, viewMode, toggleViewMode, logout, toggleLang } = useAuth();
@@ -15,6 +16,21 @@ export default function Navbar() {
   const t = translations[lang];
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [friendReqCount, setFriendReqCount] = useState(0);
+
+  // Fetch pending friend requests and listen for real-time updates
+  useEffect(() => {
+    if (!user) { setFriendReqCount(0); return; }
+    api.get('/api/friends/requests').then(d => setFriendReqCount(d.requests?.length || 0)).catch(() => {});
+    const socket = getSocket?.();
+    if (!socket) return;
+    const onReq = () => setFriendReqCount(c => c + 1);
+    const onAcc = () => {};
+    socket.on('friend_request_received', onReq);
+    socket.on('friend_request_accepted', onAcc);
+    return () => { socket.off('friend_request_received', onReq); socket.off('friend_request_accepted', onAcc); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
 
   useEffect(() => {
     const onResize = () => {
@@ -32,9 +48,11 @@ export default function Navbar() {
   const close = () => setMobileOpen(false);
 
   const navLinks = [
-    { href: '/lobby',      label: t.lobby,                            icon: <Swords size={15} />,  always: true },
-    { href: '/tournament', label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament', icon: <span className="text-sm">🏆</span>, always: true, tourney: true },
-    { href: '/setup',      label: lang === 'th' ? 'ทดสอบ' : 'Setup', icon: <Settings size={15} />, requireAuth: true },
+    { href: '/lobby',       label: t.lobby,                                                    icon: <Swords size={15} />,  always: true },
+    { href: '/tournament',  label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament',             icon: <span className="text-sm">🏆</span>, always: true, tourney: true },
+    { href: '/leaderboard', label: lang === 'th' ? 'อันดับ' : 'Leaderboard',                  icon: <Trophy size={15} />,  always: true, leaderboard: true },
+    { href: '/friends',     label: lang === 'th' ? 'เพื่อน' : 'Friends',                      icon: <UserPlus size={15} />, requireAuth: true, friends: true, badge: friendReqCount },
+    { href: '/setup',       label: lang === 'th' ? 'ทดสอบ' : 'Setup',                         icon: <Settings size={15} />, requireAuth: true },
     ...(isAdminMode ? [{ href: '/admin', label: t.admin, icon: <Shield size={15} />, admin: true }] : []),
   ];
 
@@ -63,22 +81,28 @@ export default function Navbar() {
           {/* Desktop center nav */}
           {user && (
             <div className="hidden md:flex items-center gap-1 flex-1 justify-center">
-              {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney }) => (
+              {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, badge }) => (
                 <Link key={href} href={href}
                   aria-current={isActive(href) ? 'page' : undefined}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                  onClick={() => { if (friends) setFriendReqCount(0); }}
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                     ${isActive(href)
-                      ? admin
-                        ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-600/20'
-                        : tourney
-                          ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30'
-                          : 'bg-purple-600/20 text-purple-300 border border-purple-600/20'
-                      : admin
-                        ? 'text-yellow-500 hover:text-yellow-300 hover:bg-yellow-500/5'
-                        : tourney
-                          ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8 border border-yellow-500/20'
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                      ? admin       ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-600/20'
+                      : tourney     ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30'
+                      : leaderboard ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-600/20'
+                      : friends     ? 'bg-blue-600/20 text-blue-300 border border-blue-600/20'
+                                    : 'bg-purple-600/20 text-purple-300 border border-purple-600/20'
+                      : admin       ? 'text-yellow-500 hover:text-yellow-300 hover:bg-yellow-500/5'
+                      : tourney     ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8 border border-yellow-500/20'
+                      : leaderboard ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/8'
+                      : friends     ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/8'
+                                    : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                   {icon}{label}
+                  {badge > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
@@ -215,15 +239,27 @@ export default function Navbar() {
             {/* Nav links */}
             {user && (
               <div className="px-3 py-2 space-y-1">
-                {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney }) => (
-                  <Link key={href} href={href} onClick={close}
+                {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, badge }) => (
+                  <Link key={href} href={href} onClick={() => { close(); if (friends) setFriendReqCount(0); }}
                     aria-current={isActive(href) ? 'page' : undefined}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
+                    className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition
                       ${isActive(href)
-                        ? admin ? 'bg-yellow-600/15 text-yellow-300' : tourney ? 'bg-yellow-500/12 text-yellow-300' : 'bg-purple-600/15 text-purple-300'
-                        : tourney ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
-                    <span className={admin ? 'text-yellow-400' : tourney ? 'text-yellow-400' : 'text-purple-400'}>{icon}</span>
+                        ? admin       ? 'bg-yellow-600/15 text-yellow-300'
+                        : tourney     ? 'bg-yellow-500/12 text-yellow-300'
+                        : leaderboard ? 'bg-emerald-600/15 text-emerald-300'
+                        : friends     ? 'bg-blue-600/15 text-blue-300'
+                                      : 'bg-purple-600/15 text-purple-300'
+                        : tourney     ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/8'
+                        : leaderboard ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/8'
+                        : friends     ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/8'
+                                      : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                    <span className={admin ? 'text-yellow-400' : tourney ? 'text-yellow-400' : leaderboard ? 'text-emerald-400' : friends ? 'text-blue-400' : 'text-purple-400'}>{icon}</span>
                     {label}
+                    {badge > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                        {badge > 9 ? '9+' : badge}
+                      </span>
+                    )}
                     {isActive(href) && <div className="ml-auto w-2 h-2 rounded-full bg-current opacity-60" />}
                   </Link>
                 ))}

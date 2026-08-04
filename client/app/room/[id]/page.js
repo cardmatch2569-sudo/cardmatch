@@ -338,7 +338,24 @@ export default function RoomPage() {
       setPeerConnected(true);
     };
     pc.onconnectionstatechange = () => {
-      if (['disconnected','failed'].includes(pc.connectionState)) setPeerConnected(false);
+      if (pc.connectionState === 'connected') {
+        setPeerConnected(true);
+      } else if (pc.connectionState === 'disconnected') {
+        setPeerConnected(false);
+      } else if (pc.connectionState === 'failed') {
+        setPeerConnected(false);
+        // Auto ICE restart — only the offer-side triggers re-negotiation
+        if (initiator && !leftRef.current) {
+          (async () => {
+            try {
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              socket.emit('offer', { roomId, offer });
+              console.log('[WebRTC] ICE restart attempted');
+            } catch (e) { console.warn('[WebRTC] ICE restart failed:', e.message); }
+          })();
+        }
+      }
     };
     if (initiator) {
       (async () => {
