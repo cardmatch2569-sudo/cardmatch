@@ -655,6 +655,7 @@ export default function LobbyPage() {
                     </div>
                     <button onClick={() => handleChallenge(p._id)}
                       disabled={!!lockedTournament}
+                      aria-label={`${t.challenge} ${p.username}`}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa' }}>
                       <Swords size={12} /> {t.challenge}

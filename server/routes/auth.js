@@ -21,6 +21,11 @@ router.get('/me', protect, (req, res) => res.json({ user: req.user }));
 // ── EMAIL REGISTER — Step 1 ───────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const checkLoginRate = req.app.get('checkLoginRate');
+    if (checkLoginRate && !checkLoginRate(ip))
+      return res.status(429).json({ message: 'คำขอมากเกินไป กรุณารอ 15 นาที' });
+
     const { username, email, password } = req.body;
     if (!username || !email || !password) return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบทุกช่อง' });
     if (username.length < 3 || username.length > 20) return res.status(400).json({ message: 'Username ต้องมี 3-20 ตัวอักษร' });
@@ -41,11 +46,11 @@ router.post('/register', async (req, res) => {
     await EmailVerification.create(email, code, { type: 'email', username, email, hashedPassword });
     if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 Register OTP for ${email} : ${code}\n`);
 
-    sendRegisterOTPEmail(email, code, username)
-      .then(() => console.log(`📧 sent to ${email}`))
-      .catch(e  => console.warn(`📧 warn:`, e.message));
+    let emailSent = true;
+    try { await sendRegisterOTPEmail(email, code, username); console.log(`📧 sent to ${email}`); }
+    catch (e) { console.warn(`📧 warn:`, e.message); emailSent = false; }
 
-    res.json({ requiresOtp: true, email });
+    res.json({ requiresOtp: true, email, emailSent });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -69,6 +74,11 @@ router.post('/login', async (req, res) => {
 // ── GOOGLE OAUTH — Step 1 ─────────────────────────────────────────
 router.post('/google', async (req, res) => {
   try {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const checkLoginRate = req.app.get('checkLoginRate');
+    if (checkLoginRate && !checkLoginRate(ip))
+      return res.status(429).json({ message: 'คำขอมากเกินไป กรุณารอ 15 นาที' });
+
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ message: 'No credential' });
     if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID_HERE')
@@ -94,8 +104,9 @@ router.post('/google', async (req, res) => {
     await EmailVerification.create(email, code, { googleId, email, name, picture });
     if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 Google OTP for ${email} : ${code}\n`);
 
-    sendOTPEmail(email, code, name).catch(e => console.warn(`📧 warn:`, e.message));
-    res.json({ requiresOtp: true, email, name });
+    let emailSent = true;
+    try { await sendOTPEmail(email, code, name); } catch (e) { console.warn(`📧 warn:`, e.message); emailSent = false; }
+    res.json({ requiresOtp: true, email, name, emailSent });
   } catch (err) { console.error('Google auth error:', err.message); res.status(400).json({ message: 'Google authentication failed' }); }
 });
 
@@ -159,12 +170,13 @@ router.post('/resend-otp', async (req, res) => {
     await EmailVerification.create(email, newCode, data);
     if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 OTP (resend) for ${email} : ${newCode}\n`);
 
-    const fn = data.type === 'email'
-      ? sendRegisterOTPEmail(email, newCode, data.username)
-      : sendOTPEmail(email, newCode, data.name);
-    fn.catch(e => console.warn(`📧 resend warn:`, e.message));
+    let emailSent = true;
+    try {
+      if (data.type === 'email') await sendRegisterOTPEmail(email, newCode, data.username);
+      else await sendOTPEmail(email, newCode, data.name);
+    } catch (e) { console.warn(`📧 resend warn:`, e.message); emailSent = false; }
 
-    res.json({ message: 'ส่งรหัสใหม่ไปที่ Email แล้ว' });
+    res.json({ message: emailSent ? 'ส่งรหัสใหม่ไปที่ Email แล้ว' : 'สร้าง OTP ใหม่แล้ว แต่อาจส่ง Email ไม่สำเร็จ กรุณาลองใหม่', emailSent });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -184,8 +196,9 @@ router.post('/forgot-password', async (req, res) => {
     await EmailVerification.create(email, code, { type: 'reset', userId: user._id, username: user.username });
     if (process.env.NODE_ENV !== 'production') console.log(`\n🔑 Password Reset OTP for ${email}: ${code}\n`);
 
-    sendOTPEmail(email, code, user.username).catch(e => console.warn('📧 warn:', e.message));
-    res.json({ message: 'ส่งรหัส OTP ไปยัง Email แล้ว', email });
+    let emailSent = true;
+    try { await sendOTPEmail(email, code, user.username); } catch (e) { console.warn('📧 warn:', e.message); emailSent = false; }
+    res.json({ message: emailSent ? 'ส่งรหัส OTP ไปยัง Email แล้ว' : 'สร้าง OTP แล้ว แต่อาจส่ง Email ไม่สำเร็จ กรุณาใช้ Resend OTP', email, emailSent });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

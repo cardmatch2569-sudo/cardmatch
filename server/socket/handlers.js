@@ -5,6 +5,8 @@ const Room = require('../models/Room');
 const GameType = require('../models/GameType');
 const { getPool } = require('../config/db');
 const log = require('../utils/logger');
+const { logErr } = require('../utils/errorLogger');
+const isDev = process.env.NODE_ENV !== 'production';
 
 // ── In-memory state ────────────────────────────────────────────────
 const onlineUsers = new Map();       // userId → { socketId, username, avatar, isAdmin }
@@ -117,6 +119,7 @@ const handleMatchPlayingTimeout = (io, roomId) => {
   match.adminDecisionTimer = setTimeout(() => {
     if (match.phase !== 'admin_decision') return;
     const winnerId = match.players[Math.floor(Math.random() * match.players.length)];
+    logErr('warn', 'auto_timeout', 'Admin decision timeout — auto-resolving match (playing timeout)', { roomId, metadata: { tournamentId: match.tournamentId, matchId: match.matchId, winnerId } });
     finalizeMatch(io, roomId, match, winnerId, 'auto_timeout').catch(() => {});
   }, ADMIN_DECISION_TIMEOUT_MS);
 };
@@ -174,7 +177,7 @@ const finalizeMatch = async (io, roomId, match, winnerId, method) => {
   // ── PLAYOFF BRACKET ADVANCEMENT ───────────────────────────────────────────
   if (isPlayoff) {
     const b = t.playoffBracket;
-    if (!b) return;
+    if (!b || !b.sf1 || !b.sf2 || !b.final || !b.third) return;
 
     if (match.matchType === 'sf1' || match.matchType === 'sf2') {
       // Record semifinal result
@@ -358,7 +361,8 @@ const transitionToPlayoff = async (io, t) => {
 // Start playoff semifinals
 const startPlayoffSemis = async (io, t) => {
   const b = t.playoffBracket;
-  if (!b || b.sf1.roomId || b.sf2.roomId) return; // already started
+  if (!b || !b.sf1 || !b.sf2 || !b.final || !b.third) return;
+  if (b.sf1.roomId || b.sf2.roomId) return; // already started
 
   t.status = 'playoff_sf';
   t.currentRound++;
@@ -407,7 +411,8 @@ const startPlayoffSemis = async (io, t) => {
 // Start final + 3rd place match
 const startPlayoffFinals = async (io, t) => {
   const b = t.playoffBracket;
-  if (!b || b.final.roomId || b.third.roomId) return;
+  if (!b || !b.sf1 || !b.sf2 || !b.final || !b.third) return;
+  if (b.final.roomId || b.third.roomId) return;
 
   t.status = 'playoff_final';
   t.currentRound++;
@@ -457,6 +462,7 @@ const handleMatchTimeout = (io, roomId) => {
     match.adminDecisionTimer = setTimeout(() => {
       if (match.phase !== 'admin_decision') return;
       const winnerId = match.players[Math.floor(Math.random() * match.players.length)];
+      logErr('warn', 'auto_timeout', 'Admin decision timeout — auto-resolving match (no response)', { roomId, metadata: { tournamentId: match.tournamentId, matchId: match.matchId, winnerId } });
       finalizeMatch(io, roomId, match, winnerId, 'auto_timeout').catch(() => {});
     }, ADMIN_DECISION_TIMEOUT_MS);
   } else {
@@ -491,7 +497,7 @@ const setupSocketHandlers = (io) => {
 
     onlineUsers.set(userId, { socketId: socket.id, username: user.username, avatar: user.avatar, isAdmin: !!user.isAdmin });
     io.emit('online_count', { count: onlineUsers.size });
-    console.log(`[+] ${user.username} (${socket.id})`);
+    if (isDev) console.log(`[+] ${user.username} (${socket.id})`);
     log.info({ event: 'connect', userId, username: user.username, isAdmin: !!user.isAdmin, socketId: socket.id, onlineCount: onlineUsers.size });
 
     // ── Reconnect grace period: player reconnected before forfeit fired ──
@@ -503,7 +509,7 @@ const setupSocketHandlers = (io) => {
       // Notify both players: partner is back + restart WebRTC (other player sends new offer)
       io.to(pending.roomId).emit('partner_reconnected', { userId });
       socket.to(pending.roomId).emit('peer_joined', { userId });
-      console.log(`[reconnect] ✅ ${user.username} restored — room ${pending.roomId}`);
+      if (isDev) console.log(`[reconnect] ✅ ${user.username} restored — room ${pending.roomId}`);
     }
 
     socket.emit('public_chat_history', publicChatBuffer);
@@ -520,7 +526,7 @@ const setupSocketHandlers = (io) => {
       const entry = queue.find(p => p.userId === userId);
       if (entry && entry.socketId !== socket.id) {
         entry.socketId = socket.id;
-        console.log(`[QUEUE] Updated socketId for ${user.username}`);
+        if (isDev) console.log(`[QUEUE] Updated socketId for ${user.username}`);
       }
     });
 
@@ -545,7 +551,7 @@ const setupSocketHandlers = (io) => {
         if (tm.phase === 'admin_decision') {
           setTimeout(() => socket.emit('match_needs_admin', { reason: 'reconnect' }), 500);
         }
-        console.log(`[reconnect] re-notified ${user.username} of active tournament match in room ${roomId} (phase: ${tm.phase})`);
+        if (isDev) console.log(`[reconnect] re-notified ${user.username} of active tournament match in room ${roomId} (phase: ${tm.phase})`);
       });
       break; // player can only be in one active match
     }
@@ -555,7 +561,7 @@ const setupSocketHandlers = (io) => {
       if (!rateOk(rateLimits.queueJoin, userId, 3000)) return;
       if (isLockedInTournament(userId))
         return socket.emit('tournament_lock_error', { message: 'คุณกำลังแข่ง Tournament อยู่ ไม่สามารถจับคู่ได้' });
-      console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
+      if (isDev) console.log(`\n[QUEUE] ${user.username} wants to join queue | gameTypeId=${gameTypeId}`);
 
       if (!gameTypeId) return;
       const queue = matchQueues.get(gameTypeId) || [];
@@ -564,7 +570,7 @@ const setupSocketHandlers = (io) => {
 
       const waiting = queue.find((p) => p.userId !== userId);
       if (waiting) {
-        console.log(`[QUEUE] ✅ MATCH! ${user.username} <-> ${waiting.username}`);
+        if (isDev) console.log(`[QUEUE] ✅ MATCH! ${user.username} <-> ${waiting.username}`);
         matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== waiting.userId));
 
         const roomId   = uuidv4();
@@ -611,6 +617,8 @@ const setupSocketHandlers = (io) => {
     // ── DIRECT CHALLENGE ──────────────────────────────────────────
     socket.on('challenge_by_player_id', async ({ playerId, gameTypeId }) => {
       if (!playerId || !gameTypeId) return;
+      if (!/^[A-Z2-9]{6}$/.test(String(playerId)))
+        return socket.emit('challenge_id_error', { message: 'รูปแบบ Player ID ไม่ถูกต้อง (ต้องเป็นตัวอักษร A-Z และตัวเลข 2-9 จำนวน 6 ตัว)' });
       if ([...activeRooms.values()].some(r => r.players.includes(userId)))
         return socket.emit('challenge_id_error', { message: 'ไม่สามารถท้าได้ขณะอยู่ในห้องแข่ง' });
       if ([...matchQueues.values()].some(q => q.some(p => p.userId === userId)))
@@ -1089,6 +1097,7 @@ const setupSocketHandlers = (io) => {
           tm.adminDecisionTimer = setTimeout(() => {
             if (tm.phase !== 'admin_decision') return;
             const winnerId = tm.players[Math.floor(Math.random() * tm.players.length)];
+            logErr('warn', 'auto_timeout', 'Admin decision timeout — auto-resolving match (conflict)', { roomId, metadata: { tournamentId: tm.tournamentId, matchId: tm.matchId, winnerId } });
             finalizeMatch(io, roomId, tm, winnerId, 'auto_timeout').catch(() => {});
           }, ADMIN_DECISION_TIMEOUT_MS);
         }
