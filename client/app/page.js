@@ -23,33 +23,33 @@ export default function HomePage() {
 
   const features = [
     { icon: <Camera size={20} />, label: lang === 'th' ? 'วิดีโอสด' : 'Live Video',
-      cls: 'bg-violet-400/[0.07] border border-violet-400/[0.15] text-violet-400' },
+      cls: 'bg-violet-400/[0.14] border border-violet-400/[0.35] text-violet-300' },
     { icon: <Shuffle size={20} />, label: lang === 'th' ? 'จับคู่สุ่ม' : 'Random Match',
-      cls: 'bg-pink-400/[0.07] border border-pink-400/[0.15] text-pink-400' },
+      cls: 'bg-pink-400/[0.14] border border-pink-400/[0.35] text-pink-300' },
     { icon: <Search size={20} />, label: lang === 'th' ? 'ค้นหาผู้เล่น' : 'Find Players',
-      cls: 'bg-blue-400/[0.07] border border-blue-400/[0.15] text-blue-400' },
+      cls: 'bg-blue-400/[0.14] border border-blue-400/[0.35] text-blue-300' },
     { icon: <Shield size={20} />, label: lang === 'th' ? 'ปลอดภัย' : 'Secure',
-      cls: 'bg-green-400/[0.07] border border-green-400/[0.15] text-green-400' },
+      cls: 'bg-green-400/[0.14] border border-green-400/[0.35] text-green-300' },
   ];
 
   const steps = [
     {
       n: '01', icon: '🎮',
       title: t.step1Title, desc: t.step1Desc,
-      grad: 'from-violet-600/20 to-purple-600/10',
-      border: 'border-violet-500/20',
+      grad: 'from-violet-600/35 to-purple-600/15',
+      border: 'border-violet-400/40',
     },
     {
       n: '02', icon: '⚔️',
       title: t.step2Title, desc: t.step2Desc,
-      grad: 'from-rose-600/20 to-pink-600/10',
-      border: 'border-rose-500/20',
+      grad: 'from-rose-600/35 to-pink-600/15',
+      border: 'border-rose-400/40',
     },
     {
       n: '03', icon: '📷',
       title: t.step3Title, desc: t.step3Desc,
-      grad: 'from-sky-600/20 to-blue-600/10',
-      border: 'border-sky-500/20',
+      grad: 'from-sky-600/35 to-blue-600/15',
+      border: 'border-sky-400/40',
     },
   ];
 
@@ -59,10 +59,14 @@ export default function HomePage() {
       {/* ── HERO ──────────────────────────────────────────────── */}
       <section className="relative min-h-[100vh] flex flex-col items-center justify-center px-4 text-center overflow-hidden">
 
+        {/* Vibrant mesh backdrop */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 25% 15%, rgba(192,132,252,0.16), transparent 55%), radial-gradient(circle at 75% 30%, rgba(244,114,182,0.13), transparent 50%), radial-gradient(circle at 50% 85%, rgba(34,211,238,0.10), transparent 55%)' }} />
+
         {/* Animated orbs */}
-        <div className="orb w-[500px] h-[500px] bg-purple-600/15 top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2" style={{ animationDelay: '0s' }} />
-        <div className="orb w-[400px] h-[400px] bg-violet-500/10 bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2" style={{ animationDelay: '-6s' }} />
-        <div className="orb w-[300px] h-[300px] bg-fuchsia-600/10 top-1/2 right-1/3" style={{ animationDelay: '-3s' }} />
+        <div className="orb w-[550px] h-[550px] bg-purple-600/25 top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2" style={{ animationDelay: '0s' }} />
+        <div className="orb w-[450px] h-[450px] bg-fuchsia-500/20 bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2" style={{ animationDelay: '-6s' }} />
+        <div className="orb w-[350px] h-[350px] bg-pink-500/20 top-1/2 right-1/3" style={{ animationDelay: '-3s' }} />
+        <div className="orb w-[280px] h-[280px] bg-cyan-400/15 bottom-1/3 left-1/3" style={{ animationDelay: '-9s' }} />
 
         {/* Grid overlay */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuMDMiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] pointer-events-none opacity-50" />
@@ -70,7 +74,7 @@ export default function HomePage() {
         <div className="relative z-10 max-w-4xl mx-auto">
 
           {/* Live badge */}
-          <div className="anim-fade-up inline-flex items-center gap-2.5 bg-purple-950/60 border border-purple-700/30 rounded-full px-4 py-1.5 text-sm text-purple-300 mb-8 backdrop-blur-sm">
+          <div className="anim-fade-up inline-flex items-center gap-2.5 bg-purple-950/60 border border-purple-500/40 rounded-full px-4 py-1.5 text-sm text-purple-200 mb-8 backdrop-blur-sm shadow-[0_0_20px_rgba(168,85,247,0.25)]">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
@@ -81,9 +85,9 @@ export default function HomePage() {
           {/* Headline */}
           <h1 className="anim-fade-up delay-100 text-5xl md:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight">
             {lang === 'th' ? (
-              <>หาเพื่อนเล่น<br /><span className="gradient-text text-glow">การ์ดเกมส์</span></>
+              <>หาเพื่อนเล่น<br /><span className="gradient-text" style={{ backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #f472b6 40%, #818cf8 75%, #22d3ee 100%)', textShadow: '0 0 40px rgba(232,121,249,0.45)' }}>การ์ดเกมส์</span></>
             ) : (
-              <>Find Your<br /><span className="gradient-text text-glow">Card Rival</span></>
+              <>Find Your<br /><span className="gradient-text" style={{ backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #f472b6 40%, #818cf8 75%, #22d3ee 100%)', textShadow: '0 0 40px rgba(232,121,249,0.45)' }}>Card Rival</span></>
             )}
           </h1>
 
@@ -234,9 +238,10 @@ export default function HomePage() {
       <section className="py-24 px-4">
         <div className="max-w-3xl mx-auto">
           <div className="relative card p-10 md:p-14 text-center overflow-hidden"
-            style={{ borderColor: 'rgba(124,58,237,0.3)', background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(109,40,217,0.04))' }}>
-            <div className="orb w-64 h-64 bg-purple-600/20 -top-8 -right-8 pointer-events-none" style={{ animationDelay: '-2s' }} />
-            <Zap size={40} className="text-purple-400 mx-auto mb-5" />
+            style={{ borderColor: 'rgba(192,132,252,0.4)', background: 'linear-gradient(135deg, rgba(168,85,247,0.16), rgba(236,72,153,0.08))' }}>
+            <div className="orb w-64 h-64 bg-purple-500/30 -top-8 -right-8 pointer-events-none" style={{ animationDelay: '-2s' }} />
+            <div className="orb w-56 h-56 bg-pink-500/25 -bottom-10 -left-10 pointer-events-none" style={{ animationDelay: '-5s' }} />
+            <Zap size={40} className="text-purple-300 mx-auto mb-5 drop-shadow-[0_0_12px_rgba(192,132,252,0.6)]" />
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               {lang === 'th' ? 'พร้อมเริ่มเล่นแล้วหรือยัง?' : 'Ready to Play?'}
             </h2>
