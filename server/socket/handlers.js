@@ -25,7 +25,7 @@ const publicChatBuffer = [];         // last 50 public lobby messages
 const tournaments    = new Map();    // tournamentId → { id, name, gameTypeId, status, phase, maxPlayers, totalRounds, currentRound, activeMatchCount, playedPairs: Set, points: Map, h2h: Map, playoffBracket, createdBy, players: Set<userId> }
 const tourneyMatches = new Map();    // roomId → { matchId, tournamentId, players:[p1,p2], results: Map, phase, timer, matchType }
 const adminWatching  = new Map();    // roomId → { adminUserId, adminSocketId }
-const pendingReconnects = new Map(); // userId → { roomId, timer } — grace period before forfeiting disconnect
+const pendingReconnects = new Map(); // roomId → { userId, timer } — grace period before forfeiting disconnect
 
 // ── Pairing: random, no-repeat (greedy with fallback) ─────────────────
 const pairPlayersNoRepeat = (playerIds, playedPairs) => {
@@ -90,14 +90,26 @@ const getTournamentPublic = (t) => ({
 });
 
 const isLockedInTournament = (userId) => {
+  // Check every tournament the user is registered in, not just the first one found —
+  // a user can be registered in several "waiting" tournaments at once, and locking
+  // should trigger as soon as ANY of them goes live.
   for (const t of tournaments.values()) {
     if (t.status === 'ended') continue;
     if (!t.players.has(userId)) continue;
-    if (t.scheduledAt) return Date.now() >= new Date(t.scheduledAt).getTime();
-    return t.status !== 'waiting';
+    if (t.scheduledAt) {
+      if (Date.now() >= new Date(t.scheduledAt).getTime()) return true;
+      continue;
+    }
+    if (t.status !== 'waiting') return true;
   }
   return false;
 };
+
+// True if the user is already in an active room or sitting in a matchmaking queue —
+// used to stop challenge flows from double-booking a player into two simultaneous rooms.
+const isBusy = (uid) =>
+  [...activeRooms.values()].some(r => r.players.includes(uid)) ||
+  [...matchQueues.values()].some(q => q.some(p => p.userId === uid));
 
 const notifyAdmins = (io, type, data) => {
   for (const [, info] of onlineUsers) {
@@ -141,11 +153,20 @@ const handleMatchPlayingTimeout = (io, roomId) => {
 };
 
 const finalizeMatch = async (io, roomId, match, winnerId, method) => {
+  // Idempotency guard — prevents double ELO/points award if two finalize paths race
+  // (e.g. an admin double-clicking "declare winner", or two admin tabs open on the same match).
+  if (match.phase === 'done') return;
   clearTimeout(match.playingTimer);
   clearTimeout(match.timer);
   clearTimeout(match.adminDecisionTimer); // BUG-06
   match.phase = 'done';
   match.winnerId = winnerId;
+  // Safety net: normally `leave_room`/disconnect cleans these up, but if a client leaves the
+  // result screen open without navigating away, make sure the room's memory is freed anyway.
+  setTimeout(() => {
+    if (tourneyMatches.get(roomId) === match) tourneyMatches.delete(roomId);
+    activeRooms.delete(roomId);
+  }, 5 * 60 * 1000);
   const loserId = match.players.find(p => p !== winnerId);
   if (!loserId) return;
 
@@ -536,15 +557,17 @@ const setupSocketHandlers = (io) => {
     log.info({ event: 'connect', userId, username: user.username, isAdmin: !!user.isAdmin, socketId: socket.id, onlineCount: onlineUsers.size });
 
     // ── Reconnect grace period: player reconnected before forfeit fired ──
-    const pending = pendingReconnects.get(userId);
-    if (pending) {
+    // Keyed by roomId (not userId) so a player who was briefly disconnected from more than
+    // one room at once (shouldn't normally happen, but keeps this robust) gets each restored.
+    for (const [pRoomId, pending] of pendingReconnects) {
+      if (pending.userId !== userId) continue;
       clearTimeout(pending.timer);
-      pendingReconnects.delete(userId);
-      socket.join(pending.roomId);
+      pendingReconnects.delete(pRoomId);
+      socket.join(pRoomId);
       // Notify both players: partner is back + restart WebRTC (other player sends new offer)
-      io.to(pending.roomId).emit('partner_reconnected', { userId });
-      socket.to(pending.roomId).emit('peer_joined', { userId });
-      if (isDev) console.log(`[reconnect] ✅ ${user.username} restored — room ${pending.roomId}`);
+      io.to(pRoomId).emit('partner_reconnected', { userId });
+      socket.to(pRoomId).emit('peer_joined', { userId });
+      if (isDev) console.log(`[reconnect] ✅ ${user.username} restored — room ${pRoomId}`);
     }
 
     socket.emit('public_chat_history', publicChatBuffer);
@@ -692,6 +715,10 @@ const setupSocketHandlers = (io) => {
       if (targetUserId === userId) return;
       const target = onlineUsers.get(targetUserId);
       if (!target) return socket.emit('error', { message: 'Player is offline' });
+      if (isBusy(userId))
+        return socket.emit('error', { message: 'ไม่สามารถท้าได้ขณะอยู่ในห้องแข่งหรือในคิว' });
+      if (isBusy(targetUserId))
+        return socket.emit('error', { message: 'ผู้เล่นนั้นกำลังเล่นอยู่หรืออยู่ในคิว' });
       if (isLockedInTournament(userId))
         return socket.emit('error', { message: 'คุณกำลังแข่ง Tournament อยู่' });
       if (isLockedInTournament(targetUserId))
@@ -732,13 +759,28 @@ const setupSocketHandlers = (io) => {
       if (isLockedInTournament(userId) || isLockedInTournament(challenge.from))
         return; // silently drop — tournament takes priority
 
-      const roomId   = uuidv4();
+      if (isBusy(userId) || isBusy(challenge.from)) {
+        socket.emit('error', { message: 'ไม่สามารถเข้าห้องได้ขณะนี้ กรุณาลองใหม่' });
+        io.to(fromInfo.socketId).emit('error', { message: 'ไม่สามารถเข้าห้องได้ขณะนี้ กรุณาลองใหม่' });
+        return;
+      }
+
+      const roomId = uuidv4();
+      // Reserve the room + drop both players from any queue synchronously (before the awaits
+      // below) so a second challenge accepted in the same tick can't double-book either player.
+      activeRooms.set(roomId, { players: [challenge.from, userId] });
+      matchQueues.forEach((queue, gtId) =>
+        matchQueues.set(gtId, queue.filter(p => p.userId !== userId && p.userId !== challenge.from)));
+
       const gameType = await GameType.findById(challenge.gameTypeId);
       const gameInfo = { _id: challenge.gameTypeId, name: gameType?.name, nameTh: gameType?.nameTh, color: gameType?.color };
 
       try { await Room.create({ roomId, gameTypeId: challenge.gameTypeId, players: [challenge.from, userId] }); }
-      catch (e) { socket.emit('error', { message: 'Failed to create room' }); return; }
-      activeRooms.set(roomId, { players: [challenge.from, userId] });
+      catch (e) {
+        activeRooms.delete(roomId); // roll back the reservation
+        socket.emit('error', { message: 'Failed to create room' });
+        return;
+      }
 
       io.to(fromInfo.socketId).emit('challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: userId,         username: user.username,     avatar: user.avatar          } });
       socket.emit(             'challenge_accepted', { roomId, gameType: gameInfo, opponent: { _id: challenge.from, username: fromInfo.username, avatar: fromInfo.avatar } });
@@ -1154,6 +1196,7 @@ const setupSocketHandlers = (io) => {
       if (!user.isAdmin) return;
       const tm = tourneyMatches.get(roomId);
       if (!tm || !tm.players.includes(winnerId)) return;
+      if (tm.phase === 'done') return; // already decided — avoid a duplicate ELO/points award
       clearTimeout(tm.adminDecisionTimer); // BUG-06
       finalizeMatch(io, roomId, tm, winnerId, 'admin_decision');
     });
@@ -1246,6 +1289,10 @@ const setupSocketHandlers = (io) => {
 
     // ── DISCONNECT ────────────────────────────────────────────────
     socket.on('disconnect', async () => {
+      // Ignore a stale disconnect from an old tab/socket after a newer tab has already taken
+      // over onlineUsers for this user — otherwise closing tab A forfeits matches tab B is
+      // still actively playing.
+      if (onlineUsers.get(userId)?.socketId !== socket.id) return;
       onlineUsers.delete(userId);
       matchQueues.forEach((queue, gameTypeId) => {
         matchQueues.set(gameTypeId, queue.filter((p) => p.userId !== userId));
@@ -1255,12 +1302,13 @@ const setupSocketHandlers = (io) => {
         const tm = tourneyMatches.get(roomId);
 
         if (tm && tm.phase !== 'done') {
-          // Active match — grace period: notify partner and wait before forfeiting
-          const existing = pendingReconnects.get(userId);
+          // Active match — grace period: notify partner and wait before forfeiting.
+          // Keyed by roomId so a grace timer for one room is never clobbered by another.
+          const existing = pendingReconnects.get(roomId);
           if (existing) clearTimeout(existing.timer);
           io.to(roomId).emit('partner_temporarily_offline', { userId });
           const gracePeriodTimer = setTimeout(async () => {
-            pendingReconnects.delete(userId);
+            pendingReconnects.delete(roomId);
             const match = tourneyMatches.get(roomId);
             if (match && match.phase !== 'done') {
               clearTimeout(match.playingTimer);
@@ -1278,22 +1326,22 @@ const setupSocketHandlers = (io) => {
             const aw = adminWatching.get(roomId);
             if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
           }, RECONNECT_GRACE_MS);
-          pendingReconnects.set(userId, { roomId, timer: gracePeriodTimer });
+          pendingReconnects.set(roomId, { userId, timer: gracePeriodTimer });
 
         } else if (!tm) {
           // Normal (non-tournament) room — grace period before ending
-          const existing = pendingReconnects.get(userId);
+          const existing = pendingReconnects.get(roomId);
           if (existing) clearTimeout(existing.timer);
           io.to(roomId).emit('partner_temporarily_offline', { userId });
           const gracePeriodTimer = setTimeout(async () => {
-            pendingReconnects.delete(userId);
+            pendingReconnects.delete(roomId);
             io.to(roomId).emit('partner_disconnected');
             try { await Room.updateStatus(roomId, 'ended'); } catch {}
             activeRooms.delete(roomId);
             const aw = adminWatching.get(roomId);
             if (aw) { io.to(aw.adminSocketId).emit('spectate_ended', { roomId }); adminWatching.delete(roomId); }
           }, RECONNECT_GRACE_MS);
-          pendingReconnects.set(userId, { roomId, timer: gracePeriodTimer });
+          pendingReconnects.set(roomId, { userId, timer: gracePeriodTimer });
 
         } else {
           // Match already done — no grace needed, clean up immediately
@@ -1354,7 +1402,7 @@ const setAnnouncement = (io, text, author) => {
 const getAnnouncement = () => currentAnnouncement;
 
 // BUG-01: Restore non-ended tournaments from DB into memory on server restart
-const restoreTournamentsFromDB = async () => {
+const restoreTournamentsFromDB = async (io) => {
   try {
     const pool = getPool();
     const { rows: tRows } = await pool.query(
@@ -1461,7 +1509,7 @@ const restoreTournamentsFromDB = async () => {
         if (!activeRooms.has(m.room_id)) {
           activeRooms.set(m.room_id, { players: [m.player1_id, m.player2_id], isTournament: true });
         }
-        tourneyMatches.set(m.room_id, {
+        const match = {
           matchId:            m.id,
           tournamentId:       row.id,
           players:            [m.player1_id, m.player2_id],
@@ -1471,7 +1519,19 @@ const restoreTournamentsFromDB = async () => {
           playingTimer:       null,
           adminDecisionTimer: null,
           matchType:          m.match_type || 'group',
-        });
+        };
+        tourneyMatches.set(m.room_id, match);
+        // Re-arm the 10-minute admin-decision auto-resolve safety net — without this, a match
+        // restored into admin_decision after a restart would stay stuck forever if no admin acts.
+        if (io) {
+          const roomId = m.room_id;
+          match.adminDecisionTimer = setTimeout(() => {
+            if (match.phase !== 'admin_decision') return;
+            const winnerId = match.players[Math.floor(Math.random() * match.players.length)];
+            logErr('warn', 'auto_timeout', 'Admin decision timeout — auto-resolving match (restored after restart)', { roomId, metadata: { tournamentId: row.id, matchId: m.id, winnerId } });
+            finalizeMatch(io, roomId, match, winnerId, 'auto_timeout').catch(() => {});
+          }, ADMIN_DECISION_TIMEOUT_MS);
+        }
       }
       if (matchesToRestore.length > 0) {
         console.log(`[Tournament] ${row.name}: restored ${matchesToRestore.length} match(es) into tourneyMatches`);

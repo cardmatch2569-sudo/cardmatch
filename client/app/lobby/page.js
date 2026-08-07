@@ -67,6 +67,10 @@ export default function LobbyPage() {
     onChallengeIdSent:    ({ to }) => {
       setPidLoading(false); setPidInput('');
       setPidPending({ username: to });
+      // This ack means the server accepted the challenge send — clear the "did the send even
+      // register" fallback timer, otherwise it fires a false "Challenge expired" toast later
+      // even though the challenge is legitimately still pending (or already resolved).
+      clearTimeout(pidTimeoutRef.current);
       showToast(`${langRef.current === 'th' ? 'ส่งคำท้าถึง' : 'Challenge sent to'} ${to} — ${langRef.current === 'th' ? 'รอการตอบรับ...' : 'waiting for response...'}`, 'success');
     },
     onChallengeIdError:   ({ message }) => {

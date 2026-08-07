@@ -4,7 +4,9 @@ import { api } from '../lib/api';
 
 // ── Publisher: player broadcasts their existing camera/mic to LiveKit ──
 export function useLiveKitPublisher({ roomName, enabled, localStream }) {
-  const roomRef      = useRef(null);
+  const roomRef       = useRef(null);
+  const videoTrackRef = useRef(null);
+  const audioTrackRef = useRef(null);
   const [live,       setLive]       = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [viewers,    setViewers]    = useState(0);
@@ -33,7 +35,7 @@ export function useLiveKitPublisher({ roomName, enabled, localStream }) {
         room.on(RoomEvent.ParticipantDisconnected, updateViewers);
 
         await room.connect(wsUrl, token);
-        if (cancelled) { room.disconnect(); return; }
+        if (cancelled) { room.disconnect(false); return; }
 
         // Publish existing tracks from P2P stream (no extra camera access)
         const videoTrack = localStream.getVideoTracks()[0];
@@ -43,16 +45,21 @@ export function useLiveKitPublisher({ roomName, enabled, localStream }) {
           if (videoTrack) {
             const { LocalVideoTrack } = await import('livekit-client');
             const lkVideo = new LocalVideoTrack(videoTrack, undefined, false);
+            videoTrackRef.current = lkVideo;
             await room.localParticipant.publishTrack(lkVideo, { simulcast: true, videoCodec: 'vp8' });
           }
           if (audioTrack) {
             const { LocalAudioTrack } = await import('livekit-client');
             const lkAudio = new LocalAudioTrack(audioTrack, undefined, false);
+            audioTrackRef.current = lkAudio;
             await room.localParticipant.publishTrack(lkAudio);
           }
         } catch (publishErr) {
-          room.disconnect();
+          // stopTracks=false: these MediaStreamTracks are shared with the P2P call, never stop them here
+          room.disconnect(false);
           roomRef.current = null;
+          videoTrackRef.current = null;
+          audioTrackRef.current = null;
           if (!cancelled) { setError(publishErr.message); setConnecting(false); }
           return;
         }
@@ -75,8 +82,11 @@ export function useLiveKitPublisher({ roomName, enabled, localStream }) {
       if (room) {
         room.off(RoomEvent.ParticipantConnected);
         room.off(RoomEvent.ParticipantDisconnected);
-        room.disconnect();
+        // stopTracks=false: these MediaStreamTracks are shared with the P2P call, never stop them here
+        room.disconnect(false);
         roomRef.current = null;
+        videoTrackRef.current = null;
+        audioTrackRef.current = null;
       }
       setLive(false);
       setConnecting(false);
@@ -84,7 +94,14 @@ export function useLiveKitPublisher({ roomName, enabled, localStream }) {
     };
   }, [enabled, roomName, localStream]);
 
-  return { live, connecting, viewers, error };
+  // Swap the published video track in place (e.g. front/back camera flip) without a republish/renegotiation
+  const replaceVideoTrack = async (newMediaStreamTrack) => {
+    if (videoTrackRef.current && newMediaStreamTrack) {
+      await videoTrackRef.current.replaceTrack(newMediaStreamTrack);
+    }
+  };
+
+  return { live, connecting, viewers, error, replaceVideoTrack };
 }
 
 const FRIENDLY_ERRORS = {

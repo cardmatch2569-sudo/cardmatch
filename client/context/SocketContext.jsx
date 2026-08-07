@@ -117,7 +117,12 @@ export function SocketProvider({ children }) {
       setConnected(false);
       setSocketReady(false);
     };
-  }, [user, setLobbyCallbacks]);
+  // Depend on user?._id, not `user` itself — some pages call setUser() with a freshly-fetched
+  // object (e.g. profile.js backfilling a generated player ID) while staying logged in as the
+  // same account. Depending on the object reference would force a full socket disconnect/
+  // reconnect (dropping onlineCount and re-running the connect handler) for no logical reason.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, setLobbyCallbacks]);
 
   const getSocket    = useCallback(() => socketRef.current, []);
   const setQueueGame = useCallback((gameTypeId) => {

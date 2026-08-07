@@ -43,6 +43,14 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (mode === 'register' && (form.username.length < 3 || form.username.length > 20)) {
+      setError(lang === 'th' ? 'Username ต้องมี 3-20 ตัวอักษร' : 'Username must be 3-20 characters');
+      return;
+    }
+    if (mode === 'register' && form.password.length < 6) {
+      setError(lang === 'th' ? 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร' : 'Password must be at least 6 characters');
+      return;
+    }
     if (mode === 'register' && form.password !== form.confirm) {
       setError(lang === 'th' ? 'รหัสผ่านทั้งสองช่องไม่ตรงกัน' : 'Passwords do not match');
       return;

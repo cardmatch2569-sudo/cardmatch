@@ -242,7 +242,7 @@ export default function TournamentWaitingRoom() {
   const hasJoinedRef = useRef(false);
   langRef.current = lang;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
     try {
       const { tournament: t } = await api.get(`/api/tournament/${tournamentId}`);
       setTournament(t);
@@ -251,6 +251,10 @@ export default function TournamentWaitingRoom() {
       if (t.playersInfo) setStandings([...t.playersInfo].sort((a, b) => b.points - a.points));
       return t;
     } catch {
+      // `silent` is used by the reconnect-refresh effect below — a transient failure there
+      // (e.g. one flaky request right as a mobile socket wakes up) shouldn't replace an
+      // already-working, in-progress tournament UI with a permanent "not found" error page.
+      if (silent) return null;
       setErrorMsg(translations[langRef.current].tourneyNotFound);
       setStatus('error');
       setPageLoading(false);
@@ -406,6 +410,7 @@ export default function TournamentWaitingRoom() {
     const onError = ({ message }) => {
       if (!mounted) return;
       setStartingRound(false);
+      setStartingPlayoff(false);
       setToast(message);
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => setToast(''), 5000);
@@ -483,7 +488,7 @@ export default function TournamentWaitingRoom() {
       setToast(translations[langRef.current].reconnected || (langRef.current === 'th' ? '✓ เชื่อมต่อใหม่แล้ว' : '✓ Reconnected'));
       setTimeout(() => setToast(''), 3000);
     }
-    load();
+    load({ silent: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, tournamentId, user, authLoading, getSocket]);
 

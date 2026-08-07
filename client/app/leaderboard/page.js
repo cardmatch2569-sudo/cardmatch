@@ -112,15 +112,15 @@ export default function LeaderboardPage() {
                   if (!p) return null;
                   const isCenter = boardIdx === 0;
                   return (
-                    <div key={p.userId} className={`flex flex-col items-center gap-2 ${isCenter ? 'order-2 -mb-2' : i === 1 ? 'order-1' : 'order-3'}`}>
-                      <span className="text-3xl">{RANK_LABELS[i]}</span>
+                    <div key={p.userId} className={`flex flex-col items-center gap-2 ${isCenter ? 'order-2 -mb-2' : boardIdx === 1 ? 'order-1' : 'order-3'}`}>
+                      <span className="text-3xl">{RANK_LABELS[boardIdx]}</span>
                       <div className={`rounded-full flex items-center justify-center font-black text-white flex-shrink-0 ${isCenter ? 'w-16 h-16 text-xl' : 'w-12 h-12 text-sm'}`}
-                        style={{ background: `linear-gradient(135deg, ${RANK_COLORS[i]}80, ${RANK_COLORS[i]}40)`, border: `2px solid ${RANK_COLORS[i]}60` }}>
+                        style={{ background: `linear-gradient(135deg, ${RANK_COLORS[boardIdx]}80, ${RANK_COLORS[boardIdx]}40)`, border: `2px solid ${RANK_COLORS[boardIdx]}60` }}>
                         {p.avatar ? <img src={p.avatar} className="w-full h-full rounded-full object-cover" alt="" /> : p.username[0].toUpperCase()}
                       </div>
                       <div className="text-center">
                         <p className={`font-bold text-white truncate max-w-[80px] ${isCenter ? 'text-sm' : 'text-xs'}`}>{p.username}</p>
-                        <p className="text-xs font-black" style={{ color: RANK_COLORS[i] }}>{p.elo}</p>
+                        <p className="text-xs font-black" style={{ color: RANK_COLORS[boardIdx] }}>{p.elo}</p>
                       </div>
                     </div>
                   );

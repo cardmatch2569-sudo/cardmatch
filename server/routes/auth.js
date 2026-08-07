@@ -33,8 +33,14 @@ router.post('/register', async (req, res) => {
 
     const exists = await User.findByEmailOrUsername(email, username);
     if (exists) {
-      const f = exists.email === email.toLowerCase().trim() ? 'email' : 'username';
-      return res.status(400).json({ message: f === 'email' ? 'อีเมลนี้ถูกใช้งานแล้ว' : 'Username นี้ถูกใช้งานแล้ว' });
+      const emailTaken = exists.email === email.toLowerCase().trim();
+      // Don't confirm that this specific email already has an account (email enumeration) —
+      // usernames are already public/searchable, so that collision message is safe to keep specific.
+      return res.status(400).json({
+        message: emailTaken
+          ? 'ไม่สามารถลงทะเบียนด้วยข้อมูลนี้ได้ กรุณาตรวจสอบอีเมลหรือใช้อีเมลอื่น'
+          : 'Username นี้ถูกใช้งานแล้ว',
+      });
     }
 
     if (await EmailVerification.isRateLimited(email))
@@ -132,18 +138,21 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     const data = JSON.parse(otpRow.google_data);
-    const isFirstUser = (await User.count()) === 0;
     let user;
 
+    // Admin accounts are never granted through this public, unauthenticated endpoint — use
+    // `node server/create-admin.js` instead. (Previously auto-granted admin to whoever
+    // registered first on an empty Users table — a privilege-escalation path on any fresh
+    // deploy/restore where an attacker registers before the operator runs create-admin.js.)
     if (data.type === 'email') {
       if (await User.findByUsername(data.username))
         return res.status(409).json({ message: 'Username นี้ถูกใช้ไปแล้ว' });
-      user = await User.createFromVerifiedEmail({ username: data.username, email, hashedPassword: data.hashedPassword, isAdmin: isFirstUser });
+      user = await User.createFromVerifiedEmail({ username: data.username, email, hashedPassword: data.hashedPassword });
     } else {
       const base = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 17) || 'user';
       let username = base; let counter = 1;
       while (await User.findByUsername(username)) { username = `${base}${counter++}`; if (counter > 100) break; }
-      user = await User.createWithGoogle({ googleId: data.googleId, email, username, avatar: data.picture || '', isAdmin: isFirstUser });
+      user = await User.createWithGoogle({ googleId: data.googleId, email, username, avatar: data.picture || '' });
     }
 
     await EmailVerification.markUsed(otpRow.id);

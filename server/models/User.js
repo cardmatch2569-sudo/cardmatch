@@ -152,6 +152,14 @@ const User = {
     const { password, ...pub } = user;
     return { ...pub, hasPassword: !!password };
   },
+
+  // Safe to show to OTHER users (leaderboard, profile lookups, etc.) — unlike toPublic(),
+  // this also strips email/googleId so one player can't harvest another's contact info.
+  toPublicProfile(user) {
+    if (!user) return null;
+    const { password, email, googleId, google_id, ...pub } = user;
+    return pub;
+  },
 };
 
 module.exports = User;

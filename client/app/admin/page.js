@@ -51,6 +51,7 @@ export default function AdminPage() {
   const [tourneyForm,     setTourneyForm]     = useState(EMPTY_TOURNEY);
   const [tourneyCreating,  setTourneyCreating]  = useState(false);
   const [startingPlayoffs, setStartingPlayoffs] = useState({}); // { [tournamentId]: bool }
+  const [startingRounds,  setStartingRounds]  = useState({}); // { [tournamentId]: bool } — debounce double-click on Start Round
   const [tourneyError,    setTourneyError]    = useState('');
   const [saveSuccess,     setSaveSuccess]     = useState(false);
   const [searchPending,   setSearchPending]   = useState(false);
@@ -150,8 +151,10 @@ export default function AdminPage() {
     const onClosed  = ({ tournamentId }) => setTournaments(p => p.filter(x => x.id !== tournamentId));
     const onCount   = ({ tournamentId, playerCount }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, playerCount } : x));
-    const onRoundStarted = ({ tournamentId, roundNumber, totalRounds }) =>
+    const onRoundStarted = ({ tournamentId, roundNumber, totalRounds }) => {
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'active', currentRound: roundNumber, totalRounds } : x));
+      setStartingRounds(p => { const n = { ...p }; delete n[tournamentId]; return n; });
+    };
     const onRoundComplete = ({ tournamentId, roundNumber }) =>
       setTournaments(p => p.map(x => x.id === tournamentId ? { ...x, status: 'round_complete', currentRound: roundNumber, activeMatchCount: 0 } : x));
     const onTournamentComplete = ({ tournamentId }) =>
@@ -430,12 +433,26 @@ export default function AdminPage() {
   };
 
   const handleStartRound = (tournamentId) => {
-    getSocket()?.emit('start_round', { tournamentId });
+    setStartingRounds(p => ({ ...p, [tournamentId]: true }));
+    const socket = getSocket();
+    socket?.emit('start_round', { tournamentId });
+    if (!socket) return;
+    const clearFlag = () => setStartingRounds(p => { const n = { ...p }; delete n[tournamentId]; return n; });
+    socket.once('tournament_error', clearFlag);
+    setTimeout(() => { socket.off('tournament_error', clearFlag); clearFlag(); }, 8000);
   };
 
   const handleStartPlayoff = (tournamentId) => {
     setStartingPlayoffs(p => ({ ...p, [tournamentId]: true }));
-    getSocket()?.emit('start_playoff', { tournamentId });
+    const socket = getSocket();
+    socket?.emit('start_playoff', { tournamentId });
+    if (!socket) return;
+    const clearFlag = () => setStartingPlayoffs(p => { const n = { ...p }; delete n[tournamentId]; return n; });
+    // `tournament_error` doesn't include a tournamentId, so we can't target this call precisely —
+    // clearing on any error (and on an 8s fallback) at least guarantees the button never stays
+    // stuck spinning forever, matching the pattern handleCreateTournament already uses.
+    socket.once('tournament_error', clearFlag);
+    setTimeout(() => { socket.off('tournament_error', clearFlag); clearFlag(); }, 8000);
   };
 
   const handleCloseTourney = (tournamentId) => {
@@ -1477,7 +1494,7 @@ export default function AdminPage() {
                         {['waiting', 'round_complete'].includes(tourney.status) && tourney.currentRound < (tourney.totalRounds || 3) && (
                           <button
                             onClick={() => handleStartRound(tourney.id)}
-                            disabled={(tourney.playerCount || 0) < 2 || (tourney.activeMatchCount || 0) > 0}
+                            disabled={(tourney.playerCount || 0) < 2 || (tourney.activeMatchCount || 0) > 0 || !!startingRounds[tourney.id]}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 disabled:opacity-40"
                             style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>
                             <Play size={11} />

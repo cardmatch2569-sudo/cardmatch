@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -38,6 +38,10 @@ export default function FriendsPage() {
   const [confirmRemove,   setConfirmRemove]   = useState(null); // { id, username }
 
   const th = lang === 'th';
+  // Ref so the socket listeners below (registered once per user, not per lang change) always
+  // read the CURRENT language instead of whatever was active when they were registered.
+  const langRef = useRef(lang);
+  langRef.current = lang;
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -62,11 +66,11 @@ export default function FriendsPage() {
     if (!socket) return;
     const onReq = ({ fromUsername }) => {
       loadRequests();
-      showToast(th ? `${fromUsername} ส่งคำขอเป็นเพื่อน` : `${fromUsername} sent you a friend request`, 'info');
+      showToast(langRef.current === 'th' ? `${fromUsername} ส่งคำขอเป็นเพื่อน` : `${fromUsername} sent you a friend request`, 'info');
     };
     const onAcc = ({ byUsername }) => {
       loadFriends();
-      showToast(th ? `${byUsername} ยอมรับคำขอเพื่อนแล้ว` : `${byUsername} accepted your friend request`);
+      showToast(langRef.current === 'th' ? `${byUsername} ยอมรับคำขอเพื่อนแล้ว` : `${byUsername} accepted your friend request`);
     };
     socket.on('friend_request_received', onReq);
     socket.on('friend_request_accepted', onAcc);

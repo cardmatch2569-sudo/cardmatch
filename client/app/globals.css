@@ -302,6 +302,33 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
 .badge-yellow { background: rgba(251,191,36,0.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
 .badge-red    { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
 
+/* ── Holo Card (trading-card foil hover, tracks pointer via --mx/--my) ── */
+.holo-card {
+  position: relative;
+  transition: transform 0.15s ease-out, border-color 0.2s;
+  will-change: transform;
+}
+.holo-card::before,
+.holo-card::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  opacity: var(--holo-opacity, 0);
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.holo-card::before {
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.35), transparent 45%);
+  mix-blend-mode: overlay;
+}
+.holo-card::after {
+  background: linear-gradient(115deg, transparent 25%, rgba(168,85,247,0.55) 38%, rgba(236,72,153,0.55) 48%, rgba(34,211,238,0.55) 58%, transparent 75%);
+  background-size: 250% 250%;
+  background-position: var(--mx, 50%) var(--my, 50%);
+  mix-blend-mode: color-dodge;
+  opacity: calc(var(--holo-opacity, 0) * 0.55);
+}
+
 /* ── Orb ───────────────────────────────────────────────────────── */
 .orb {
   position: absolute; border-radius: 50%;

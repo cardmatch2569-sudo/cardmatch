@@ -93,6 +93,10 @@ const initTables = async () => {
   `);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_ev_email ON EmailVerifications(email)`).catch(() => {});
 
+  // ELO rating column — must exist before the index on it is created below (on a brand-new
+  // DB, Users has no elo column yet since it's added here via ALTER, not in CREATE TABLE).
+  await p.query(`ALTER TABLE Users ADD COLUMN IF NOT EXISTS elo INTEGER DEFAULT 1000`).catch(() => {});
+
   // Performance indexes for high-frequency queries
   await p.query(`CREATE INDEX IF NOT EXISTS idx_rooms_status   ON Rooms(status)`).catch(() => {});
   await p.query(`CREATE INDEX IF NOT EXISTS idx_rooms_created  ON Rooms(created_at DESC)`).catch(() => {});
@@ -177,9 +181,6 @@ const initTables = async () => {
   } catch (e) {
     console.error('[DB] ErrorLogs table warning:', e.message);
   }
-
-  // ELO rating column (safe on re-deploy)
-  await p.query(`ALTER TABLE Users ADD COLUMN IF NOT EXISTS elo INTEGER DEFAULT 1000`).catch(() => {});
 
   // Friend system
   try {

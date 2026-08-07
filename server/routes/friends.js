@@ -70,10 +70,14 @@ router.post('/request/:targetId', protect, async (req, res) => {
       return res.status(400).json({ message: 'มีคำขอเพื่อนรอดำเนินการอยู่แล้ว' });
     }
 
-    await pool.query(
-      'INSERT INTO Friendships (user_id, friend_id, status) VALUES ($1, $2, $3)',
+    // ON CONFLICT DO NOTHING — two concurrent identical requests (double-click/retry) can both
+    // pass the `existing` check above before either inserts; without this the second insert
+    // throws a raw duplicate-key error instead of failing gracefully.
+    const { rowCount } = await pool.query(
+      'INSERT INTO Friendships (user_id, friend_id, status) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
       [userId, targetId, 'pending']
     );
+    if (rowCount === 0) return res.status(400).json({ message: 'มีคำขอเพื่อนรอดำเนินการอยู่แล้ว' });
 
     // Notify target if online
     const io = req.app.get('io');

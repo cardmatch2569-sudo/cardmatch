@@ -123,7 +123,7 @@ connectDB().then(async () => {
   } catch (e) { console.warn('Auto-seed warning:', e.message); }
 
   // BUG-01: Restore active/waiting tournaments (and tourneyMatches) from DB
-  await restoreTournamentsFromDB().catch(() => {});
+  await restoreTournamentsFromDB(io).catch(() => {});
 }).then(() => {
   // BUG-01 fix 2: socket handlers + server.listen only AFTER restore completes
   // — prevents early connections from seeing an empty tournament list

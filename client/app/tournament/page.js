@@ -281,7 +281,9 @@ export default function TournamentListPage() {
   );
 
   const open   = tournaments.filter(t => t.status === 'waiting');
-  const active = tournaments.filter(t => ['active', 'round_complete'].includes(t.status));
+  // Include playoff-stage statuses — without these, a tournament vanishes from this list the
+  // moment it advances past the group stage, even though TournamentCard already renders them.
+  const active = tournaments.filter(t => ['active', 'round_complete', 'playoff_ready', 'playoff_sf', 'playoff_final'].includes(t.status));
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">

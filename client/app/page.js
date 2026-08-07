@@ -21,6 +21,22 @@ export default function HomePage() {
 
   useEffect(() => { loadGames(); }, [loadGames]);
 
+  const handleHoloMove = (e) => {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    el.style.setProperty('--mx', `${x}%`);
+    el.style.setProperty('--my', `${y}%`);
+    el.style.setProperty('--holo-opacity', '1');
+    el.style.transform = `perspective(700px) rotateX(${((50 - y) / 50) * 8}deg) rotateY(${((x - 50) / 50) * 8}deg) translateY(-4px)`;
+  };
+  const handleHoloLeave = (e) => {
+    const el = e.currentTarget;
+    el.style.setProperty('--holo-opacity', '0');
+    el.style.transform = '';
+  };
+
   const features = [
     { icon: <Camera size={20} />, label: lang === 'th' ? 'วิดีโอสด' : 'Live Video',
       cls: 'bg-violet-400/[0.14] border border-violet-400/[0.35] text-violet-300' },
@@ -208,8 +224,10 @@ export default function HomePage() {
               {games.map((game) => (
                 <div
                   key={game._id}
-                  className="card card-hover group p-6 cursor-pointer"
+                  className="card holo-card group p-6 cursor-pointer"
                   style={{ borderColor: `${game.color}20` }}
+                  onMouseMove={handleHoloMove}
+                  onMouseLeave={handleHoloLeave}
                 >
                   <div
                     className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black mb-4 transition-transform group-hover:scale-110"

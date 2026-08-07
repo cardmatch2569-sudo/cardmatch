@@ -120,6 +120,8 @@ export default function RoomPage() {
   const remoteVideoRef = useRef(null);
   const peerRef        = useRef(null);
   const localStreamRef = useRef(null);
+  const pendingCandidatesRef = useRef([]);
+  const mountedRef            = useRef(true);
   const leftRef              = useRef(false);
   const tournamentRedirectRef = useRef(false);
   const chatOpenRef          = useRef(false);
@@ -136,6 +138,11 @@ export default function RoomPage() {
   const [chatOpen,      setChatOpen]      = useState(false);
   const [unread,        setUnread]        = useState(0);
   const [mediaError,    setMediaError]    = useState('');
+  const [toast,         setToast]         = useState(null);
+  const showToast = useCallback((msg, type = 'info') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
   const [endModal,      setEndModal]      = useState(null); // null | 'leave' | 'partner_left'
   const [isFullscreen,    setIsFullscreen]    = useState(false);
   const [forcedLandscape, setForcedLandscape] = useState(false);
@@ -301,6 +308,11 @@ export default function RoomPage() {
         video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      if (!mountedRef.current) {
+        // Component unmounted while getUserMedia was pending — don't leak the camera/mic
+        stream.getTracks().forEach(tk => tk.stop());
+        return null;
+      }
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       setMediaError('');
@@ -380,6 +392,7 @@ export default function RoomPage() {
     const socket = getSocket();
     if (!socket) return;
 
+    mountedRef.current = true;
     const isAdminSpectate = !!user?.isAdmin;
 
     let aborted = false;
@@ -391,8 +404,26 @@ export default function RoomPage() {
       await startMedia();
       if (!aborted) socket.emit('join_room', { roomId });
     };
+    const flushPendingCandidates = async (pc) => {
+      const queued = pendingCandidatesRef.current;
+      pendingCandidatesRef.current = [];
+      for (const c of queued) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      }
+    };
+    const closeStalePeer = () => {
+      if (peerRef.current) {
+        peerRef.current.onicecandidate = null;
+        peerRef.current.ontrack = null;
+        peerRef.current.onconnectionstatechange = null;
+        peerRef.current.close();
+        peerRef.current = null;
+      }
+      pendingCandidatesRef.current = [];
+    };
     const onPeerJoined = () => {
       setEndModal(prev => prev === 'partner_left' ? null : prev);
+      closeStalePeer(); // avoid orphaning a pre-existing connection if the server re-emits peer_joined
       createPeer(true, localStreamRef.current);
     };
     const onOffer = async ({ offer }) => {
@@ -400,12 +431,28 @@ export default function RoomPage() {
       const pc = peerRef.current;
       if (!pc) return;
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await flushPendingCandidates(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('answer', { roomId, answer });
     };
-    const onAnswer = async ({ answer }) => { if (peerRef.current) await peerRef.current.setRemoteDescription(new RTCSessionDescription(answer)); };
-    const onIce = async ({ candidate }) => { try { if (peerRef.current && candidate) await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {} };
+    const onAnswer = async ({ answer }) => {
+      const pc = peerRef.current;
+      if (!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushPendingCandidates(pc);
+    };
+    const onIce = async ({ candidate }) => {
+      if (!candidate) return;
+      const pc = peerRef.current;
+      // Queue candidates that arrive before the remote description is applied — addIceCandidate
+      // would throw InvalidStateError and silently drop them otherwise.
+      if (!pc || !pc.remoteDescription) {
+        pendingCandidatesRef.current.push(candidate);
+        return;
+      }
+      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+    };
     const onMessage = (msg) => {
       setMessages(p => [...p, msg]);
       setUnread(p => chatOpenRef.current ? 0 : p + 1);
@@ -427,25 +474,13 @@ export default function RoomPage() {
       setPartnerReconnecting(true);
       setPeerConnected(false);
       // Close stale WebRTC — fresh connection will be created on reconnect
-      if (peerRef.current) {
-        peerRef.current.onicecandidate = null;
-        peerRef.current.ontrack = null;
-        peerRef.current.onconnectionstatechange = null;
-        peerRef.current.close();
-        peerRef.current = null;
-      }
+      closeStalePeer();
     };
 
     const onPartnerReconnected = () => {
       setPartnerReconnecting(false);
       // Null out stale PC so onOffer creates a fresh one when other player re-initiates WebRTC
-      if (peerRef.current) {
-        peerRef.current.onicecandidate = null;
-        peerRef.current.ontrack = null;
-        peerRef.current.onconnectionstatechange = null;
-        peerRef.current.close();
-        peerRef.current = null;
-      }
+      closeStalePeer();
     };
 
     // Tournament socket handlers
@@ -696,8 +731,10 @@ export default function RoomPage() {
       socket.off('ice_candidate', onIce); socket.off('message_received', onMessage); socket.off('partner_disconnected', onPartnerLeft);
       socket.off('partner_temporarily_offline', onPartnerTemporarilyOffline);
       socket.off('partner_reconnected', onPartnerReconnected);
+      mountedRef.current = false;
       localStreamRef.current?.getTracks().forEach(tk => tk.stop());
       localStreamRef.current = null;
+      pendingCandidatesRef.current = [];
       if (peerRef.current) {
         peerRef.current.onicecandidate = null;
         peerRef.current.ontrack = null;
@@ -837,7 +874,7 @@ export default function RoomPage() {
   };
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { live: isLive, connecting: liveConnecting, viewers: liveViewers, error: liveError } = useLiveKitPublisher({ roomName: roomId, enabled: goLive, localStream: liveStream });
+  const { live: isLive, connecting: liveConnecting, viewers: liveViewers, error: liveError, replaceVideoTrack } = useLiveKitPublisher({ roomName: roomId, enabled: goLive, localStream: liveStream });
 
   useEffect(() => {
     if (liveError) {
@@ -865,6 +902,9 @@ export default function RoomPage() {
         const sender = peerRef.current.getSenders().find(s => s.track?.kind === 'video');
         if (sender) await sender.replaceTrack(newTrack);
       }
+      // Keep the LiveKit-published track (if currently live) in sync — otherwise spectators
+      // keep seeing the old, now-stopped camera track.
+      if (goLive) await replaceVideoTrack?.(newTrack);
       // Stop old video track and swap in new one
       const oldTrack = localStreamRef.current?.getVideoTracks()[0];
       if (oldTrack) { localStreamRef.current.removeTrack(oldTrack); oldTrack.stop(); }
@@ -873,7 +913,7 @@ export default function RoomPage() {
       setFacingMode(next);
       setCameraOn(true);
     } catch (e) { console.warn('[flipCamera]', e.message); }
-  }, [facingMode]);
+  }, [facingMode, goLive, replaceVideoTrack]);
   const sendMessage  = () => { if (!msgInput.trim()) return; getSocket()?.emit('send_message', { roomId, message: msgInput }); setMsgInput(''); };
 
   // Tournament actions
@@ -1435,6 +1475,16 @@ export default function RoomPage() {
 
       {/* Hidden audio element — plays admin's mic voice on player side */}
       <audio ref={adminMicAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+
+      {/* ── Toast (Go Live / media errors) ── */}
+      {toast && (
+        <div className={`fixed top-20 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-50 anim-fade-up px-4 py-3 rounded-xl text-sm font-medium shadow-2xl flex items-center gap-2
+          ${toast.type === 'success' ? 'bg-green-950 border border-green-700/50 text-green-300' :
+            toast.type === 'error' ? 'bg-red-950 border border-red-700/50 text-red-300' :
+            'bg-purple-950 border border-purple-700/50 text-purple-300'}`}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* ── Admin called toast ── */}
       {adminCalledMsg && (
