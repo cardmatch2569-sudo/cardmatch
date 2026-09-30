@@ -147,7 +147,7 @@ export default function ProfilePage() {
             </div>
             <div className="pb-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-white">{user.username}</h1>
+                <h1 className="font-display text-xl font-bold text-white">{user.username}</h1>
                 <EloRankBadge elo={user.elo || 1000} lang={lang} />
                 {user.isAdmin && (
                   <span className="badge badge-yellow gap-1">
@@ -448,7 +448,7 @@ export default function ProfilePage() {
             <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-red-500 to-transparent mb-5" />
             <div className="text-center mb-5">
               <div className="text-4xl mb-3">🗑️</div>
-              <h2 className="text-lg font-bold text-white mb-1">
+              <h2 className="font-display text-lg font-bold text-white mb-1">
                 {lang === 'th' ? 'ลบบัญชีถาวร?' : 'Delete Account?'}
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed">

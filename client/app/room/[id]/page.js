@@ -1539,7 +1539,7 @@ export default function RoomPage() {
             {tourneyPhase === 'result_reporting' && !matchResult && (
               <>
                 <div className="text-4xl mb-3">🏁</div>
-                <h2 className="text-white font-bold text-lg mb-1">
+                <h2 className="font-display text-white font-bold text-lg mb-1">
                   {lang === 'th' ? 'จบเกมส์แล้ว' : 'Game Over'}
                 </h2>
                 <p className="text-slate-500 text-sm mb-4">
@@ -1614,7 +1614,7 @@ export default function RoomPage() {
                 <div className="text-5xl mb-4">
                   {matchResult.winnerId === user._id ? '🏆' : '💔'}
                 </div>
-                <h2 className={`font-bold text-xl mb-2 ${matchResult.winnerId === user._id ? 'text-green-400' : 'text-red-400'}`}>
+                <h2 className={`font-display font-bold text-xl mb-2 ${matchResult.winnerId === user._id ? 'text-green-400' : 'text-red-400'}`}>
                   {matchResult.winnerId === user._id
                     ? (lang === 'th' ? 'คุณชนะ! +3 แต้ม' : 'You Won! +3 pts')
                     : (lang === 'th' ? 'คุณแพ้' : 'You Lost')}

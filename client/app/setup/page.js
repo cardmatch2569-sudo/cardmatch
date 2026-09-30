@@ -162,7 +162,7 @@ export default function SetupPage() {
         <div className="inline-flex w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-violet-600 items-center justify-center mb-3 shadow-xl shadow-purple-900/40">
           <Settings size={22} className="text-white" />
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
+        <h1 className="font-display text-2xl md:text-3xl font-bold text-white mb-1">
           {lang === 'th' ? 'ทดสอบอุปกรณ์' : 'Device Setup'}
         </h1>
         <p className="text-slate-500 text-sm">

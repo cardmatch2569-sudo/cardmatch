@@ -26,7 +26,7 @@ export default function DonatePage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500/20 to-rose-600/10 border border-pink-500/20 mb-4">
             <Heart size={28} className="text-pink-400" fill="currentColor" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">{t.donateTitle}</h1>
+          <h1 className="font-display text-2xl font-bold text-white mb-2">{t.donateTitle}</h1>
           <p className="text-slate-400 text-sm leading-relaxed">{t.donateSubtitle}</p>
         </div>
 

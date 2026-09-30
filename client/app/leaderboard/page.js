@@ -58,7 +58,7 @@ export default function LeaderboardPage() {
               <Trophy size={20} className="text-emerald-400" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">{th ? 'อันดับผู้เล่น' : 'Leaderboard'}</h1>
+              <h1 className="font-display text-xl font-bold text-white">{th ? 'อันดับผู้เล่น' : 'Leaderboard'}</h1>
               <p className="text-xs text-slate-500">{th ? 'เรียงตามคะแนน ELO' : 'Ranked by ELO rating'}</p>
             </div>
           </div>

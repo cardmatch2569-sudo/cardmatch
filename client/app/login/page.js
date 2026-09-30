@@ -174,7 +174,7 @@ export default function LoginPage() {
           <div className="inline-flex w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-violet-600 items-center justify-center text-2xl sm:text-3xl shadow-xl shadow-purple-900/40 mb-3">
             🃏
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white">CardMatch</h1>
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-white">CardMatch</h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
             {lang === 'th' ? 'หาเพื่อนเล่นการ์ดเกมส์' : 'Find Friends to Play Card Games'}
           </p>

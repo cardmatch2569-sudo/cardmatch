@@ -561,7 +561,7 @@ export default function TournamentWaitingRoom() {
       <div className="max-w-lg mx-auto px-4 py-8">
         <div className="card p-8 text-center mb-4" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
           <div className="text-5xl mb-3">🏆</div>
-          <h1 className="text-white font-bold text-2xl mb-1">{tl.tourneyComplete}</h1>
+          <h1 className="font-display text-white font-bold text-2xl mb-1">{tl.tourneyComplete}</h1>
           <p className="text-slate-500 text-sm">{tournament?.name}</p>
         </div>
         {podium && (
@@ -735,7 +735,7 @@ export default function TournamentWaitingRoom() {
             🏆
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-white text-base leading-tight truncate">{t?.name || 'Tournament'}</h1>
+            <h1 className="font-display font-bold text-white text-base leading-tight truncate">{t?.name || 'Tournament'}</h1>
             <p className="text-xs text-slate-500 mt-0.5">
               {tl.roundPrefix}{' '}
               <span className="text-white font-semibold">{currentRound}</span>

@@ -155,7 +155,7 @@ export default function FriendsPage() {
             <UserPlus size={20} className="text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">{th ? 'เพื่อน' : 'Friends'}</h1>
+            <h1 className="font-display text-xl font-bold text-white">{th ? 'เพื่อน' : 'Friends'}</h1>
             <p className="text-xs text-slate-500">{friends.length} {th ? 'เพื่อน' : 'friends'}</p>
           </div>
         </div>

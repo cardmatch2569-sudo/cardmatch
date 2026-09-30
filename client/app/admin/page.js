@@ -640,7 +640,7 @@ export default function AdminPage() {
 
             <div className="text-center mb-5">
               <div className="text-4xl mb-3">⚠️</div>
-              <h2 className="text-lg font-bold text-white mb-1">
+              <h2 className="font-display text-lg font-bold text-white mb-1">
                 {t.deleteUserTitle}
               </h2>
               <p className="text-sm text-slate-400 mb-1">
@@ -719,7 +719,7 @@ export default function AdminPage() {
           style={{ background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)' }}>
           <div className="w-full max-w-3xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-white font-bold text-lg flex items-center gap-2">
+              <h2 className="font-display text-white font-bold text-lg flex items-center gap-2">
                 <Eye size={18} className="text-yellow-400" />
                 {t.watchingMatch}
               </h2>
@@ -849,7 +849,7 @@ export default function AdminPage() {
           <div className="anim-scale-in card w-full max-w-sm p-6 text-center"
             style={{ background: 'rgba(15,10,20,0.99)', borderColor: 'rgba(251,191,36,0.3)' }}>
             <div className="text-4xl mb-3">⚖️</div>
-            <h2 className="text-white font-bold text-lg mb-2">
+            <h2 className="font-display text-white font-bold text-lg mb-2">
               {t.decideMatch}
             </h2>
             <p className="text-slate-500 text-sm mb-5">
@@ -881,7 +881,7 @@ export default function AdminPage() {
             <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-purple-500 to-transparent" />
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-white">{editId ? t.editGame : t.addGame}</h2>
+                <h2 className="font-display text-lg font-bold text-white">{editId ? t.editGame : t.addGame}</h2>
                 <button onClick={() => setModal(null)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition"><X size={15} /></button>
               </div>
               {formError   && <div className="badge badge-red   w-full justify-center py-2 rounded-lg text-xs mb-4">{formError}</div>}
@@ -960,7 +960,7 @@ export default function AdminPage() {
             <Shield size={18} className="text-yellow-400" />
           </div>
           <div>
-            <h1 className="text-lg md:text-2xl font-bold text-white leading-tight">Admin</h1>
+            <h1 className="font-display text-lg md:text-2xl font-bold text-white leading-tight">Admin</h1>
             <p className="text-slate-600 text-[11px]">CardMatch</p>
           </div>
         </div>

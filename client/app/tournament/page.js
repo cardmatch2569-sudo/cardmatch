@@ -294,7 +294,7 @@ export default function TournamentListPage() {
             <Trophy size={20} className="text-yellow-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">
+            <h1 className="font-display text-xl font-bold text-white">
               {lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournaments'}
             </h1>
             <p className="text-xs text-slate-600">
