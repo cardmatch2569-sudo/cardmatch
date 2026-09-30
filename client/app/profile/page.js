@@ -6,16 +6,16 @@ import { api } from '../../lib/api';
 import translations from '../../lib/translations';
 import { Trophy, Gamepad2, Target, Shield, Calendar, Mail, Copy, Check, Trash2, Lock, Eye, EyeOff, Swords, TrendingUp } from 'lucide-react';
 
-function EloRankBadge({ elo }) {
-  const r = elo >= 1800 ? { label: 'Diamond', color: '#818cf8' }
-    : elo >= 1600 ? { label: 'Platinum', color: '#67e8f9' }
-    : elo >= 1400 ? { label: 'Gold', color: '#fbbf24' }
-    : elo >= 1200 ? { label: 'Silver', color: '#94a3b8' }
-    : { label: 'Bronze', color: '#b45309' };
+function EloRankBadge({ elo, lang }) {
+  const r = elo >= 1700 ? { label: 'Diamond', labelTh: 'เพชร',   color: '#818cf8' }
+    : elo >= 1500      ? { label: 'Platinum', labelTh: 'แพลทินัม', color: '#67e8f9' }
+    : elo >= 1300      ? { label: 'Gold',     labelTh: 'ทอง',     color: '#fbbf24' }
+    : elo >= 1100      ? { label: 'Silver',   labelTh: 'เงิน',    color: '#94a3b8' }
+    :                    { label: 'Bronze',   labelTh: 'ทองแดง',  color: '#b45309' };
   return (
     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
       style={{ background: `${r.color}22`, color: r.color, border: `1px solid ${r.color}44` }}>
-      {r.label}
+      {lang === 'th' ? r.labelTh : r.label}
     </span>
   );
 }
@@ -148,7 +148,7 @@ export default function ProfilePage() {
             <div className="pb-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold text-white">{user.username}</h1>
-                <EloRankBadge elo={user.elo || 1000} />
+                <EloRankBadge elo={user.elo || 1000} lang={lang} />
                 {user.isAdmin && (
                   <span className="badge badge-yellow gap-1">
                     <Shield size={9} /> Admin
@@ -252,7 +252,7 @@ export default function ProfilePage() {
           if (m.outcome === 'win') byGame[key].wins++;
         });
         const rows = Object.values(byGame);
-        if (rows.length < 2) return null;
+        if (rows.length < 1) return null;
         return (
           <div className="card p-5 mb-5">
             <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-widest">

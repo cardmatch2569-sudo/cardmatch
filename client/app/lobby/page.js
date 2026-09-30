@@ -223,7 +223,7 @@ export default function LobbyPage() {
     return () => setLobbyCallbacks({});
   }, [setLobbyCallbacks]);
 
-  const showToast = (msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
+  const showToast = (msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), type === 'error' ? 6000 : 4000); };
 
   const handleQuickMatch = () => {
     if (!selectedGame) return showToast(t.selectGameFirst, 'error');
@@ -659,10 +659,16 @@ export default function LobbyPage() {
             <div className="relative mb-4">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
               <input type="text" value={searchQuery} onChange={e => handleSearch(e.target.value)}
-                placeholder={t.findPlayerPlaceholder} className="input-base pl-9 text-sm" />
+                placeholder={lang === 'th' ? 'พิมพ์ชื่อผู้เล่น (อย่างน้อย 2 ตัวอักษร)' : 'Search username (min. 2 characters)'}
+                className="input-base pl-9 text-sm" />
               {searching && <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 animate-spin" />}
             </div>
 
+            {searchQuery.length > 0 && searchQuery.length < 2 && (
+              <p className="text-xs text-slate-600 text-center mb-2">
+                {lang === 'th' ? 'พิมพ์อย่างน้อย 2 ตัวอักษร' : 'Type at least 2 characters'}
+              </p>
+            )}
             {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
               <div className="text-center py-5 text-slate-600 text-sm">{t.noPlayers}</div>
             )}
@@ -699,7 +705,7 @@ export default function LobbyPage() {
                           </button>
                         ))}
                         <button onClick={() => handleChallenge(p._id)}
-                          disabled={!!lockedTournament}
+                          disabled={!!lockedTournament || inQueue}
                           aria-label={`${t.challenge} ${p.username}`}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
                           style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa' }}>

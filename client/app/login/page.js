@@ -35,6 +35,7 @@ export default function LoginPage() {
   const [showConfPass,setShowConfPass] = useState(false);
 
   const [otpData, setOtpData] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const googleConfigured =
     process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID &&
@@ -96,11 +97,13 @@ export default function LoginPage() {
   };
 
   const handleResendOtp = async () => {
-    if (!resetEmail.trim() || loading) return;
+    if (!resetEmail.trim() || loading || resendCooldown > 0) return;
     setLoading(true); setError('');
     try {
       await api.post('/api/auth/forgot-password', { email: resetEmail.trim() });
       setSuccess(lang === 'th' ? `ส่ง OTP ใหม่ไปยัง ${resetEmail} แล้ว` : `New OTP sent to ${resetEmail}`);
+      setResendCooldown(60);
+      const iv = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(iv); return 0; } return c - 1; }), 1000);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -211,7 +214,7 @@ export default function LoginPage() {
 
         {/* Step indicator for reset password flow */}
         {(mode === 'forgot' || mode === 'reset') && (() => {
-          const resetStep = mode === 'forgot' ? 1 : newPass.length > 0 ? 3 : 2;
+          const resetStep = mode === 'forgot' ? 1 : resetCode.length === 6 && newPass.length > 0 ? 3 : 2;
           const steps = [
             { step: 1, label: lang === 'th' ? 'อีเมล' : 'Email' },
             { step: 2, label: 'OTP' },
@@ -307,9 +310,11 @@ export default function LoginPage() {
                   : <><KeyRound size={14} /> {lang === 'th' ? 'ตั้งรหัสผ่านใหม่' : 'Set New Password'}</>}
               </button>
               <button type="button" onClick={handleResendOtp}
-                disabled={loading}
+                disabled={loading || resendCooldown > 0}
                 className="w-full text-xs text-slate-600 hover:text-slate-400 transition py-2 disabled:opacity-40 disabled:cursor-not-allowed">
-                {loading ? (lang === 'th' ? 'กำลังส่ง...' : 'Sending...') : (lang === 'th' ? 'ส่ง OTP ใหม่อีกครั้ง' : 'Resend OTP')}
+                {loading ? (lang === 'th' ? 'กำลังส่ง...' : 'Sending...')
+                  : resendCooldown > 0 ? (lang === 'th' ? `ส่งใหม่ได้ใน ${resendCooldown}s` : `Resend in ${resendCooldown}s`)
+                  : (lang === 'th' ? 'ส่ง OTP ใหม่อีกครั้ง' : 'Resend OTP')}
               </button>
             </form>
           )}

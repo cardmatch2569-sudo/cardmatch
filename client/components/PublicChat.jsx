@@ -41,7 +41,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
         <div
           className="fixed z-40 anim-slide-up flex flex-col shadow-2xl"
           style={{
-            bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+            bottom: 'calc(var(--navbar-h, 64px) + 12px)',
             right: 'max(12px, env(safe-area-inset-right, 0px))',
             width: 'min(360px, calc(100vw - 24px))',
             maxHeight: 'min(520px, max(300px, calc(100dvh - 140px)))',
@@ -136,7 +136,7 @@ export default function PublicChat({ lang, user, messages, onSend }) {
         onClick={() => setOpen(p => !p)}
         className="fixed z-40 w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-95"
         style={{
-          bottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+          bottom: 'calc(var(--navbar-h, 64px) + 12px)',
           right: 'max(16px, env(safe-area-inset-right, 16px))',
           background: open ? 'rgba(74,222,128,0.25)' : 'rgba(10,10,22,0.95)',
           border: `1px solid ${open ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.2)'}`,
