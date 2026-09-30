@@ -100,9 +100,9 @@ export default function Navbar() {
         <div className="absolute inset-x-0 top-0 h-px pointer-events-none"
           style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(139,92,246,0.55) 50%, transparent 95%)' }} />
 
-        {/* Bottom border */}
+        {/* Bottom border — violet→cyan shimmer */}
         <div className="absolute inset-x-0 bottom-0 h-px pointer-events-none"
-          style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(124,58,237,0.14) 40%, rgba(124,58,237,0.14) 60%, transparent 100%)' }} />
+          style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.3) 30%, rgba(6,182,212,0.3) 70%, transparent 100%)' }} />
 
         <div className="relative max-w-7xl mx-auto px-4 flex items-center justify-between gap-3"
           style={{ height: '100%', paddingTop: 'var(--safe-top, 0px)' }}>

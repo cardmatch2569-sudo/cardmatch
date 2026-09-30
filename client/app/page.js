@@ -99,7 +99,7 @@ export default function HomePage() {
           </div>
 
           {/* Headline */}
-          <h1 className="anim-fade-up delay-100 text-5xl md:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight">
+          <h1 className="anim-fade-up delay-100 font-display text-5xl md:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight">
             {lang === 'th' ? (
               <>หาเพื่อนเล่น<br /><span className="gradient-text" style={{ backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #f472b6 40%, #818cf8 75%, #22d3ee 100%)', textShadow: '0 0 40px rgba(232,121,249,0.45)' }}>การ์ดเกมส์</span></>
             ) : (
@@ -158,7 +158,7 @@ export default function HomePage() {
             <p className="text-purple-400 text-sm font-semibold tracking-widest uppercase mb-3">
               {lang === 'th' ? 'เริ่มเล่นใน 3 ขั้นตอน' : '3 Simple Steps'}
             </p>
-            <h2 className="text-4xl font-bold text-white">{t.howItWorks}</h2>
+            <h2 className="font-display text-4xl font-bold text-white">{t.howItWorks}</h2>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
@@ -217,7 +217,7 @@ export default function HomePage() {
               <p className="text-purple-400 text-sm font-semibold tracking-widest uppercase mb-3">
                 {lang === 'th' ? 'เกมที่รองรับ' : 'Supported Games'}
               </p>
-              <h2 className="text-4xl font-bold text-white">{t.availableGames}</h2>
+              <h2 className="font-display text-4xl font-bold text-white">{t.availableGames}</h2>
             </div>
 
             <div className="grid md:grid-cols-3 gap-5">
