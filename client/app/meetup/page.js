@@ -4,9 +4,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
 import PageLoader from '../../components/PageLoader';
+import MeetupMap from '../../components/MeetupMap';
 import {
   MapPin, Calendar, Users, Plus, X, Heart,
-  Trash2, Info, ChevronDown, Search,
+  Trash2, Info, ChevronDown, Search, Navigation, ExternalLink, Crosshair, Map as MapIcon, AlertTriangle,
 } from 'lucide-react';
 
 // ── Province list (77 จังหวัด) ─────────────────────────────────────────────
@@ -128,6 +129,173 @@ function timeAgo(iso, lang) {
   return `${day}d ago`;
 }
 
+// ── Maps / geocoding ───────────────────────────────────────────────────────
+const NOMINATIM = 'https://nominatim.openstreetmap.org';
+
+function shortAddress(displayName = '') {
+  return displayName
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s && s !== 'ประเทศไทย' && s !== 'Thailand' && !/^\d{5}$/.test(s))
+    .join(', ');
+}
+
+function matchProvince(addr = {}) {
+  for (const raw of [addr.province, addr.state, addr.city]) {
+    if (!raw) continue;
+    if (raw.includes('กรุงเทพ') || /bangkok/i.test(raw)) return 'กรุงเทพมหานคร';
+    const name = raw.replace(/^จังหวัด/, '').trim();
+    const hit = PROVINCES.find(p => p.th === name || p.en.toLowerCase() === name.toLowerCase());
+    if (hit) return hit.th;
+  }
+  return '';
+}
+
+function googleMapsUrl(post) {
+  const q = post.lat != null
+    ? `${post.lat},${post.lng}`
+    : `${post.locationName} ${post.province}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+function directionsUrl(post) {
+  const d = post.lat != null
+    ? `${post.lat},${post.lng}`
+    : `${post.locationName} ${post.province}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(d)}`;
+}
+
+function LocationPicker({ value, address, onChange, onProvince, lang }) {
+  const [query,     setQuery]     = useState('');
+  const [results,   setResults]   = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [locating,  setLocating]  = useState(false);
+  const [err,       setErr]       = useState('');
+  const reqId = useRef(0);
+
+  const reverse = async (pos) => {
+    const id = ++reqId.current;
+    onChange({ ...pos, address: '' });
+    try {
+      const r = await fetch(`${NOMINATIM}/reverse?format=jsonv2&lat=${pos.lat}&lon=${pos.lng}&accept-language=th&zoom=18`);
+      const d = await r.json();
+      if (id !== reqId.current) return;
+      onChange({ ...pos, address: shortAddress(d.display_name) });
+      const prov = matchProvince(d.address);
+      if (prov) onProvince(prov);
+    } catch {}
+  };
+
+  const search = async () => {
+    const q = query.trim();
+    if (!q) return;
+    setSearching(true); setErr(''); setResults([]);
+    try {
+      const r = await fetch(`${NOMINATIM}/search?format=jsonv2&countrycodes=th&accept-language=th&limit=5&addressdetails=1&q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!d.length) setErr(lang === 'th' ? 'ไม่พบสถานที่ ลองพิมพ์ชื่ออื่น หรือแตะบนแผนที่' : 'No results — try another name or tap the map');
+      setResults(d);
+    } catch {
+      setErr(lang === 'th' ? 'ค้นหาไม่สำเร็จ' : 'Search failed');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickResult = (r) => {
+    setResults([]);
+    const pos = { lat: parseFloat(r.lat), lng: parseFloat(r.lon) };
+    onChange({ ...pos, address: shortAddress(r.display_name) });
+    const prov = matchProvince(r.address);
+    if (prov) onProvince(prov);
+  };
+
+  const locate = () => {
+    if (!navigator.geolocation) {
+      setErr(lang === 'th' ? 'อุปกรณ์นี้ไม่รองรับ GPS' : 'GPS not supported');
+      return;
+    }
+    setLocating(true); setErr('');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setLocating(false); reverse({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+      ()  => { setLocating(false); setErr(lang === 'th' ? 'ไม่สามารถดึงตำแหน่งได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง' : 'Could not get location — allow location access'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div className="relative flex-1 min-w-0">
+          <input
+            className="input-base w-full pr-9"
+            placeholder={lang === 'th' ? 'ค้นหา เช่น เซ็นทรัลลาดพร้าว' : 'Search, e.g. Central Ladprao'}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search(); } }}
+          />
+          <button type="button" onClick={search} disabled={searching}
+            aria-label={lang === 'th' ? 'ค้นหา' : 'Search'}
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center
+              rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]">
+            <Search size={14} className={searching ? 'animate-pulse' : ''} />
+          </button>
+        </div>
+        <button type="button" onClick={locate} disabled={locating}
+          className="flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium border whitespace-nowrap
+            text-cyan-300 border-cyan-500/25 bg-cyan-500/[0.06] hover:bg-cyan-500/[0.12] transition-all duration-200">
+          <Crosshair size={13} className={locating ? 'animate-spin' : ''} />
+          {lang === 'th' ? 'ตำแหน่งฉัน' : 'My location'}
+        </button>
+      </div>
+
+      {results.length > 0 && (
+        <div className="rounded-xl border overflow-hidden"
+          style={{ background: 'var(--card-2, #181930)', borderColor: 'var(--border-2, #2c2e5a)' }}>
+          {results.map(r => (
+            <button key={r.place_id} type="button" onClick={() => pickResult(r)}
+              className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/[0.05] hover:text-white
+                transition-colors border-b border-white/[0.04] last:border-b-0">
+              {shortAddress(r.display_name)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {err && <p className="text-xs text-amber-400">{err}</p>}
+
+      <MeetupMap value={value} onChange={reverse} height={220} />
+
+      {value ? (
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs text-slate-400 flex items-start gap-1.5 min-w-0">
+            <MapPin size={12} className="text-rose-400 flex-shrink-0 mt-0.5" />
+            <span className="break-words">
+              {address || (lang === 'th' ? 'กำลังค้นหาที่อยู่...' : 'Looking up address...')}
+            </span>
+          </p>
+          <button type="button" onClick={() => { reqId.current++; onChange(null); }}
+            className="text-[11px] text-slate-500 hover:text-red-400 whitespace-nowrap">
+            {lang === 'th' ? 'ลบหมุด' : 'Remove pin'}
+          </button>
+        </div>
+      ) : (
+        <p className="text-[11px] text-slate-500">
+          {lang === 'th' ? 'แตะบนแผนที่เพื่อปักหมุด ลากหมุดเพื่อปรับตำแหน่ง' : 'Tap the map to drop a pin, drag to adjust'}
+        </p>
+      )}
+
+      <p className="flex items-start gap-1.5 text-[11px] text-amber-400/80 px-2.5 py-2 rounded-lg"
+        style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
+        <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+        {lang === 'th'
+          ? 'หมุดจะแสดงให้ทุกคนเห็น แนะนำให้นัดที่ร้านหรือที่สาธารณะ ไม่ควรปักหมุดบ้านตัวเอง'
+          : 'Pins are public. Meet at a shop or public place — do not pin your home.'}
+      </p>
+    </div>
+  );
+}
+
 // ── Province dropdown ──────────────────────────────────────────────────────
 function ProvinceSelect({ value, onChange, lang, placeholder, className = '' }) {
   const [open, setOpen]     = useState(false);
@@ -209,6 +377,8 @@ function ProvinceSelect({ value, onChange, lang, placeholder, className = '' }) 
 function PostCard({ post, user, lang, onInterest, onDelete }) {
   const rank  = getRank(post.host.elo);
   const isOwn = user?._id === post.host.id;
+  const hasPin = post.lat != null && post.lng != null;
+  const [showMap, setShowMap] = useState(false);
 
   return (
     <div className="card card-hover relative overflow-hidden" style={{ padding: '0' }}>
@@ -254,9 +424,12 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
           </div>
           <div className="flex items-start gap-2 text-sm">
             <MapPin size={13} className="text-cyan-400 flex-shrink-0 mt-0.5" />
-            <span className="text-slate-300">
+            <span className="text-slate-300 min-w-0">
               <span className="text-slate-400 text-xs mr-1">{post.province}</span>
               {post.locationName}
+              {post.address && (
+                <span className="block text-[11px] text-slate-500 mt-0.5 break-words">{post.address}</span>
+              )}
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
@@ -268,6 +441,38 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
             </span>
           </div>
         </div>
+
+        {/* Map actions */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {hasPin && (
+            <button type="button" onClick={() => setShowMap(s => !s)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200
+                ${showMap
+                  ? 'text-cyan-300 border-cyan-500/30 bg-cyan-500/[0.10]'
+                  : 'text-slate-400 border-white/[0.07] hover:text-cyan-300 hover:border-cyan-500/25'}`}>
+              <MapIcon size={12} />
+              {showMap ? (lang === 'th' ? 'ซ่อนแผนที่' : 'Hide map') : (lang === 'th' ? 'ดูแผนที่' : 'Map')}
+            </button>
+          )}
+          <a href={googleMapsUrl(post)} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border
+              text-slate-400 border-white/[0.07] hover:text-white hover:border-white/[0.15] transition-all duration-200">
+            <ExternalLink size={12} />
+            {lang === 'th' ? 'ดูใน Google Maps' : 'Google Maps'}
+          </a>
+          <a href={directionsUrl(post)} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border
+              text-cyan-300 border-cyan-500/25 bg-cyan-500/[0.08] hover:bg-cyan-500/[0.15] transition-all duration-200">
+            <Navigation size={12} />
+            {lang === 'th' ? 'นำทาง' : 'Directions'}
+          </a>
+        </div>
+
+        {showMap && hasPin && (
+          <div className="mb-3">
+            <MeetupMap value={{ lat: post.lat, lng: post.lng }} readOnly height={200} />
+          </div>
+        )}
 
         {/* Note */}
         {post.note && (
@@ -318,6 +523,7 @@ export default function MeetupPage() {
   const [form,         setForm]         = useState({
     province: '', locationName: '', date: '', time: '', playersNeeded: '1', note: '',
   });
+  const [pin,       setPin]       = useState(null);
   const [formError, setFormError] = useState('');
   const [toast,     setToast]     = useState(null);
 
@@ -364,9 +570,11 @@ export default function MeetupPage() {
         scheduledAt,
         playersNeeded: parseInt(form.playersNeeded),
         note:          form.note,
+        ...(pin ? { lat: pin.lat, lng: pin.lng, address: pin.address || '' } : {}),
       });
       setShowCreate(false);
       setForm({ province: '', locationName: '', date: '', time: '', playersNeeded: '1', note: '' });
+      setPin(null);
       showToast(lang === 'th' ? 'โพสต์นัดเล่นแล้ว!' : 'Meetup posted!');
       fetchPosts();
     } catch (e) {
@@ -566,6 +774,19 @@ export default function MeetupPage() {
                   value={form.locationName}
                   onChange={e => setForm(f => ({ ...f, locationName: e.target.value }))}
                   maxLength={200}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  {lang === 'th' ? 'ปักหมุดบนแผนที่ (ไม่บังคับ แต่แนะนำ)' : 'Pin on map (optional, recommended)'}
+                </label>
+                <LocationPicker
+                  value={pin}
+                  address={pin?.address}
+                  onChange={setPin}
+                  onProvince={prov => setForm(f => f.province ? f : { ...f, province: prov })}
+                  lang={lang}
                 />
               </div>
 

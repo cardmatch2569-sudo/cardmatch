@@ -49,6 +49,7 @@ router.get('/', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mp.id, mp.province, mp.location_name, mp.scheduled_at,
               mp.players_needed, mp.note, mp.interest_count, mp.created_at,
+              mp.lat, mp.lng, mp.address,
               u.id AS user_id, u.username, u.avatar, u.elo, u.wins, u.losses,
               (SELECT COUNT(*) FROM MeetupPosts mp2 WHERE mp2.user_id = u.id) AS hosted_count
               ${interestSel}
@@ -72,6 +73,9 @@ router.get('/', async (req, res) => {
         interestCount: parseInt(r.interest_count) || 0,
         createdAt:     r.created_at,
         iAmInterested: r.i_am_interested || false,
+        lat:           r.lat,
+        lng:           r.lng,
+        address:       r.address || '',
         host: {
           id:          r.user_id,
           username:    r.username,
@@ -92,17 +96,21 @@ router.get('/', async (req, res) => {
 // POST /api/meetup — create post (auth required)
 router.post('/', protect, async (req, res) => {
   try {
-    const { province, locationName, scheduledAt, playersNeeded, note } = req.body;
+    const { province, locationName, scheduledAt, playersNeeded, note, address } = req.body;
     if (!province || !locationName || !scheduledAt) {
       return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบ' });
     }
     if (new Date(scheduledAt) <= new Date()) {
       return res.status(400).json({ message: 'วันเวลาที่เลือกต้องเป็นอนาคต' });
     }
+    let lat = parseFloat(req.body.lat);
+    let lng = parseFloat(req.body.lng);
+    // Thailand bounding box; anything outside is dropped rather than rejected
+    if (!(lat >= 5 && lat <= 21 && lng >= 97 && lng <= 106)) { lat = null; lng = null; }
     const pool = getPool();
     const { rows } = await pool.query(
-      `INSERT INTO MeetupPosts (user_id, province, location_name, scheduled_at, players_needed, note)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      `INSERT INTO MeetupPosts (user_id, province, location_name, scheduled_at, players_needed, note, lat, lng, address)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         req.user._id,
         province,
@@ -110,6 +118,9 @@ router.post('/', protect, async (req, res) => {
         scheduledAt,
         Math.min(Math.max(parseInt(playersNeeded) || 1, 1), 10),
         (note || '').slice(0, 200),
+        lat,
+        lng,
+        lat === null ? '' : String(address || '').slice(0, 300),
       ]
     );
     res.json({ id: rows[0].id });

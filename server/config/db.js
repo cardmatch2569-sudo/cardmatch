@@ -232,6 +232,9 @@ const initTables = async () => {
     `);
     await p.query(`CREATE INDEX IF NOT EXISTS idx_mp_province ON MeetupPosts(province)`).catch(() => {});
     await p.query(`CREATE INDEX IF NOT EXISTS idx_mp_status   ON MeetupPosts(status, scheduled_at)`).catch(() => {});
+    await p.query(`ALTER TABLE MeetupPosts ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`).catch(() => {});
+    await p.query(`ALTER TABLE MeetupPosts ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`).catch(() => {});
+    await p.query(`ALTER TABLE MeetupPosts ADD COLUMN IF NOT EXISTS address VARCHAR(300) DEFAULT ''`).catch(() => {});
     await p.query(`
       CREATE TABLE IF NOT EXISTS MeetupInterests (
         post_id  INTEGER     NOT NULL REFERENCES MeetupPosts(id) ON DELETE CASCADE,
