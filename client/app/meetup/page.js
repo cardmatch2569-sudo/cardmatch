@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
-import PageLoader from '../../components/PageLoader';
 import MeetupMap from '../../components/MeetupMap';
 import {
   MapPin, Calendar, Users, Plus, X, Heart,
@@ -353,7 +352,7 @@ function ProvinceSelect({ value, onChange, lang, placeholder, className = '' }) 
               </button>
             )}
             {filtered.length === 0 && (
-              <p className="px-4 py-3 text-sm text-slate-600">ไม่พบจังหวัด</p>
+              <p className="px-4 py-3 text-sm text-slate-600">{lang === 'th' ? 'ไม่พบจังหวัด' : 'No province found'}</p>
             )}
             {filtered.map(p => (
               <button
@@ -379,6 +378,13 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
   const isOwn = user?._id === post.host.id;
   const hasPin = post.lat != null && post.lng != null;
   const [showMap, setShowMap] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+
+  useEffect(() => {
+    if (!confirmDel) return;
+    const t = setTimeout(() => setConfirmDel(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmDel]);
 
   return (
     <div className="card card-hover relative overflow-hidden" style={{ padding: '0' }}>
@@ -407,13 +413,21 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
               </p>
             </div>
           </div>
-          {isOwn && (
+          {isOwn && (confirmDel ? (
             <button onClick={onDelete}
+              className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs font-semibold
+                text-red-300 border border-red-500/30 bg-red-500/[0.12] hover:bg-red-500/20 transition-all duration-200">
+              <Trash2 size={12} />
+              {lang === 'th' ? 'ยืนยันลบ' : 'Confirm'}
+            </button>
+          ) : (
+            <button onClick={() => setConfirmDel(true)}
+              aria-label={lang === 'th' ? 'ลบโพสต์' : 'Delete post'}
               className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-600
                 hover:text-red-400 hover:bg-red-500/[0.08] transition-all duration-200">
               <Trash2 size={13} />
             </button>
-          )}
+          ))}
         </div>
 
         {/* Date + location */}
@@ -527,26 +541,36 @@ export default function MeetupPage() {
   const [formError, setFormError] = useState('');
   const [toast,     setToast]     = useState(null);
 
+  const toastTimer   = useRef(null);
+  const fetchId      = useRef(0);
+  const pendingIds   = useRef(new Set());
+  // Close modal only if the press started on the backdrop (not a map drag that ended there)
+  const backdropDown = useRef(false);
+
   const showToast = (msg, type = 'success') => {
+    clearTimeout(toastTimer.current);
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
   const fetchPosts = useCallback(async () => {
+    const id = ++fetchId.current;
     setLoading(true);
     try {
       const p = new URLSearchParams();
       if (filterProvince)           p.set('province', filterProvince);
       if (filterPeriod !== 'all')   p.set('period', filterPeriod);
       const data = await api.get(`/api/meetup?${p}`);
-      setPosts(data.posts || []);
+      if (id === fetchId.current) setPosts(data.posts || []);
     } catch (e) {
-      showToast(e.message, 'error');
+      if (id === fetchId.current) showToast(e.message, 'error');
     } finally {
-      setLoading(false);
+      if (id === fetchId.current) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterProvince, filterPeriod]);
+  }, [filterProvince, filterPeriod, user?._id]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
@@ -557,11 +581,17 @@ export default function MeetupPage() {
       setFormError(lang === 'th' ? 'กรุณากรอกข้อมูลให้ครบ' : 'Please fill all required fields');
       return;
     }
-    const scheduledAt = `${form.date}T${form.time}:00`;
-    if (new Date(scheduledAt) <= new Date()) {
+    // Parse as the browser's local time, then send UTC so the server (UTC) stores the right instant
+    const when = new Date(`${form.date}T${form.time}`);
+    if (isNaN(when.getTime())) {
+      setFormError(lang === 'th' ? 'รูปแบบวันเวลาไม่ถูกต้อง' : 'Invalid date/time');
+      return;
+    }
+    if (when <= new Date()) {
       setFormError(lang === 'th' ? 'วันเวลาต้องเป็นอนาคต' : 'Date/time must be in the future');
       return;
     }
+    const scheduledAt = when.toISOString();
     setCreating(true);
     try {
       await api.post('/api/meetup', {
@@ -586,28 +616,39 @@ export default function MeetupPage() {
 
   const toggleInterest = async (postId) => {
     if (!user) { router.push('/login'); return; }
+    if (pendingIds.current.has(postId)) return;
     const orig = posts.find(p => p.id === postId);
     if (!orig) return;
+    pendingIds.current.add(postId);
     setPosts(ps => ps.map(p => p.id === postId ? {
       ...p,
       iAmInterested: !p.iAmInterested,
-      interestCount: p.iAmInterested ? p.interestCount - 1 : p.interestCount + 1,
+      interestCount: Math.max(0, p.iAmInterested ? p.interestCount - 1 : p.interestCount + 1),
     } : p));
     try {
-      await api.post(`/api/meetup/${postId}/interest`, {});
+      const r = await api.post(`/api/meetup/${postId}/interest`, {});
+      setPosts(ps => ps.map(p => p.id === postId
+        ? { ...p, iAmInterested: r.interested, interestCount: r.interestCount ?? p.interestCount }
+        : p));
     } catch (e) {
       setPosts(ps => ps.map(p => p.id === postId ? orig : p));
       showToast(e.message, 'error');
+    } finally {
+      pendingIds.current.delete(postId);
     }
   };
 
   const deletePost = async (postId) => {
+    if (pendingIds.current.has(postId)) return;
+    pendingIds.current.add(postId);
     try {
       await api.delete(`/api/meetup/${postId}`);
       setPosts(ps => ps.filter(p => p.id !== postId));
       showToast(lang === 'th' ? 'ลบโพสต์แล้ว' : 'Post deleted');
     } catch (e) {
       showToast(e.message, 'error');
+    } finally {
+      pendingIds.current.delete(postId);
     }
   };
 
@@ -618,7 +659,10 @@ export default function MeetupPage() {
     { value: 'next_week', label: lang === 'th' ? 'สัปดาห์หน้า'  : 'Next week' },
   ];
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const localDateStr = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayStr = localDateStr(new Date());
+  const maxStr   = localDateStr(new Date(Date.now() + 90 * 86400000));
 
   return (
     <div style={{ minHeight: 'calc(var(--vh, 100vh) - var(--navbar-h, 4rem))', paddingTop: 'var(--navbar-h, 4rem)' }}>
@@ -632,7 +676,7 @@ export default function MeetupPage() {
             Battle of Talingchan
           </span>
           <h1 className="font-display text-3xl md:text-4xl font-bold text-white mb-1.5">
-            กระดานนัดเล่น
+            {lang === 'th' ? 'กระดานนัดเล่น' : 'Meetup Board'}
           </h1>
           <p className="text-slate-400 text-sm">
             {lang === 'th'
@@ -702,7 +746,10 @@ export default function MeetupPage() {
 
         {/* Post list */}
         {loading ? (
-          <PageLoader />
+          <div className="flex justify-center py-16">
+            <div role="status" aria-label="Loading"
+              className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
+          </div>
         ) : posts.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <MapPin size={36} className="mx-auto mb-3 opacity-20" />
@@ -736,7 +783,8 @@ export default function MeetupPage() {
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
-          onClick={() => setShowCreate(false)}>
+          onMouseDown={e => { backdropDown.current = e.target === e.currentTarget; }}
+          onClick={e => { if (backdropDown.current && e.target === e.currentTarget) setShowCreate(false); }}>
           <div
             className="card w-full max-w-md max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
@@ -800,6 +848,7 @@ export default function MeetupPage() {
                     className="input-base w-full"
                     value={form.date}
                     min={todayStr}
+                    max={maxStr}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                   />
                 </div>

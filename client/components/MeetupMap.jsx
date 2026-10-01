@@ -48,6 +48,8 @@ export default function MeetupMap({ value, onChange, readOnly = false, height = 
         center: value ? [value.lat, value.lng] : THAILAND.center,
         zoom:   value ? 16 : THAILAND.zoom,
         scrollWheelZoom: !readOnly,
+        // One-finger drag on a small preview map would hijack page scrolling on phones
+        dragging: !readOnly || !L.Browser.mobile,
         attributionControl: true,
       });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

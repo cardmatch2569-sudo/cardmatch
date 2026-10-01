@@ -20,7 +20,8 @@ function optionalUser(req) {
 router.get('/', async (req, res) => {
   try {
     const pool = getPool();
-    const { province, period } = req.query;
+    const province = typeof req.query.province === 'string' ? req.query.province.slice(0, 100) : '';
+    const period   = typeof req.query.period   === 'string' ? req.query.period : '';
     const currentUserId = optionalUser(req);
 
     const params = [];
@@ -48,7 +49,8 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT mp.id, mp.province, mp.location_name, mp.scheduled_at,
-              mp.players_needed, mp.note, mp.interest_count, mp.created_at,
+              mp.players_needed, mp.note, mp.created_at,
+              (SELECT COUNT(*) FROM MeetupInterests mi WHERE mi.post_id = mp.id) AS interest_count,
               mp.lat, mp.lng, mp.address,
               u.id AS user_id, u.username, u.avatar, u.elo, u.wins, u.losses,
               (SELECT COUNT(*) FROM MeetupPosts mp2 WHERE mp2.user_id = u.id) AS hosted_count
@@ -93,31 +95,54 @@ router.get('/', async (req, res) => {
   }
 });
 
+const MAX_ACTIVE_POSTS = 5;
+const MAX_DAYS_AHEAD   = 90;
+
+const parseId = (v) => (/^\d{1,9}$/.test(String(v)) ? parseInt(v, 10) : null);
+
 // POST /api/meetup — create post (auth required)
 router.post('/', protect, async (req, res) => {
   try {
-    const { province, locationName, scheduledAt, playersNeeded, note, address } = req.body;
-    if (!province || !locationName || !scheduledAt) {
+    const { playersNeeded, note, address } = req.body;
+    const province     = String(req.body.province || '').trim().slice(0, 100);
+    const locationName = String(req.body.locationName || '').trim().slice(0, 200);
+    if (!province || !locationName || !req.body.scheduledAt) {
       return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบ' });
     }
-    if (new Date(scheduledAt) <= new Date()) {
+    // Client must send an ISO string with timezone; a bare local time would be read as UTC here
+    const when = new Date(req.body.scheduledAt);
+    if (isNaN(when.getTime())) {
+      return res.status(400).json({ message: 'รูปแบบวันเวลาไม่ถูกต้อง' });
+    }
+    if (when <= new Date()) {
       return res.status(400).json({ message: 'วันเวลาที่เลือกต้องเป็นอนาคต' });
+    }
+    if (when > new Date(Date.now() + MAX_DAYS_AHEAD * 86400000)) {
+      return res.status(400).json({ message: `นัดล่วงหน้าได้ไม่เกิน ${MAX_DAYS_AHEAD} วัน` });
     }
     let lat = parseFloat(req.body.lat);
     let lng = parseFloat(req.body.lng);
     // Thailand bounding box; anything outside is dropped rather than rejected
     if (!(lat >= 5 && lat <= 21 && lng >= 97 && lng <= 106)) { lat = null; lng = null; }
     const pool = getPool();
+    const { rows: [{ n }] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM MeetupPosts
+       WHERE user_id = $1 AND status = 'active' AND scheduled_at > NOW()`,
+      [req.user._id]
+    );
+    if (n >= MAX_ACTIVE_POSTS) {
+      return res.status(429).json({ message: `โพสต์นัดที่ยังไม่ถึงเวลาได้สูงสุด ${MAX_ACTIVE_POSTS} โพสต์ กรุณาลบโพสต์เก่าก่อน` });
+    }
     const { rows } = await pool.query(
       `INSERT INTO MeetupPosts (user_id, province, location_name, scheduled_at, players_needed, note, lat, lng, address)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         req.user._id,
         province,
-        locationName.slice(0, 200),
-        scheduledAt,
+        locationName,
+        when.toISOString(),
         Math.min(Math.max(parseInt(playersNeeded) || 1, 1), 10),
-        (note || '').slice(0, 200),
+        String(note || '').slice(0, 200),
         lat,
         lng,
         lat === null ? '' : String(address || '').slice(0, 300),
@@ -134,8 +159,9 @@ router.post('/', protect, async (req, res) => {
 router.post('/:id/interest', protect, async (req, res) => {
   try {
     const pool   = getPool();
-    const postId = parseInt(req.params.id);
+    const postId = parseId(req.params.id);
     const userId = req.user._id;
+    if (postId === null) return res.status(404).json({ message: 'ไม่พบโพสต์' });
 
     const { rows: [post] } = await pool.query(
       `SELECT id, user_id FROM MeetupPosts WHERE id = $1 AND status = 'active'`,
@@ -149,22 +175,17 @@ router.post('/:id/interest', protect, async (req, res) => {
       `DELETE FROM MeetupInterests WHERE post_id = $1 AND user_id = $2`,
       [postId, userId]
     );
-    if (rowCount > 0) {
+    if (rowCount === 0) {
       await pool.query(
-        `UPDATE MeetupPosts SET interest_count = GREATEST(interest_count - 1, 0) WHERE id = $1`,
-        [postId]
+        `INSERT INTO MeetupInterests (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [postId, userId]
       );
-      return res.json({ interested: false });
     }
-    await pool.query(
-      `INSERT INTO MeetupInterests (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-      [postId, userId]
-    );
-    await pool.query(
-      `UPDATE MeetupPosts SET interest_count = interest_count + 1 WHERE id = $1`,
+    const { rows: [{ count }] } = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM MeetupInterests WHERE post_id = $1`,
       [postId]
     );
-    res.json({ interested: true });
+    res.json({ interested: rowCount === 0, interestCount: count });
   } catch (err) {
     console.error('[meetup] interest error:', err.message);
     res.status(500).json({ message: err.message });
@@ -175,9 +196,11 @@ router.post('/:id/interest', protect, async (req, res) => {
 router.delete('/:id', protect, async (req, res) => {
   try {
     const pool = getPool();
+    const postId = parseId(req.params.id);
+    if (postId === null) return res.status(404).json({ message: 'ไม่พบโพสต์' });
     const { rowCount } = await pool.query(
       `DELETE FROM MeetupPosts WHERE id = $1 AND user_id = $2`,
-      [req.params.id, req.user._id]
+      [postId, req.user._id]
     );
     if (rowCount === 0)
       return res.status(403).json({ message: 'ไม่พบโพสต์หรือไม่มีสิทธิ์ลบ' });

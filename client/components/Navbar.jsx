@@ -74,6 +74,9 @@ export default function Navbar() {
     ...(isAdminMode ? [{ href: '/admin', label: t.admin, icon: <Shield size={14} />, admin: true }] : []),
   ];
 
+  // Guests only get the public Meetup board; everything else needs an account
+  const visibleLinks = user ? navLinks : navLinks.filter(l => l.meetup);
+
   const donateLink = { href: '/donate', label: t.donate, icon: <Heart size={11} fill="currentColor" /> };
 
   // Per-link color config
@@ -130,9 +133,9 @@ export default function Navbar() {
           </Link>
 
           {/* ── Desktop center nav ────────────── */}
-          {user && (
+          {!loading && (
             <div className="hidden md:flex items-center gap-0.5 flex-1 justify-center">
-              {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, meetup, badge }) => {
+              {visibleLinks.map(({ href, label, icon, admin, tourney, leaderboard, friends, meetup, badge }) => {
                 const active = isActive(href);
                 const c = col({ admin, tourney, leaderboard, friends, meetup });
                 return (
@@ -325,9 +328,9 @@ export default function Navbar() {
             )}
 
             {/* Nav links */}
-            {user && (
+            {!loading && (
               <div className="px-3 py-2.5 space-y-0.5">
-                {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, meetup, badge }) => {
+                {visibleLinks.map(({ href, label, icon, admin, tourney, leaderboard, friends, meetup, badge }) => {
                   const active = isActive(href);
                   const c = col({ admin, tourney, leaderboard, friends, meetup });
                   return (
