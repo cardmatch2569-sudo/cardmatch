@@ -214,6 +214,34 @@ const initTables = async () => {
     console.log('[DB] Notifications table ready');
   } catch (e) { console.error('[DB] Notifications warning:', e.message); }
 
+  // Meetup board
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS MeetupPosts (
+        id             SERIAL        PRIMARY KEY,
+        user_id        VARCHAR(36)   NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
+        province       VARCHAR(100)  NOT NULL,
+        location_name  VARCHAR(200)  NOT NULL,
+        scheduled_at   TIMESTAMPTZ   NOT NULL,
+        players_needed SMALLINT      DEFAULT 1,
+        note           VARCHAR(200)  DEFAULT '',
+        status         VARCHAR(20)   DEFAULT 'active',
+        interest_count INTEGER       DEFAULT 0,
+        created_at     TIMESTAMPTZ   DEFAULT NOW()
+      )
+    `);
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_mp_province ON MeetupPosts(province)`).catch(() => {});
+    await p.query(`CREATE INDEX IF NOT EXISTS idx_mp_status   ON MeetupPosts(status, scheduled_at)`).catch(() => {});
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS MeetupInterests (
+        post_id  INTEGER     NOT NULL REFERENCES MeetupPosts(id) ON DELETE CASCADE,
+        user_id  VARCHAR(36) NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
+        PRIMARY KEY (post_id, user_id)
+      )
+    `);
+    console.log('[DB] Meetup tables ready');
+  } catch (e) { console.error('[DB] Meetup tables warning:', e.message); }
+
   if (noId.length) console.log(`[DB] Generated player_id for ${noId.length} existing user(s)`);
   console.log('Tables initialized (PostgreSQL)');
 };

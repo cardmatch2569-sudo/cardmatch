@@ -5,7 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import translations from '../lib/translations';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart, Trophy, UserPlus } from 'lucide-react';
+import { Users, LogOut, Shield, Globe, Swords, Eye, EyeOff, Settings, Menu, X, Heart, Trophy, UserPlus, MapPin } from 'lucide-react';
 import { api } from '../lib/api';
 
 export default function Navbar() {
@@ -66,6 +66,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '/lobby',       label: t.lobby,                                         icon: <Swords size={14} />,         always: true },
+    { href: '/meetup',      label: lang === 'th' ? 'นัดเล่น' : 'Meetup',           icon: <MapPin size={14} />,         always: true, meetup: true },
     { href: '/tournament',  label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament',  icon: <span className="text-xs">🏆</span>, always: true, tourney: true },
     { href: '/leaderboard', label: lang === 'th' ? 'อันดับ' : 'Leaderboard',       icon: <Trophy size={14} />,         always: true, leaderboard: true },
     { href: '/friends',     label: lang === 'th' ? 'เพื่อน' : 'Friends',           icon: <UserPlus size={14} />,       requireAuth: true, friends: true, badge: friendReqCount },
@@ -76,11 +77,12 @@ export default function Navbar() {
   const donateLink = { href: '/donate', label: t.donate, icon: <Heart size={11} fill="currentColor" /> };
 
   // Per-link color config
-  const col = ({ admin, tourney, leaderboard, friends }) => {
+  const col = ({ admin, tourney, leaderboard, friends, meetup }) => {
     if (admin)       return { a: 'from-amber-600/[0.18] to-yellow-600/[0.08] text-amber-300 border-amber-500/25',   ia: 'text-amber-500/60 hover:text-amber-300 hover:bg-amber-500/[0.07]',   glow: '0 0 14px rgba(251,191,36,0.18)' };
     if (tourney)     return { a: 'from-yellow-500/[0.18] to-amber-500/[0.08] text-yellow-300 border-yellow-500/25', ia: 'text-yellow-400/60 hover:text-yellow-300 hover:bg-yellow-500/[0.07]', glow: '0 0 14px rgba(234,179,8,0.18)' };
     if (leaderboard) return { a: 'from-emerald-600/[0.18] to-teal-600/[0.08] text-emerald-300 border-emerald-500/25', ia: 'text-emerald-500/60 hover:text-emerald-300 hover:bg-emerald-500/[0.07]', glow: '0 0 14px rgba(52,211,153,0.18)' };
     if (friends)     return { a: 'from-blue-600/[0.18] to-indigo-600/[0.08] text-blue-300 border-blue-500/25',      ia: 'text-blue-400/60 hover:text-blue-300 hover:bg-blue-500/[0.07]',         glow: '0 0 14px rgba(96,165,250,0.18)' };
+    if (meetup)      return { a: 'from-cyan-600/[0.18] to-sky-600/[0.08] text-cyan-300 border-cyan-500/25',         ia: 'text-cyan-500/60 hover:text-cyan-300 hover:bg-cyan-500/[0.07]',         glow: '0 0 14px rgba(6,182,212,0.18)' };
     return             { a: 'from-purple-600/[0.22] to-violet-600/[0.12] text-purple-300 border-purple-500/25',   ia: 'text-slate-400/80 hover:text-slate-100 hover:bg-white/[0.06]',           glow: '0 0 14px rgba(124,58,237,0.2)' };
   };
 
@@ -130,9 +132,9 @@ export default function Navbar() {
           {/* ── Desktop center nav ────────────── */}
           {user && (
             <div className="hidden md:flex items-center gap-0.5 flex-1 justify-center">
-              {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, badge }) => {
+              {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, meetup, badge }) => {
                 const active = isActive(href);
-                const c = col({ admin, tourney, leaderboard, friends });
+                const c = col({ admin, tourney, leaderboard, friends, meetup });
                 return (
                   <Link key={href} href={href}
                     aria-current={active ? 'page' : undefined}
@@ -325,9 +327,9 @@ export default function Navbar() {
             {/* Nav links */}
             {user && (
               <div className="px-3 py-2.5 space-y-0.5">
-                {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, badge }) => {
+                {navLinks.filter(l => !l.requireAuth || user).map(({ href, label, icon, admin, tourney, leaderboard, friends, meetup, badge }) => {
                   const active = isActive(href);
-                  const c = col({ admin, tourney, leaderboard, friends });
+                  const c = col({ admin, tourney, leaderboard, friends, meetup });
                   return (
                     <Link key={href} href={href}
                       onClick={() => { close(); if (friends) setFriendReqCount(0); }}
