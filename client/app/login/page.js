@@ -9,6 +9,12 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight, CheckCircle, KeyRound } from
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+// Internal paths only, so ?next= can't be used as an open redirect
+const nextPath = () => {
+  const n = new URLSearchParams(window.location.search).get('next');
+  return n && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/\\') ? n : '/lobby';
+};
+
 export default function LoginPage() {
   const { login, register, verifyOTP, lang } = useAuth();
   const t = translations[lang];
@@ -68,7 +74,7 @@ export default function LoginPage() {
     try {
       if (mode === 'login') {
         await login(form.email, form.password);
-        router.push('/lobby');
+        router.push(nextPath());
       } else {
         const result = await register(form.username, form.email, form.password);
         if (result?.requiresOtp) setOtpData({ email: result.email });
@@ -161,7 +167,7 @@ export default function LoginPage() {
           email={otpData.email}
           name={form.username}
           lang={lang}
-          onSuccess={() => router.push('/lobby')}
+          onSuccess={() => router.push(nextPath())}
           onCancel={() => setOtpData(null)}
         />
       )}

@@ -111,6 +111,20 @@ function formatBE(iso, lang) {
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function startsIn(iso, lang) {
+  const at   = new Date(iso);
+  const diff = at.getTime() - Date.now();
+  const th   = lang === 'th';
+  if (diff <= 0) return { label: th ? 'กำลังเล่นอยู่' : 'Happening now', hot: true };
+  const mins = Math.round(diff / 60000);
+  if (mins < 60) return { label: th ? `อีก ${mins} นาที` : `In ${mins} min`, hot: true };
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(at) - startOfDay(new Date())) / 86400000);
+  if (days === 0) return { label: th ? `วันนี้ · อีก ${Math.round(mins / 60)} ชม.` : `Today · in ${Math.round(mins / 60)}h`, hot: true };
+  if (days === 1) return { label: th ? 'พรุ่งนี้' : 'Tomorrow', hot: false };
+  return { label: th ? `อีก ${days} วัน` : `In ${days} days`, hot: false };
+}
+
 function timeAgo(iso, lang) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -164,13 +178,35 @@ function directionsUrl(post) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(d)}`;
 }
 
-function LocationPicker({ value, address, onChange, onProvince, lang }) {
+const provinceCenters = new Map();
+
+function LocationPicker({ value, address, onChange, onProvince, province, lang }) {
   const [query,     setQuery]     = useState('');
   const [results,   setResults]   = useState([]);
   const [searching, setSearching] = useState(false);
   const [locating,  setLocating]  = useState(false);
   const [err,       setErr]       = useState('');
+  const [focus,     setFocus]     = useState(null);
   const reqId = useRef(0);
+
+  // Move the (still unpinned) map to the chosen province
+  useEffect(() => {
+    if (!province || value) return;
+    if (provinceCenters.has(province)) { setFocus(provinceCenters.get(province)); return; }
+    let stale = false;
+    const q = province === 'กรุงเทพมหานคร' ? province : `จังหวัด${province}`;
+    fetch(`${NOMINATIM}/search?format=jsonv2&countrycodes=th&limit=1&q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (stale || !d[0]) return;
+        const c = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon), zoom: province === 'กรุงเทพมหานคร' ? 11 : 10 };
+        provinceCenters.set(province, c);
+        setFocus(c);
+      })
+      .catch(() => {});
+    return () => { stale = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [province]);
 
   const reverse = async (pos) => {
     const id = ++reqId.current;
@@ -228,7 +264,7 @@ function LocationPicker({ value, address, onChange, onProvince, lang }) {
         <div className="relative flex-1 min-w-0">
           <input
             className="input-base w-full pr-9"
-            placeholder={lang === 'th' ? 'ค้นหา เช่น เซ็นทรัลลาดพร้าว' : 'Search, e.g. Central Ladprao'}
+            placeholder={lang === 'th' ? 'ค้นหาชื่อสถานที่' : 'Search a place'}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search(); } }}
@@ -263,7 +299,7 @@ function LocationPicker({ value, address, onChange, onProvince, lang }) {
 
       {err && <p className="text-xs text-amber-400">{err}</p>}
 
-      <MeetupMap value={value} onChange={reverse} height={220} />
+      <MeetupMap value={value} onChange={reverse} focus={focus} height={240} />
 
       {value ? (
         <div className="flex items-start justify-between gap-2">
@@ -274,13 +310,15 @@ function LocationPicker({ value, address, onChange, onProvince, lang }) {
             </span>
           </p>
           <button type="button" onClick={() => { reqId.current++; onChange(null); }}
-            className="text-[11px] text-slate-500 hover:text-red-400 whitespace-nowrap">
+            className="text-xs text-slate-400 hover:text-red-400 whitespace-nowrap px-2 py-1.5 -my-1.5 rounded-lg hover:bg-red-500/[0.08]">
             {lang === 'th' ? 'ลบหมุด' : 'Remove pin'}
           </button>
         </div>
       ) : (
         <p className="text-[11px] text-slate-500">
-          {lang === 'th' ? 'แตะบนแผนที่เพื่อปักหมุด ลากหมุดเพื่อปรับตำแหน่ง' : 'Tap the map to drop a pin, drag to adjust'}
+          {lang === 'th'
+            ? 'แตะแผนที่เพื่อซูมเข้า แล้วแตะอีกครั้งตรงจุดนัดเพื่อปักหมุด (ลากหมุดเพื่อปรับได้)'
+            : 'Tap to zoom in, then tap the exact spot to drop a pin (drag to adjust)'}
         </p>
       )}
 
@@ -296,7 +334,7 @@ function LocationPicker({ value, address, onChange, onProvince, lang }) {
 }
 
 // ── Province dropdown ──────────────────────────────────────────────────────
-function ProvinceSelect({ value, onChange, lang, placeholder, className = '' }) {
+function ProvinceSelect({ value, onChange, lang, placeholder, className = '', invalid = false, id }) {
   const [open, setOpen]     = useState(false);
   const [query, setQuery]   = useState('');
   const ref                 = useRef(null);
@@ -319,7 +357,10 @@ function ProvinceSelect({ value, onChange, lang, placeholder, className = '' }) 
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="input-base w-full flex items-center justify-between gap-2 text-left"
+        id={id}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`input-base w-full flex items-center justify-between gap-2 text-left ${invalid ? '!border-red-500/60' : ''}`}
         style={{ cursor: 'pointer' }}>
         <span className={value ? 'text-white' : 'text-slate-500'}>
           {value || placeholder}
@@ -377,6 +418,7 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
   const rank  = getRank(post.host.elo);
   const isOwn = user?._id === post.host.id;
   const hasPin = post.lat != null && post.lng != null;
+  const when   = startsIn(post.scheduledAt, lang);
   const [showMap, setShowMap] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
 
@@ -415,7 +457,7 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
           </div>
           {isOwn && (confirmDel ? (
             <button onClick={onDelete}
-              className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs font-semibold
+              className="flex items-center gap-1 h-9 px-3 rounded-lg text-xs font-semibold
                 text-red-300 border border-red-500/30 bg-red-500/[0.12] hover:bg-red-500/20 transition-all duration-200">
               <Trash2 size={12} />
               {lang === 'th' ? 'ยืนยันลบ' : 'Confirm'}
@@ -423,18 +465,24 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
           ) : (
             <button onClick={() => setConfirmDel(true)}
               aria-label={lang === 'th' ? 'ลบโพสต์' : 'Delete post'}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-600
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-500
                 hover:text-red-400 hover:bg-red-500/[0.08] transition-all duration-200">
-              <Trash2 size={13} />
+              <Trash2 size={14} />
             </button>
           ))}
         </div>
 
         {/* Date + location */}
         <div className="space-y-1.5 mb-3">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm flex-wrap">
             <Calendar size={13} className="text-purple-400 flex-shrink-0" />
             <span className="text-white font-medium">{formatBE(post.scheduledAt, lang)}</span>
+            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border
+              ${when.hot
+                ? 'text-amber-300 border-amber-500/30 bg-amber-500/[0.10]'
+                : 'text-purple-300 border-purple-500/25 bg-purple-500/[0.08]'}`}>
+              {when.label}
+            </span>
           </div>
           <div className="flex items-start gap-2 text-sm">
             <MapPin size={13} className="text-cyan-400 flex-shrink-0 mt-0.5" />
@@ -460,7 +508,7 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
         <div className="flex flex-wrap gap-1.5 mb-3">
           {hasPin && (
             <button type="button" onClick={() => setShowMap(s => !s)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200
+              className={`flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-medium border transition-all duration-200
                 ${showMap
                   ? 'text-cyan-300 border-cyan-500/30 bg-cyan-500/[0.10]'
                   : 'text-slate-400 border-white/[0.07] hover:text-cyan-300 hover:border-cyan-500/25'}`}>
@@ -469,13 +517,13 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
             </button>
           )}
           <a href={googleMapsUrl(post)} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border
+            className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-medium border
               text-slate-400 border-white/[0.07] hover:text-white hover:border-white/[0.15] transition-all duration-200">
             <ExternalLink size={12} />
             {lang === 'th' ? 'ดูใน Google Maps' : 'Google Maps'}
           </a>
           <a href={directionsUrl(post)} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border
+            className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-semibold border
               text-cyan-300 border-cyan-500/25 bg-cyan-500/[0.08] hover:bg-cyan-500/[0.15] transition-all duration-200">
             <Navigation size={12} />
             {lang === 'th' ? 'นำทาง' : 'Directions'}
@@ -497,24 +545,32 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2.5"
+        <div className="flex items-center justify-between gap-3 pt-3"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <span className="text-[11px] text-slate-600">{timeAgo(post.createdAt, lang)}</span>
+          <div className="min-w-0">
+            <p className={`text-xs font-medium ${post.interestCount > 0 ? 'text-rose-300/90' : 'text-slate-500'}`}>
+              {post.interestCount > 0
+                ? (lang === 'th' ? `${post.interestCount} คนสนใจ` : `${post.interestCount} interested`)
+                : (lang === 'th' ? 'ยังไม่มีคนสนใจ' : 'No one yet')}
+            </p>
+            <p className="text-[11px] text-slate-600">
+              {isOwn && <span className="text-purple-400/80">{lang === 'th' ? 'โพสต์ของคุณ · ' : 'Your post · '}</span>}
+              {timeAgo(post.createdAt, lang)}
+            </p>
+          </div>
 
           {!isOwn && (
             <button
               onClick={onInterest}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 border
+              aria-pressed={post.iAmInterested}
+              className={`flex items-center gap-1.5 h-10 px-4 rounded-xl text-sm font-semibold transition-all duration-200 border flex-shrink-0
                 ${post.iAmInterested
-                  ? 'bg-rose-500/[0.15] text-rose-400 border-rose-500/25 hover:bg-rose-500/20'
-                  : 'text-slate-400 border-white/[0.07] hover:border-rose-500/25 hover:text-rose-400'}`}>
-              <Heart size={11} fill={post.iAmInterested ? 'currentColor' : 'none'} />
+                  ? 'bg-rose-500/[0.15] text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
+                  : 'text-rose-300 border-rose-500/25 bg-rose-500/[0.05] hover:bg-rose-500/[0.12]'}`}>
+              <Heart size={14} fill={post.iAmInterested ? 'currentColor' : 'none'} />
               {post.iAmInterested
                 ? (lang === 'th' ? 'สนใจแล้ว' : 'Interested')
                 : (lang === 'th' ? 'สนใจร่วมด้วย' : 'Join')}
-              {post.interestCount > 0 && (
-                <span className="opacity-60">{post.interestCount}</span>
-              )}
             </button>
           )}
         </div>
@@ -539,6 +595,7 @@ export default function MeetupPage() {
   });
   const [pin,       setPin]       = useState(null);
   const [formError, setFormError] = useState('');
+  const [attempted, setAttempted] = useState(false);
   const [toast,     setToast]     = useState(null);
 
   const toastTimer   = useRef(null);
@@ -577,8 +634,17 @@ export default function MeetupPage() {
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormError('');
-    if (!form.province || !form.locationName || !form.date || !form.time) {
-      setFormError(lang === 'th' ? 'กรุณากรอกข้อมูลให้ครบ' : 'Please fill all required fields');
+    setAttempted(true);
+    const firstMissing =
+      !form.province              ? 'mu-province' :
+      !form.locationName.trim()   ? 'mu-location' :
+      !form.date                  ? 'mu-date' :
+      !form.time                  ? 'mu-time' : null;
+    if (firstMissing) {
+      setFormError(lang === 'th' ? 'กรุณากรอกช่องที่มีกรอบสีแดงให้ครบ' : 'Please fill in the fields outlined in red');
+      const el = document.getElementById(firstMissing);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus({ preventScroll: true });
       return;
     }
     // Parse as the browser's local time, then send UTC so the server (UTC) stores the right instant
@@ -615,7 +681,7 @@ export default function MeetupPage() {
   };
 
   const toggleInterest = async (postId) => {
-    if (!user) { router.push('/login'); return; }
+    if (!user) { router.push('/login?next=/meetup'); return; }
     if (pendingIds.current.has(postId)) return;
     const orig = posts.find(p => p.id === postId);
     if (!orig) return;
@@ -659,14 +725,32 @@ export default function MeetupPage() {
     { value: 'next_week', label: lang === 'th' ? 'สัปดาห์หน้า'  : 'Next week' },
   ];
 
+  const hasFilters = !!filterProvince || filterPeriod !== 'all';
+
+  const openCreate = () => {
+    setFormError('');
+    setAttempted(false);
+    setForm(f => (f.province || !filterProvince) ? f : { ...f, province: filterProvince });
+    setShowCreate(true);
+  };
+
+  useEffect(() => {
+    if (!showCreate) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') setShowCreate(false); };
+    document.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); };
+  }, [showCreate]);
+
   const localDateStr = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const todayStr = localDateStr(new Date());
   const maxStr   = localDateStr(new Date(Date.now() + 90 * 86400000));
 
   return (
-    <div style={{ minHeight: 'calc(var(--vh, 100vh) - var(--navbar-h, 4rem))', paddingTop: 'var(--navbar-h, 4rem)' }}>
-      <div className="max-w-2xl mx-auto px-4 py-6">
+    <div>
+      <div className="max-w-2xl mx-auto px-4 pt-6 pb-10">
 
         {/* Header */}
         <div className="mb-6">
@@ -712,34 +796,26 @@ export default function MeetupPage() {
         <div className="mb-5">
           {user ? (
             <button
-              onClick={() => setShowCreate(true)}
+              onClick={openCreate}
               className="btn-primary flex items-center gap-2">
               <Plus size={16} />
               {lang === 'th' ? 'โพสต์นัดเล่น' : 'Post Meetup'}
             </button>
           ) : (
-            <div className="card flex items-center gap-3 px-4 py-3 text-sm text-slate-400"
-              style={{ borderColor: 'rgba(139,92,246,0.15)' }}>
-              <Info size={14} className="flex-shrink-0 text-purple-400" />
-              {lang === 'th' ? (
+            <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              style={{ borderColor: 'rgba(139,92,246,0.2)' }}>
+              <div className="flex items-center gap-2.5 text-sm text-slate-400 min-w-0">
+                <Info size={15} className="flex-shrink-0 text-purple-400" />
                 <span>
-                  ต้องการโพสต์?{' '}
-                  <button onClick={() => router.push('/login')}
-                    className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
-                    เข้าสู่ระบบ
-                  </button>{' '}
-                  ก่อน · ดูโพสต์ไม่ต้องล็อกอิน
+                  {lang === 'th'
+                    ? 'ดูนัดได้ฟรี · เข้าสู่ระบบเพื่อโพสต์หรือกดสนใจ'
+                    : 'Browse freely · log in to post or join'}
                 </span>
-              ) : (
-                <span>
-                  Want to post?{' '}
-                  <button onClick={() => router.push('/login')}
-                    className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
-                    Log in
-                  </button>{' '}
-                  first · browsing is free
-                </span>
-              )}
+              </div>
+              <button onClick={() => router.push('/login?next=/meetup')}
+                className="btn-primary text-sm h-10 px-4 flex-shrink-0">
+                {lang === 'th' ? 'เข้าสู่ระบบ' : 'Log in'}
+              </button>
             </div>
           )}
         </div>
@@ -751,16 +827,32 @@ export default function MeetupPage() {
               className="w-8 h-8 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
           </div>
         ) : posts.length === 0 ? (
-          <div className="text-center py-16 text-slate-500">
+          <div className="text-center py-14 text-slate-500">
             <MapPin size={36} className="mx-auto mb-3 opacity-20" />
-            <p className="font-medium">
-              {lang === 'th' ? 'ยังไม่มีนัดเล่น' : 'No meetups yet'}
+            <p className="font-medium text-slate-300">
+              {hasFilters
+                ? (lang === 'th' ? 'ไม่พบนัดตามตัวกรองนี้' : 'No meetups match these filters')
+                : (lang === 'th' ? 'ยังไม่มีนัดเล่น' : 'No meetups yet')}
             </p>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               {lang === 'th'
-                ? 'เป็นคนแรกที่โพสต์นัดเล่นในจังหวัดของคุณ'
-                : 'Be the first to post a meetup in your province'}
+                ? `เป็นคนแรกที่โพสต์นัดเล่น${filterProvince ? `ใน${filterProvince}` : 'ในจังหวัดของคุณ'}`
+                : `Be the first to post a meetup${filterProvince ? ` in ${filterProvince}` : ' in your province'}`}
             </p>
+            <div className="flex flex-wrap justify-center gap-2 mt-5">
+              {hasFilters && (
+                <button onClick={() => { setFilterProvince(''); setFilterPeriod('all'); }}
+                  className="btn-ghost text-sm h-10 px-4">
+                  {lang === 'th' ? 'ล้างตัวกรอง' : 'Clear filters'}
+                </button>
+              )}
+              {user && (
+                <button onClick={openCreate} className="btn-primary text-sm h-10 px-4 flex items-center gap-1.5">
+                  <Plus size={14} />
+                  {lang === 'th' ? 'โพสต์นัดเล่น' : 'Post Meetup'}
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -786,20 +878,23 @@ export default function MeetupPage() {
           onMouseDown={e => { backdropDown.current = e.target === e.currentTarget; }}
           onClick={e => { if (backdropDown.current && e.target === e.currentTarget) setShowCreate(false); }}>
           <div
-            className="card w-full max-w-md max-h-[90vh] overflow-y-auto"
+            role="dialog" aria-modal="true" aria-labelledby="meetup-create-title"
+            className="card w-full max-w-md max-h-[92vh] overflow-y-auto overscroll-contain"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-display text-xl font-bold text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4"
+              style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
+              <h2 id="meetup-create-title" className="font-display text-xl font-bold text-white">
                 {lang === 'th' ? 'โพสต์นัดเล่น' : 'Post Meetup'}
               </h2>
               <button onClick={() => setShowCreate(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg
+                aria-label={lang === 'th' ? 'ปิด' : 'Close'}
+                className="w-9 h-9 flex items-center justify-center rounded-lg
                   text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all duration-200">
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleCreate} noValidate className="space-y-4 px-5 pt-4 pb-5">
               <div>
                 <label className="block text-xs text-slate-400 mb-1.5">
                   {lang === 'th' ? 'จังหวัด *' : 'Province *'}
@@ -809,56 +904,48 @@ export default function MeetupPage() {
                   onChange={v => setForm(f => ({ ...f, province: v }))}
                   lang={lang}
                   placeholder={lang === 'th' ? 'เลือกจังหวัด' : 'Select province'}
+                  invalid={attempted && !form.province}
+                  id="mu-province"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">
+                <label htmlFor="mu-location" className="block text-xs text-slate-400 mb-1.5">
                   {lang === 'th' ? 'ชื่อสถานที่ *' : 'Location *'}
                 </label>
                 <input
-                  className="input-base w-full"
-                  placeholder={lang === 'th' ? 'เช่น ร้านเกม XYZ, บ้านตลิ่งชัน' : 'e.g. XYZ Game Shop'}
+                  id="mu-location"
+                  className={`input-base w-full ${attempted && !form.locationName.trim() ? '!border-red-500/60' : ''}`}
+                  placeholder={lang === 'th' ? 'เช่น ร้านเกม XYZ ชั้น 3' : 'e.g. XYZ Game Shop, 3rd floor'}
                   value={form.locationName}
                   onChange={e => setForm(f => ({ ...f, locationName: e.target.value }))}
                   maxLength={200}
                 />
               </div>
 
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">
-                  {lang === 'th' ? 'ปักหมุดบนแผนที่ (ไม่บังคับ แต่แนะนำ)' : 'Pin on map (optional, recommended)'}
-                </label>
-                <LocationPicker
-                  value={pin}
-                  address={pin?.address}
-                  onChange={setPin}
-                  onProvince={prov => setForm(f => f.province ? f : { ...f, province: prov })}
-                  lang={lang}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <label htmlFor="mu-date" className="block text-xs text-slate-400 mb-1.5">
                     {lang === 'th' ? 'วันที่ *' : 'Date *'}
                   </label>
                   <input
+                    id="mu-date"
                     type="date"
-                    className="input-base w-full"
+                    className={`input-base w-full ${attempted && !form.date ? '!border-red-500/60' : ''}`}
                     value={form.date}
                     min={todayStr}
                     max={maxStr}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">
+                <div className="min-w-0">
+                  <label htmlFor="mu-time" className="block text-xs text-slate-400 mb-1.5">
                     {lang === 'th' ? 'เวลา *' : 'Time *'}
                   </label>
                   <input
+                    id="mu-time"
                     type="time"
-                    className="input-base w-full"
+                    className={`input-base w-full ${attempted && !form.time ? '!border-red-500/60' : ''}`}
                     value={form.time}
                     onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
                   />
@@ -881,6 +968,20 @@ export default function MeetupPage() {
 
               <div>
                 <label className="block text-xs text-slate-400 mb-1.5">
+                  {lang === 'th' ? 'ปักหมุดบนแผนที่ (ไม่บังคับ แต่แนะนำ)' : 'Pin on map (optional, recommended)'}
+                </label>
+                <LocationPicker
+                  value={pin}
+                  address={pin?.address}
+                  onChange={setPin}
+                  onProvince={prov => setForm(f => f.province ? f : { ...f, province: prov })}
+                  province={form.province}
+                  lang={lang}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
                   {lang === 'th' ? 'โน้ต (ไม่บังคับ)' : 'Note (optional)'}
                 </label>
                 <textarea
@@ -897,7 +998,7 @@ export default function MeetupPage() {
               </div>
 
               {formError && (
-                <p className="text-red-400 text-sm">{formError}</p>
+                <p role="alert" className="text-red-400 text-sm">{formError}</p>
               )}
 
               <button type="submit" className="btn-primary w-full" disabled={creating}>
@@ -912,7 +1013,7 @@ export default function MeetupPage() {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-sm font-medium
+        <div role="status" className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] px-5 py-2.5 rounded-xl text-sm font-medium
           shadow-2xl pointer-events-none
           ${toast.type === 'error' ? 'bg-red-600/90 text-white' : 'bg-purple-600/90 text-white'}`}
           style={{ backdropFilter: 'blur(12px)' }}>
