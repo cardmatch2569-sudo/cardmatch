@@ -242,6 +242,7 @@ const initTables = async () => {
         PRIMARY KEY (post_id, user_id)
       )
     `);
+    await p.query(`ALTER TABLE MeetupInterests ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`).catch(() => {});
     console.log('[DB] Meetup tables ready');
   } catch (e) { console.error('[DB] Meetup tables warning:', e.message); }
 

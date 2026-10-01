@@ -10,13 +10,14 @@ import { api } from '../lib/api';
 
 export default function Navbar() {
   const { user, lang, loading, isAdminMode, viewMode, toggleViewMode, logout, toggleLang } = useAuth();
-  const { onlineCount, connected, getSocket } = useSocket();
+  const { onlineCount, connected, getSocket, socketReady } = useSocket();
   const router   = useRouter();
   const pathname = usePathname();
   const t = translations[lang];
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [friendReqCount, setFriendReqCount] = useState(0);
+  const [meetupNotif, setMeetupNotif] = useState(0);
   const mobileMenuRef = useRef(null);
 
   useEffect(() => {
@@ -31,6 +32,21 @@ export default function Navbar() {
     return () => { socket.off('friend_request_received', onReq); socket.off('friend_request_accepted', onAcc); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id]);
+
+  useEffect(() => {
+    if (!user) { setMeetupNotif(0); return; }
+    const refresh = () => api.get('/api/meetup/notifications/count').then(d => setMeetupNotif(d.count || 0)).catch(() => {});
+    refresh();
+    window.addEventListener('meetup-notif-changed', refresh);
+    const socket = getSocket?.();
+    const onInterest = () => setMeetupNotif(c => c + 1);
+    socket?.on('meetup_interest', onInterest);
+    return () => {
+      window.removeEventListener('meetup-notif-changed', refresh);
+      socket?.off('meetup_interest', onInterest);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, socketReady]);
 
   useEffect(() => {
     const onResize = () => { if (window.innerWidth >= 768) setMobileOpen(false); };
@@ -66,7 +82,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '/lobby',       label: t.lobby,                                         icon: <Swords size={14} />,         always: true },
-    { href: '/meetup',      label: lang === 'th' ? 'นัดเล่น' : 'Meetup',           icon: <MapPin size={14} />,         always: true, meetup: true },
+    { href: '/meetup',      label: lang === 'th' ? 'นัดเล่น' : 'Meetup',           icon: <MapPin size={14} />,         always: true, meetup: true, badge: meetupNotif },
     { href: '/tournament',  label: lang === 'th' ? 'ทัวร์นาเมนต์' : 'Tournament',  icon: <span className="text-xs">🏆</span>, always: true, tourney: true },
     { href: '/leaderboard', label: lang === 'th' ? 'อันดับ' : 'Leaderboard',       icon: <Trophy size={14} />,         always: true, leaderboard: true },
     { href: '/friends',     label: lang === 'th' ? 'เพื่อน' : 'Friends',           icon: <UserPlus size={14} />,       requireAuth: true, friends: true, badge: friendReqCount },
@@ -268,13 +284,17 @@ export default function Navbar() {
             {/* Hamburger */}
             <button
               onClick={() => setMobileOpen(p => !p)}
-              className="md:hidden flex items-center justify-center w-8 h-8 rounded-xl
+              className="relative md:hidden flex items-center justify-center w-8 h-8 rounded-xl
                 text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all duration-200"
               aria-label={mobileOpen ? (lang === 'th' ? 'ปิดเมนู' : 'Close menu') : (lang === 'th' ? 'เปิดเมนู' : 'Open menu')}
               aria-expanded={mobileOpen}>
               <div className="transition-transform duration-200" style={{ transform: mobileOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                 {mobileOpen ? <X size={18} /> : <Menu size={18} />}
               </div>
+              {!mobileOpen && (meetupNotif > 0 || friendReqCount > 0) && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500"
+                  style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }} />
+              )}
             </button>
           </div>
         </div>

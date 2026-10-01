@@ -1,13 +1,19 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
 import MeetupMap from '../../components/MeetupMap';
 import {
   MapPin, Calendar, Users, Plus, X, Heart,
   Trash2, Info, ChevronDown, Search, Navigation, ExternalLink, Crosshair, Map as MapIcon, AlertTriangle,
+  UserPlus, UserCheck, Clock,
 } from 'lucide-react';
+
+// Tells the navbar badge to re-read the unread count
+const notifyBadge = () => window.dispatchEvent(new Event('meetup-notif-changed'));
 
 // ── Province list (77 จังหวัด) ─────────────────────────────────────────────
 const PROVINCES = [
@@ -413,14 +419,127 @@ function ProvinceSelect({ value, onChange, lang, placeholder, className = '', in
   );
 }
 
+// ── Interested list (host only) ────────────────────────────────────────────
+function InterestedPanel({ postId, lang, onSeen }) {
+  const [users, setUsers] = useState(null);
+  const [error, setError] = useState('');
+  const [busy,  setBusy]  = useState(null);
+  const th = lang === 'th';
+
+  useEffect(() => {
+    let stale = false;
+    api.get(`/api/meetup/${postId}/interested`)
+      .then(d => { if (stale) return; setUsers(d.users || []); onSeen?.(); })
+      .catch(e => { if (!stale) setError(e.message); });
+    return () => { stale = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]);
+
+  const act = async (u) => {
+    setBusy(u.id); setError('');
+    try {
+      if (u.friendStatus === 'none') {
+        await api.post(`/api/friends/request/${u.id}`, {});
+        setUsers(us => us.map(x => x.id === u.id ? { ...x, friendStatus: 'sent' } : x));
+      } else if (u.friendStatus === 'received') {
+        await api.post(`/api/friends/accept/${u.id}`, {});
+        setUsers(us => us.map(x => x.id === u.id ? { ...x, friendStatus: 'friends' } : x));
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const statusButton = (u) => {
+    if (u.friendStatus === 'friends') return (
+      <Link href="/friends"
+        className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-semibold border
+          text-emerald-300 border-emerald-500/25 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.15] transition-all duration-200">
+        <UserCheck size={13} />{th ? 'เป็นเพื่อนแล้ว' : 'Friends'}
+      </Link>
+    );
+    if (u.friendStatus === 'sent') return (
+      <span className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-medium border
+        text-slate-400 border-white/[0.08]">
+        <Clock size={13} />{th ? 'ส่งคำขอแล้ว' : 'Request sent'}
+      </span>
+    );
+    const accept = u.friendStatus === 'received';
+    return (
+      <button onClick={() => act(u)} disabled={busy === u.id}
+        className="flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-semibold border disabled:opacity-50
+          text-blue-300 border-blue-500/30 bg-blue-500/[0.10] hover:bg-blue-500/[0.18] transition-all duration-200">
+        <UserPlus size={13} />
+        {accept ? (th ? 'ยอมรับเป็นเพื่อน' : 'Accept friend') : (th ? 'เพิ่มเพื่อน' : 'Add friend')}
+      </button>
+    );
+  };
+
+  return (
+    <div className="mt-3 rounded-xl p-3 space-y-2"
+      style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      {users === null && !error && (
+        <div className="flex justify-center py-3">
+          <div className="w-5 h-5 border-2 border-purple-600/30 border-t-purple-500 rounded-full animate-spin" />
+        </div>
+      )}
+      {users?.length === 0 && (
+        <p className="text-xs text-slate-500 text-center py-2">{th ? 'ยังไม่มีคนสนใจ' : 'No one yet'}</p>
+      )}
+      {users?.map(u => {
+        const rank = getRank(u.elo);
+        return (
+          <div key={u.id} className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-violet-600
+                  flex items-center justify-center text-xs font-bold uppercase">
+                  {u.username[0]}
+                </div>
+                {u.isOnline && (
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2"
+                    style={{ borderColor: 'var(--card)' }} />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-white truncate">{u.username}</span>
+                  <span className="text-[10px] font-bold px-1.5 rounded-md flex-shrink-0"
+                    style={{ color: rank.color, background: `${rank.color}22` }}>{rank.label}</span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {u.wins}W {u.losses}L
+                  {u.isOnline && <span className="text-green-400/80"> · {th ? 'ออนไลน์' : 'online'}</span>}
+                </p>
+              </div>
+            </div>
+            {statusButton(u)}
+          </div>
+        );
+      })}
+      {error && <p className="text-xs text-amber-400">{error}</p>}
+      {users?.length > 0 && (
+        <p className="text-[11px] text-slate-500 pt-1">
+          {th
+            ? 'เพิ่มเพื่อนเพื่อดูสถานะออนไลน์และนัดหมายกันต่อในหน้าเพื่อน'
+            : 'Add them as friends to see when they are online and coordinate from the Friends page'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Post card ──────────────────────────────────────────────────────────────
-function PostCard({ post, user, lang, onInterest, onDelete }) {
+function PostCard({ post, user, lang, onInterest, onDelete, onSeen }) {
   const rank  = getRank(post.host.elo);
   const isOwn = user?._id === post.host.id;
   const hasPin = post.lat != null && post.lng != null;
   const when   = startsIn(post.scheduledAt, lang);
   const [showMap, setShowMap] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [showList,   setShowList]   = useState(false);
 
   useEffect(() => {
     if (!confirmDel) return;
@@ -573,7 +692,30 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
                 : (lang === 'th' ? 'สนใจร่วมด้วย' : 'Join')}
             </button>
           )}
+
+          {isOwn && post.interestCount > 0 && (
+            <button
+              onClick={() => setShowList(s => !s)}
+              aria-expanded={showList}
+              className={`relative flex items-center gap-1.5 h-10 px-4 rounded-xl text-sm font-semibold border flex-shrink-0 transition-all duration-200
+                ${showList
+                  ? 'text-purple-200 border-purple-500/40 bg-purple-500/[0.18]'
+                  : 'text-purple-300 border-purple-500/30 bg-purple-500/[0.08] hover:bg-purple-500/[0.15]'}`}>
+              <Users size={14} />
+              {lang === 'th' ? 'ดูคนที่สนใจ' : 'See who'}
+              <ChevronDown size={14} className={`transition-transform duration-200 ${showList ? 'rotate-180' : ''}`} />
+              {post.newInterest > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white
+                  text-[10px] font-bold flex items-center justify-center"
+                  style={{ boxShadow: '0 0 8px rgba(239,68,68,0.5)' }}>
+                  {lang === 'th' ? `ใหม่ ${post.newInterest}` : `${post.newInterest} new`}
+                </span>
+              )}
+            </button>
+          )}
         </div>
+
+        {isOwn && showList && <InterestedPanel postId={post.id} lang={lang} onSeen={onSeen} />}
       </div>
     </div>
   );
@@ -582,7 +724,9 @@ function PostCard({ post, user, lang, onInterest, onDelete }) {
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function MeetupPage() {
   const { user, lang } = useAuth();
+  const { getSocket, socketReady } = useSocket();
   const router = useRouter();
+  const [filterMine, setFilterMine] = useState(false);
 
   const [posts,        setPosts]        = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -607,18 +751,19 @@ export default function MeetupPage() {
   const showToast = (msg, type = 'success') => {
     clearTimeout(toastTimer.current);
     setToast({ msg, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
+    toastTimer.current = setTimeout(() => setToast(null), 4500);
   };
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const fetchPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async (silent = false) => {
     const id = ++fetchId.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const p = new URLSearchParams();
       if (filterProvince)           p.set('province', filterProvince);
       if (filterPeriod !== 'all')   p.set('period', filterPeriod);
+      if (filterMine && user)       p.set('mine', '1');
       const data = await api.get(`/api/meetup?${p}`);
       if (id === fetchId.current) setPosts(data.posts || []);
     } catch (e) {
@@ -627,9 +772,26 @@ export default function MeetupPage() {
       if (id === fetchId.current) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterProvince, filterPeriod, user?._id]);
+  }, [filterProvince, filterPeriod, filterMine, user?._id]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  // Live: someone just tapped "interested" on one of my posts
+  const fetchRef = useRef(fetchPosts);
+  fetchRef.current = fetchPosts;
+  useEffect(() => {
+    const socket = getSocket?.();
+    if (!socket || !user) return;
+    const onInterest = (d) => {
+      showToast(lang === 'th'
+        ? `${d.fromUsername} สนใจนัดที่ ${d.locationName}`
+        : `${d.fromUsername} is interested in ${d.locationName}`);
+      fetchRef.current(true);
+    };
+    socket.on('meetup_interest', onInterest);
+    return () => socket.off('meetup_interest', onInterest);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socketReady, user?._id, lang]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -696,6 +858,11 @@ export default function MeetupPage() {
       setPosts(ps => ps.map(p => p.id === postId
         ? { ...p, iAmInterested: r.interested, interestCount: r.interestCount ?? p.interestCount }
         : p));
+      if (r.interested) {
+        showToast(lang === 'th'
+          ? `แจ้ง ${orig.host.username} แล้ว · เจ้าของนัดจะเพิ่มคุณเป็นเพื่อนเพื่อนัดกันต่อ`
+          : `${orig.host.username} has been notified and can add you as a friend`);
+      }
     } catch (e) {
       setPosts(ps => ps.map(p => p.id === postId ? orig : p));
       showToast(e.message, 'error');
@@ -725,7 +892,7 @@ export default function MeetupPage() {
     { value: 'next_week', label: lang === 'th' ? 'สัปดาห์หน้า'  : 'Next week' },
   ];
 
-  const hasFilters = !!filterProvince || filterPeriod !== 'all';
+  const hasFilters = !!filterProvince || filterPeriod !== 'all' || filterMine;
 
   const openCreate = () => {
     setFormError('');
@@ -789,6 +956,17 @@ export default function MeetupPage() {
                 {label}
               </button>
             ))}
+            {user && (
+              <button
+                onClick={() => setFilterMine(m => !m)}
+                aria-pressed={filterMine}
+                className={`px-3 h-10 rounded-xl text-sm font-medium transition-all duration-200 border whitespace-nowrap
+                  ${filterMine
+                    ? 'bg-cyan-500/[0.15] text-cyan-300 border-cyan-500/30'
+                    : 'text-slate-400 border-white/[0.07] hover:border-white/[0.15] hover:text-white'}`}>
+                {lang === 'th' ? 'นัดของฉัน' : 'Mine'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -841,7 +1019,7 @@ export default function MeetupPage() {
             </p>
             <div className="flex flex-wrap justify-center gap-2 mt-5">
               {hasFilters && (
-                <button onClick={() => { setFilterProvince(''); setFilterPeriod('all'); }}
+                <button onClick={() => { setFilterProvince(''); setFilterPeriod('all'); setFilterMine(false); }}
                   className="btn-ghost text-sm h-10 px-4">
                   {lang === 'th' ? 'ล้างตัวกรอง' : 'Clear filters'}
                 </button>
@@ -864,6 +1042,10 @@ export default function MeetupPage() {
                 lang={lang}
                 onInterest={() => toggleInterest(post.id)}
                 onDelete={() => deletePost(post.id)}
+                onSeen={() => {
+                  setPosts(ps => ps.map(p => p.id === post.id ? { ...p, newInterest: 0 } : p));
+                  notifyBadge();
+                }}
               />
             ))}
           </div>

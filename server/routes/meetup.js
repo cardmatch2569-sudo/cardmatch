@@ -2,6 +2,9 @@ const express = require('express');
 const jwt     = require('jsonwebtoken');
 const { protect }  = require('../middleware/auth');
 const { getPool }  = require('../config/db');
+const { getOnlineUsers } = require('../socket/handlers');
+
+const NOTIF_TYPE = 'meetup_interest';
 
 const router = express.Router();
 
@@ -38,13 +41,17 @@ router.get('/', async (req, res) => {
       conds.push(`mp.scheduled_at < NOW() + INTERVAL '14 days'`);
     }
 
-    let interestSel  = ', false AS i_am_interested';
+    let interestSel  = ', false AS i_am_interested, 0 AS new_interest';
     let interestJoin = '';
     if (currentUserId) {
       params.push(currentUserId);
       const pn = params.length;
       interestJoin = `LEFT JOIN MeetupInterests mi_u ON mi_u.post_id = mp.id AND mi_u.user_id = $${pn}`;
-      interestSel  = ', (mi_u.user_id IS NOT NULL) AS i_am_interested';
+      interestSel  = `, (mi_u.user_id IS NOT NULL) AS i_am_interested,
+        (SELECT COUNT(*) FROM Notifications n
+          WHERE n.user_id = $${pn} AND n.type = '${NOTIF_TYPE}' AND n.read = FALSE
+            AND n.data->>'postId' = mp.id::text) AS new_interest`;
+      if (req.query.mine === '1') conds.push(`mp.user_id = $${pn}`);
     }
 
     const { rows } = await pool.query(
@@ -75,6 +82,7 @@ router.get('/', async (req, res) => {
         interestCount: parseInt(r.interest_count) || 0,
         createdAt:     r.created_at,
         iAmInterested: r.i_am_interested || false,
+        newInterest:   parseInt(r.new_interest) || 0,
         lat:           r.lat,
         lng:           r.lng,
         address:       r.address || '',
@@ -164,7 +172,7 @@ router.post('/:id/interest', protect, async (req, res) => {
     if (postId === null) return res.status(404).json({ message: 'ไม่พบโพสต์' });
 
     const { rows: [post] } = await pool.query(
-      `SELECT id, user_id FROM MeetupPosts WHERE id = $1 AND status = 'active'`,
+      `SELECT id, user_id, location_name, scheduled_at FROM MeetupPosts WHERE id = $1 AND status = 'active'`,
       [postId]
     );
     if (!post) return res.status(404).json({ message: 'ไม่พบโพสต์' });
@@ -175,17 +183,43 @@ router.post('/:id/interest', protect, async (req, res) => {
       `DELETE FROM MeetupInterests WHERE post_id = $1 AND user_id = $2`,
       [postId, userId]
     );
-    if (rowCount === 0) {
+    const nowInterested = rowCount === 0;
+    if (nowInterested) {
       await pool.query(
         `INSERT INTO MeetupInterests (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [postId, userId]
       );
     }
+
+    // One unread notification per (post, user): toggling off/on must not stack duplicates
+    await pool.query(
+      `DELETE FROM Notifications
+       WHERE user_id = $1 AND type = $2 AND read = FALSE
+         AND data->>'postId' = $3 AND data->>'fromId' = $4`,
+      [post.user_id, NOTIF_TYPE, String(postId), userId]
+    );
+    if (nowInterested) {
+      const data = {
+        postId,
+        fromId:       userId,
+        fromUsername: req.user.username,
+        locationName: post.location_name,
+        scheduledAt:  post.scheduled_at,
+      };
+      await pool.query(
+        `INSERT INTO Notifications (user_id, type, data) VALUES ($1, $2, $3)`,
+        [post.user_id, NOTIF_TYPE, JSON.stringify(data)]
+      );
+      const io = req.app.get('io');
+      const hostEntry = getOnlineUsers().get(post.user_id);
+      if (hostEntry && io) io.to(hostEntry.socketId).emit('meetup_interest', data);
+    }
+
     const { rows: [{ count }] } = await pool.query(
       `SELECT COUNT(*)::int AS count FROM MeetupInterests WHERE post_id = $1`,
       [postId]
     );
-    res.json({ interested: rowCount === 0, interestCount: count });
+    res.json({ interested: nowInterested, interestCount: count });
   } catch (err) {
     console.error('[meetup] interest error:', err.message);
     res.status(500).json({ message: err.message });
@@ -204,8 +238,81 @@ router.delete('/:id', protect, async (req, res) => {
     );
     if (rowCount === 0)
       return res.status(403).json({ message: 'ไม่พบโพสต์หรือไม่มีสิทธิ์ลบ' });
+    await pool.query(
+      `DELETE FROM Notifications WHERE type = $1 AND data->>'postId' = $2`,
+      [NOTIF_TYPE, String(postId)]
+    );
     res.json({ message: 'ลบโพสต์แล้ว' });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/meetup/notifications/count — unread "someone is interested" count for the host
+router.get('/notifications/count', protect, async (req, res) => {
+  try {
+    const { rows: [{ count }] } = await getPool().query(
+      `SELECT COUNT(*)::int AS count FROM Notifications n
+       JOIN MeetupPosts mp ON mp.id::text = n.data->>'postId'
+       WHERE n.user_id = $1 AND n.type = $2 AND n.read = FALSE AND mp.status = 'active'`,
+      [req.user._id, NOTIF_TYPE]
+    );
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/meetup/:id/interested — host only: who is interested + friend status; marks them seen
+router.get('/:id/interested', protect, async (req, res) => {
+  try {
+    const pool   = getPool();
+    const postId = parseId(req.params.id);
+    const hostId = req.user._id;
+    if (postId === null) return res.status(404).json({ message: 'ไม่พบโพสต์' });
+
+    const { rows: [post] } = await pool.query(
+      `SELECT user_id FROM MeetupPosts WHERE id = $1`, [postId]
+    );
+    if (!post) return res.status(404).json({ message: 'ไม่พบโพสต์' });
+    if (post.user_id !== hostId)
+      return res.status(403).json({ message: 'ดูรายชื่อได้เฉพาะเจ้าของโพสต์' });
+
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.avatar, u.elo, u.wins, u.losses, mi.created_at,
+              (SELECT status FROM Friendships WHERE user_id = $2 AND friend_id = u.id) AS out_status,
+              (SELECT status FROM Friendships WHERE user_id = u.id AND friend_id = $2) AS in_status
+       FROM MeetupInterests mi
+       JOIN Users u ON u.id = mi.user_id
+       WHERE mi.post_id = $1
+       ORDER BY mi.created_at DESC NULLS LAST`,
+      [postId, hostId]
+    );
+    await pool.query(
+      `UPDATE Notifications SET read = TRUE
+       WHERE user_id = $1 AND type = $2 AND read = FALSE AND data->>'postId' = $3`,
+      [hostId, NOTIF_TYPE, String(postId)]
+    );
+
+    const online = getOnlineUsers();
+    res.json({
+      users: rows.map(r => ({
+        id:       r.id,
+        username: r.username,
+        avatar:   r.avatar || '',
+        elo:      r.elo || 1000,
+        wins:     r.wins || 0,
+        losses:   r.losses || 0,
+        isOnline: online.has(r.id),
+        friendStatus:
+          r.out_status === 'accepted' || r.in_status === 'accepted' ? 'friends'
+          : r.out_status === 'pending' ? 'sent'
+          : r.in_status  === 'pending' ? 'received'
+          : 'none',
+      })),
+    });
+  } catch (err) {
+    console.error('[meetup] interested error:', err.message);
     res.status(500).json({ message: err.message });
   }
 });
