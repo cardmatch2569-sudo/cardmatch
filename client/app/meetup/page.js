@@ -651,7 +651,7 @@ function PostCard({ post, user, lang, onInterest, onDelete, onSeen }) {
 
         {showMap && hasPin && (
           <div className="mb-3">
-            <MeetupMap value={{ lat: post.lat, lng: post.lng }} readOnly height={200} />
+            <MeetupMap value={{ lat: post.lat, lng: post.lng }} readOnly height={240} />
           </div>
         )}
 
